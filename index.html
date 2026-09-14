@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Exchange</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0B0E11;--bg2:#1E2026;--card:#2B3139;
+  --t1:#EAECEF;--t2:#848E9C;
+  --yellow:#F0B90B;--yellow-h:#D4A20A;
+  --green:#0ECB81;--red:#F6465D;
+  --border:#2B3139;
+}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t1);
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;max-width:430px;margin:0 auto}
+input,textarea,select{outline:none;font-family:inherit;font-size:14px}
+input::placeholder,textarea::placeholder{color:var(--t2)}
+button{cursor:pointer;border:none;font-family:inherit;transition:transform .1s}
+button:active{transform:scale(0.96)}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--card);border-radius:2px}
+
+.page{display:none;min-height:100vh;padding-bottom:72px}
+.page.active{display:block;animation:fadeIn .3s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
+/* Splash */
+#splash{display:flex;align-items:center;justify-content:center;flex-direction:column;
+  position:fixed;inset:0;background:var(--bg);z-index:100;gap:24px}
+#splash .splash-logo{opacity:0;transform:scale(.8);animation:splashLogoIn .8s ease forwards}
+#splash .splash-card{opacity:0;transform:translateY(20px);
+  animation:splashCardIn .5s .3s ease forwards}
+@keyframes splashLogoIn{to{opacity:1;transform:scale(1)}}
+@keyframes splashCardIn{to{opacity:1;transform:translateY(0)}}
+.splash-card-inner{display:flex;align-items:center;gap:12px;
+  background:rgba(30,35,45,0.95);border-radius:12px;padding:14px 20px;
+  box-shadow:0 0 24px rgba(240,185,11,0.08),0 0 60px rgba(0,0,0,0.4);
+  backdrop-filter:blur(8px)}
+.splash-card-inner .splash-text{display:flex;flex-direction:column;gap:2px}
+.splash-card-inner .splash-title{color:var(--t1);font-size:14px;font-weight:600}
+.splash-card-inner .splash-sub{color:var(--t2);font-size:12px}
+.splash-card-inner .splash-lock{color:var(--yellow);font-size:22px;margin-left:8px}
+
+/* Bottom Nav */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;
+  background:var(--bg2);border-top:1px solid var(--border);display:flex;
+  justify-content:space-around;align-items:center;height:64px;z-index:50}
+.nav-btn{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 16px;
+  background:none;transition:color .2s,filter .2s}
+.nav-btn svg{width:24px;height:24px}
+.nav-btn span{font-size:11px;font-weight:500}
+.nav-btn.active svg{stroke:var(--yellow);filter:drop-shadow(0 0 4px rgba(240,185,11,0.4))}
+.nav-btn.active span{color:var(--yellow)}
+.nav-btn:not(.active) svg{stroke:var(--t2)}
+.nav-btn:not(.active) span{color:var(--t2)}
+
+/* Cards & Components */
+.wallet-card{margin:0 16px;border-radius:16px;padding:20px;
+  background:linear-gradient(to bottom,var(--card),var(--bg2))}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 16px}
+.avatar{border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-weight:700;color:var(--bg);background:var(--yellow)}
+
+/* Balance hide/show */
+#balance-amount{cursor:pointer;transition:filter .3s ease;user-select:none}
+#balance-amount.blurred{filter:blur(8px)}
+
+.banner-wrap{margin:16px;position:relative;overflow:hidden;border-radius:12px;height:160px}
+.banner{position:absolute;inset:0;padding:0;display:flex;align-items:center;
+  border-radius:12px;transition:transform .3s,opacity .3s;cursor:pointer;overflow:hidden}
+.banner.hide-left{transform:translateX(-100%);opacity:0}
+.banner.hide-right{transform:translateX(100%);opacity:0}
+.banner.visible{transform:translateX(0);opacity:1}
+.banner:active{transform:scale(0.97)!important}
+.banner .lock-watermark{position:absolute;right:16px;top:50%;transform:translateY(-50%);
+  opacity:.15;width:48px;height:48px;pointer-events:none}
+.dots{display:flex;justify-content:center;gap:6px;margin-top:12px}
+.dot{width:6px;height:6px;border-radius:3px;background:var(--card);transition:all .3s;cursor:pointer}
+.dot.active{width:16px;background:var(--yellow)}
+
+.order-card{background:var(--card);border-radius:12px;padding:16px;margin-bottom:12px}
+.toggle-row{display:flex;margin:12px 16px 0;background:var(--card);border-radius:8px;overflow:hidden}
+.toggle-btn{flex:1;padding:12px;text-align:center;font-size:14px;font-weight:600;
+  background:none;color:var(--t2);transition:all .2s}
+.toggle-btn.active-buy{background:var(--green);color:#fff}
+.toggle-btn.active-sell{background:var(--red);color:#fff}
+.toggle-btn.active-yellow{background:var(--yellow);color:var(--bg)}
+
+.filter-row{display:flex;gap:8px;margin:12px 16px 0}
+.filter-row select{flex:1;background:var(--card);color:var(--t1);border:1px solid var(--border);
+  border-radius:8px;padding:8px 12px}
+
+.form-group{margin-bottom:16px}
+.form-group label{display:block;color:var(--t2);font-size:13px;margin-bottom:4px}
+.form-group input,.form-group select,.form-group textarea{width:100%;background:var(--card);
+  color:var(--t1);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+.form-group textarea{resize:none;height:80px}
+
+.btn-primary{width:100%;padding:12px;background:var(--yellow);color:var(--bg);border-radius:8px;
+  font-size:14px;font-weight:600;transition:background .2s,transform .1s}
+.btn-primary:hover{background:var(--yellow-h)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.btn-outline{padding:10px 20px;background:none;border:1px solid var(--yellow);color:var(--yellow);
+  border-radius:8px;font-size:14px;font-weight:500;transition:all .2s}
+.btn-outline:hover{background:var(--yellow);color:var(--bg)}
+.btn-green{background:var(--green);color:#fff;border-radius:8px;padding:12px;font-weight:600;font-size:14px;transition:transform .1s}
+.btn-red-o{background:var(--card);color:var(--red);border:1px solid var(--red);border-radius:8px;
+  padding:12px;font-weight:600;font-size:14px;transition:transform .1s}
+
+.badge{display:inline-block;padding:2px 12px;border-radius:20px;font-size:11px;font-weight:500}
+.badge-pending{background:rgba(240,185,11,.2);color:var(--yellow)}
+.badge-paid{background:rgba(59,130,246,.2);color:#60a5fa}
+.badge-completed{background:rgba(14,203,129,.2);color:var(--green)}
+.badge-cancelled{background:rgba(246,70,93,.2);color:var(--red)}
+.badge-disputed{background:rgba(249,115,22,.2);color:#fb923c}
+
+.section-title{color:var(--t1);font-size:15px;font-weight:600;margin:24px 16px 12px}
+.empty{color:var(--t2);font-size:14px;text-align:center;padding:32px 0}
+.deal-info{background:var(--card);border-radius:12px;padding:16px;margin-bottom:16px}
+.deal-info .row{display:flex;justify-content:space-between;margin-bottom:8px}
+.deal-info .row .label{color:var(--t2);font-size:13px}
+.deal-info .row .value{color:var(--t1);font-size:14px;font-weight:500}
+
+.timer-box{background:rgba(240,185,11,.1);border:1px solid rgba(240,185,11,.3);
+  border-radius:12px;padding:12px;text-align:center;margin-bottom:16px}
+.timer-box .label{color:var(--t2);font-size:12px}
+.timer-box .time{color:var(--yellow);font-size:28px;font-weight:700}
+
+.chat-box{background:var(--card);border-radius:12px;overflow:hidden;margin-bottom:16px}
+.chat-header{padding:8px 16px;border-bottom:1px solid var(--border);font-size:14px;font-weight:500}
+.chat-messages{height:250px;overflow-y:auto;padding:12px}
+.chat-msg{max-width:75%;margin-bottom:8px;padding:8px 12px;border-radius:12px;font-size:14px;word-break:break-word}
+.chat-msg.mine{margin-left:auto;background:var(--yellow);color:var(--bg);border-bottom-right-radius:4px}
+.chat-msg.other{background:var(--bg2);color:var(--t1);border-bottom-left-radius:4px}
+.chat-msg .sender{font-size:11px;color:var(--t2);margin-bottom:2px}
+.chat-msg .time{font-size:10px;margin-top:2px;opacity:.6}
+.chat-input{display:flex;gap:8px;padding:12px;border-top:1px solid var(--border)}
+.chat-input input{flex:1;background:var(--bg2);color:var(--t1);border:none;border-radius:8px;padding:8px 12px}
+.chat-input button{background:var(--yellow);color:var(--bg);border-radius:8px;padding:8px 16px;
+  font-size:13px;font-weight:600}
+
+.fab{position:fixed;bottom:80px;right:16px;width:56px;height:56px;border-radius:50%;
+  background:var(--yellow);display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 12px rgba(240,185,11,.3);z-index:30;transition:transform .2s}
+.fab:hover{transform:scale(1.05)}
+.fab:active{transform:scale(0.95)!important}
+.fab svg{width:24px;height:24px;stroke:var(--bg);stroke-width:3}
+
+.back-btn{background:none;color:var(--t2);padding:8px}
+.back-btn svg{width:24px;height:24px;stroke:currentColor;stroke-width:2}
+.page-header{display:flex;align-items:center;gap:12px;padding:12px 16px}
+.page-header h1{font-size:18px;font-weight:600;color:var(--t1)}
+
+.lang-switch{display:flex;background:var(--card);border-radius:8px;overflow:hidden}
+.lang-btn{padding:8px 16px;font-size:14px;font-weight:500;background:none;color:var(--t2);transition:all .2s}
+.lang-btn.active{background:var(--yellow);color:var(--bg)}
+
+.profile-card{background:var(--card);border-radius:12px;padding:20px;display:flex;
+  flex-direction:column;align-items:center;margin:0 16px 16px}
+.profile-stat{margin-top:12px;padding:8px 16px;background:var(--bg2);border-radius:8px;text-align:center}
+.profile-stat .label{color:var(--t2);font-size:12px}
+.profile-stat .val{color:var(--yellow);font-size:20px;font-weight:700}
+
+.crypto-icons{display:flex;gap:12px;margin-bottom:20px}
+.crypto-icon{display:flex;align-items:center;gap:4px}
+.crypto-icon .sym{color:var(--yellow);font-size:14px;display:flex;align-items:center}
+.crypto-icon .sym img{width:20px;height:20px;border-radius:50%;object-fit:cover}
+.crypto-icon .name{color:var(--t2);font-size:12px}
+
+.pay-badges{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+.pay-badge{padding:2px 8px;background:var(--bg2);border-radius:4px;font-size:12px;color:var(--t2)}
+
+.txn-row{background:var(--card);border-radius:12px;padding:12px;display:flex;align-items:center;
+  justify-content:space-between;margin-bottom:8px;cursor:pointer;transition:transform .1s}
+.txn-row:active{transform:scale(0.97)}
+.txn-left{display:flex;align-items:center;gap:12px}
+.txn-icon{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:14px}
+.txn-icon.buy{background:rgba(14,203,129,.2);color:var(--green)}
+.txn-icon.sell{background:rgba(246,70,93,.2);color:var(--red)}
+</style>
+</head>
+<body>
+
+<!-- ═══ SPLASH ═══ -->
+<div id="splash">
+  <div class="splash-logo">
+    <img src="assets/Binance-welcome screen.png" alt="Logo" width="140"
+         style="border-radius:0" onerror="this.style.display='none'">
+  </div>
+  <div class="splash-card">
+    <div class="splash-card-inner">
+      <div class="splash-text">
+        <span class="splash-title" id="splash-title">Secure & Fast Trades</span>
+        <span class="splash-sub">Escrow protection</span>
+      </div>
+      <span class="splash-lock">🔒</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ HOME ═══ -->
+<div id="page-home" class="page">
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div class="avatar" style="width:32px;height:32px;font-size:13px" id="home-avatar">D</div>
+      <span style="font-size:14px;font-weight:500" id="home-greeting">Hi, Demo</span>
+    </div>
+    <button style="background:none;padding:8px">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#848E9C" stroke-width="2" stroke-linecap="round">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Wallet Card -->
+  <div class="wallet-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <span style="color:var(--t2);font-size:13px" id="lbl-balance">Estimated Balance</span>
+      <button onclick="toggleBalance()" style="background:none;padding:4px" id="eye-btn"></button>
+    </div>
+    <div style="margin-bottom:16px">
+      <span style="font-size:28px;font-weight:700" id="balance-amount" onclick="toggleBalance()"></span>
+    </div>
+    <div class="crypto-icons" id="crypto-icons-row"></div>
+    <div style="display:flex;gap:12px">
+      <button class="btn-outline" style="flex:1" id="btn-deposit">Deposit</button>
+      <button class="btn-outline" style="flex:1" id="btn-withdraw">Withdraw</button>
+    </div>
+  </div>
+
+  <!-- Banners -->
+  <div class="banner-wrap" id="banner-container"></div>
+  <div class="dots" id="banner-dots"></div>
+
+  <!-- Recent Transactions -->
+  <div class="section-title" id="lbl-recent">Recent Transactions</div>
+  <div style="padding:0 16px" id="recent-deals"></div>
+</div>
+
+<!-- ═══ EXCHANGE ═══ -->
+<div id="page-exchange" class="page">
+  <div class="toggle-row" id="ex-toggle">
+    <button class="toggle-btn active-buy" onclick="setExSide('buy')" id="ex-buy-btn">Buy</button>
+    <button class="toggle-btn" onclick="setExSide('sell')" id="ex-sell-btn">Sell</button>
+  </div>
+  <div class="filter-row">
+    <select id="ex-crypto" onchange="renderOrders()">
+      <option value="">All Crypto</option>
+      <option>BTC</option><option>ETH</option><option>USDT</option><option>GRAM</option><option>STARS</option>
+    </select>
+    <select id="ex-fiat" onchange="renderOrders()">
+      <option value="">All Fiat</option>
+      <option>USD</option><option>EUR</option><option>RUB</option><option>UAH</option>
+      <option>MDL</option><option>TRY</option><option>CNY</option><option>GBP</option>
+    </select>
+  </div>
+  <div style="padding:16px" id="orders-list"></div>
+  <button class="fab" onclick="showPage('create-order')">
+    <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round">
+      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>
+  </button>
+</div>
+
+<!-- ═══ CREATE ORDER ═══ -->
+<div id="page-create-order" class="page">
+  <div class="page-header">
+    <button class="back-btn" onclick="showPage('exchange')"><svg viewBox="0 0 24 24" fill="none"><polyline points="15,18 9,12 15,6"/></svg></button>
+    <h1 id="lbl-create-order">Create Order</h1>
+  </div>
+  <div style="padding:0 16px">
+    <div class="form-group">
+      <label id="lbl-side">I want to</label>
+      <div class="toggle-row" style="margin:4px 0 0">
+        <button class="toggle-btn active-buy" onclick="setCoSide('buy')" id="co-buy-btn">Buy</button>
+        <button class="toggle-btn" onclick="setCoSide('sell')" id="co-sell-btn">Sell</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label id="lbl-co-crypto">Crypto</label>
+      <select id="co-crypto">
+        <option>BTC</option><option>ETH</option><option selected>USDT</option><option>GRAM</option><option>STARS</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label id="lbl-co-fiat">Fiat</label>
+      <select id="co-fiat">
+        <option selected>USD</option><option>EUR</option><option>RUB</option><option>UAH</option>
+        <option>MDL</option><option>TRY</option><option>CNY</option><option>GBP</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label id="lbl-co-price">Price per unit</label>
+      <input type="number" id="co-price" placeholder="0.00">
+    </div>
+    <div class="form-group">
+      <label id="lbl-co-amount">Amount</label>
+      <input type="number" id="co-amount" placeholder="0.00">
+    </div>
+    <div style="display:flex;gap:12px">
+      <div class="form-group" style="flex:1">
+        <label id="lbl-co-min">Min Limit</label>
+        <input type="number" id="co-min" placeholder="0">
+      </div>
+      <div class="form-group" style="flex:1">
+        <label id="lbl-co-max">Max Limit</label>
+        <input type="number" id="co-max" placeholder="0">
+      </div>
+    </div>
+    <div class="form-group">
+      <label id="lbl-co-payment">Payment Method</label>
+      <input type="text" id="co-payment" placeholder="Sberbank, PayPal...">
+    </div>
+    <div class="form-group">
+      <label id="lbl-co-terms">Terms & Conditions</label>
+      <textarea id="co-terms" placeholder="..."></textarea>
+    </div>
+    <button class="btn-primary" onclick="submitOrder()" id="btn-submit-order">Submit Order</button>
+  </div>
+</div>
+
+<!-- ═══ DEAL ═══ -->
+<div id="page-deal" class="page">
+  <div class="page-header">
+    <button class="back-btn" onclick="showPage('exchange')"><svg viewBox="0 0 24 24" fill="none"><polyline points="15,18 9,12 15,6"/></svg></button>
+    <h1 id="deal-title">Deal #1</h1>
+    <div style="margin-left:auto" id="deal-badge"></div>
+  </div>
+  <div style="padding:0 16px">
+    <div class="deal-info" id="deal-info"></div>
+    <div id="deal-timer"></div>
+    <div id="deal-actions" style="display:flex;gap:12px;margin-bottom:16px"></div>
+    <div class="chat-box">
+      <div class="chat-header" id="lbl-chat">Chat</div>
+      <div class="chat-messages" id="chat-messages"></div>
+      <div class="chat-input">
+        <input type="text" id="chat-input" placeholder="Message...">
+        <button onclick="sendChatMsg()" id="btn-chat-send">Send</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PROFILE ═══ -->
+<div id="page-profile" class="page">
+  <div class="page-header"><h1 id="lbl-profile-title">Profile</h1></div>
+  <div class="profile-card">
+    <div class="avatar" style="width:64px;height:64px;font-size:26px" id="prof-avatar">D</div>
+    <p style="font-size:18px;font-weight:600;margin-top:12px" id="prof-name">Demo</p>
+    <p style="color:var(--t2);font-size:14px" id="prof-username">@demo_user</p>
+    <p style="color:var(--t2);font-size:12px;margin-top:4px" id="prof-tgid">Telegram ID: 123456789</p>
+    <div class="profile-stat">
+      <div class="label" id="lbl-completed">Deals Completed</div>
+      <div class="val" id="prof-completed">0</div>
+    </div>
+  </div>
+
+  <div style="padding:0 16px 16px">
+    <div style="background:var(--card);border-radius:12px;padding:16px;margin-bottom:16px;display:flex;align-items:center;gap:8px">
+      <span style="color:var(--t2);font-size:14px" id="lbl-language">Language:</span>
+      <div class="lang-switch">
+        <button class="lang-btn active" onclick="setLang('en')" id="lang-en">English</button>
+        <button class="lang-btn" onclick="setLang('ru')" id="lang-ru">Русский</button>
+      </div>
+    </div>
+
+    <div class="toggle-row" style="margin:0 0 16px">
+      <button class="toggle-btn active-yellow" onclick="setProfileTab('orders')" id="prof-orders-btn">My Orders</button>
+      <button class="toggle-btn" onclick="setProfileTab('deals')" id="prof-deals-btn">My Deals</button>
+    </div>
+    <div id="prof-tab-content"></div>
+
+    <button onclick="closeApp()" style="width:100%;margin-top:24px;padding:12px;background:var(--card);
+      color:var(--red);border:1px solid rgba(246,70,93,.3);border-radius:8px;font-size:14px;font-weight:500"
+      id="btn-close">Close App</button>
+  </div>
+</div>
+
+<!-- ═══ BOTTOM NAV ═══ -->
+<div class="bottom-nav" id="bottom-nav" style="display:none">
+  <button class="nav-btn active" onclick="showPage('home')" id="nav-home">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/>
+    </svg>
+    <span>Home</span>
+  </button>
+  <button class="nav-btn" onclick="showPage('exchange')" id="nav-exchange">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="17,1 21,5 17,9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+      <polyline points="7,23 3,19 7,15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+    </svg>
+    <span>Exchange</span>
+  </button>
+  <button class="nav-btn" onclick="showPage('profile')" id="nav-profile">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/>
+    </svg>
+    <span>Profile</span>
+  </button>
+</div>
+
+<script>
+// ═══════════════════════════════
+// CONFIG
+// ═══════════════════════════════
+const APP_NAME = '';
+
+// ═══════════════════════════════
+// STATE
+// ═══════════════════════════════
+let locale = localStorage.getItem('p2p_locale') || 'en';
+let balanceVisible = true;
+let balanceAnimating = false;
+let currentPage = 'home';
+let exSide = 'buy';
+let coSide = 'buy';
+let profileTab = 'orders';
+let bannerIdx = 0;
+let bannerTimer = null;
+let dealTimerInterval = null;
+let currentDeal = null;
+let chatMessages = [];
+
+const user = {id:1, telegram_id:123456789, username:'demo_user', first_name:'Demo'};
+
+try {
+  if (window.Telegram && Telegram.WebApp && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user) {
+    const tg = Telegram.WebApp.initDataUnsafe.user;
+    user.telegram_id = tg.id;
+    user.username = tg.username || '';
+    user.first_name = tg.first_name || 'User';
+    if (tg.language_code === 'ru') locale = 'ru';
+    Telegram.WebApp.expand();
+    Telegram.WebApp.setHeaderColor('#0B0E11');
+    Telegram.WebApp.setBackgroundColor('#0B0E11');
+  }
+} catch(e) {}
+
+// ═══════════════════════════════
+// CRYPTO ICON HELPERS
+// ═══════════════════════════════
+const cryptoIcons = {BTC:'assets/Bitcoin-Logo.png',ETH:'assets/ethereum-eth-logo.png',USDT:'assets/tether.png',GRAM:'assets/Gram Diamond Mark.png',STARS:'assets/stars.png',BNB:'assets/bnb-bnb-logo.png',SOL:'assets/solana logo.png'};
+const cryptoFallback = {BTC:'₿',ETH:'Ξ',USDT:'₮',GRAM:'◆',STARS:'★'};
+
+function cryptoImg(cur) {
+  const src = cryptoIcons[cur];
+  const fb = cryptoFallback[cur] || cur[0];
+  if (!src) return fb;
+  return `<img src="${src}" alt="${cur}" width="20" height="20" style="border-radius:50%" onerror="this.outerHTML='${fb}'">`;
+}
+
+// ═══════════════════════════════
+// EYE ICON SVGs
+// ═══════════════════════════════
+const eyeOpen = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#848E9C" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+const eyeClosed = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#848E9C" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+
+// ═══════════════════════════════
+// LOCK WATERMARK SVG (for banners)
+// ═══════════════════════════════
+const lockSvg = `<svg class="lock-watermark" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;
+
+// ═══════════════════════════════
+// i18n
+// ═══════════════════════════════
+const L = {
+  en: {
+    'nav.home':'Home','nav.exchange':'Exchange','nav.profile':'Profile',
+    'greeting':'Hi, {name}','balance':'Estimated Balance','deposit':'Deposit','withdraw':'Withdraw',
+    'recent':'Recent Transactions','no_txn':'No transactions yet',
+    'b1':'Trading Available','b2':'New: Telegram Stars Support','b3':'Trade GRAM Now',
+    'b4':'Secure & Fast Trades','b5':'Low Fees, High Speed',
+    'buy':'Buy','sell':'Sell','crypto':'Crypto','fiat':'Fiat','price':'Price','amount':'Amount',
+    'available':'Available','payment':'Payment','create_order':'Create Order','no_orders':'No orders yet',
+    'min_limit':'Min Limit','max_limit':'Max Limit','payment_method':'Payment Method',
+    'terms':'Terms & Conditions','side':'I want to','submit':'Submit Order','price_unit':'Price per unit',
+    'deal_title':'Deal #{id}','status':'Status','pending':'Pending','paid':'Paid','completed':'Completed',
+    'cancelled':'Cancelled','disputed':'Disputed','mark_paid':'Mark as Paid','confirm_receipt':'Confirm Receipt',
+    'cancel_deal':'Cancel Deal','enter_amt':'Enter amount','total':'Total','confirm':'Confirm Deal',
+    'chat':'Chat','send':'Send','time_left':'Time left to pay','buyer':'Buyer','seller':'Seller',
+    'profile':'Profile','language':'Language','my_orders':'My Orders','my_deals':'My Deals',
+    'deals_done':'Deals Completed','close_app':'Close App','tg_id':'Telegram ID',
+    'all_crypto':'All Crypto','all_fiat':'All Fiat',
+    'splash_title':'Secure & Fast Trades'
+  },
+  ru: {
+    'nav.home':'Главная','nav.exchange':'Обмен','nav.profile':'Профиль',
+    'greeting':'Привет, {name}','balance':'Примерный баланс','deposit':'Пополнить','withdraw':'Вывести',
+    'recent':'Последние сделки','no_txn':'Сделок пока нет',
+    'b1':'Торговля доступна','b2':'Новое: Telegram Stars','b3':'Торгуйте GRAM',
+    'b4':'Безопасные и быстрые сделки','b5':'Низкие комиссии',
+    'buy':'Купить','sell':'Продать','crypto':'Крипто','fiat':'Фиат','price':'Цена','amount':'Количество',
+    'available':'Доступно','payment':'Оплата','create_order':'Создать ордер','no_orders':'Ордеров пока нет',
+    'min_limit':'Мин. лимит','max_limit':'Макс. лимит','payment_method':'Способ оплаты',
+    'terms':'Условия сделки','side':'Я хочу','submit':'Разместить ордер','price_unit':'Цена за единицу',
+    'deal_title':'Сделка #{id}','status':'Статус','pending':'Ожидание','paid':'Оплачено','completed':'Завершено',
+    'cancelled':'Отменено','disputed':'Спор','mark_paid':'Отметить оплату','confirm_receipt':'Подтвердить получение',
+    'cancel_deal':'Отменить сделку','enter_amt':'Введите сумму','total':'Итого','confirm':'Подтвердить',
+    'chat':'Чат','send':'Отправить','time_left':'Осталось на оплату','buyer':'Покупатель','seller':'Продавец',
+    'profile':'Профиль','language':'Язык','my_orders':'Мои ордера','my_deals':'Мои сделки',
+    'deals_done':'Завершённых сделок','close_app':'Закрыть приложение','tg_id':'Telegram ID',
+    'all_crypto':'Все крипто','all_fiat':'Все фиат',
+    'splash_title':'Безопасные и быстрые сделки'
+  }
+};
+
+function t(key, params) {
+  let s = (L[locale] && L[locale][key]) || L.en[key] || key;
+  if (params) Object.entries(params).forEach(([k,v]) => s = s.replace('{'+k+'}', v));
+  return s;
+}
+
+// ═══════════════════════════════
+// MOCK DATA
+// ═══════════════════════════════
+
+// TODO: fetch from API
+const balances = [
+  {currency:'BTC',balance:0,frozen:0},{currency:'ETH',balance:0,frozen:0},
+  {currency:'USDT',balance:0,frozen:0},{currency:'GRAM',balance:0,frozen:0},
+  {currency:'STARS',balance:0,frozen:0}
+];
+
+// TODO: fetch from API
+const orders = [
+  {id:1,user_id:2,username:'crypto_trader',first_name:'Alex',side:'sell',crypto_currency:'USDT',
+   fiat_currency:'RUB',price:0,amount:0,min_limit:0,max_limit:0,
+   payment_method:'Sberbank, Tinkoff',terms:'Fast transfer',status:'active'},
+  {id:2,user_id:3,username:'btc_whale',first_name:'Maria',side:'sell',crypto_currency:'BTC',
+   fiat_currency:'USD',price:0,amount:0,min_limit:0,max_limit:0,
+   payment_method:'PayPal, Wise',status:'active'},
+  {id:3,user_id:4,username:'star_dealer',first_name:'Ivan',side:'sell',crypto_currency:'STARS',
+   fiat_currency:'USD',price:0,amount:0,min_limit:0,max_limit:0,
+   payment_method:'Any crypto',status:'active'},
+  {id:4,user_id:5,username:'eth_fan',first_name:'Olga',side:'buy',crypto_currency:'ETH',
+   fiat_currency:'EUR',price:0,amount:0,min_limit:0,max_limit:0,
+   payment_method:'SEPA, Revolut',status:'active'},
+];
+
+// TODO: fetch from API
+const deals = [
+  {id:1,buyer_id:1,seller_id:2,crypto_currency:'USDT',fiat_currency:'RUB',price:0,
+   crypto_amount:0,fiat_amount:0,status:'completed',created_at:'2024-01-14T15:00:00'},
+  {id:2,buyer_id:1,seller_id:3,crypto_currency:'BTC',fiat_currency:'USD',price:0,
+   crypto_amount:0,fiat_amount:0,status:'pending',created_at:'2024-01-15T12:00:00'},
+];
+
+// ═══════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const el = document.getElementById('page-' + name);
+  if (el) el.classList.add('active');
+  currentPage = name;
+
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  const nb = document.getElementById('nav-' + name);
+  if (nb) nb.classList.add('active');
+
+  if (name === 'home') renderHome();
+  if (name === 'exchange') renderOrders();
+  if (name === 'profile') renderProfile();
+}
+
+// ═══════════════════════════════
+// HOME
+// ═══════════════════════════════
+function renderHome() {
+  const letter = (user.first_name || 'U')[0].toUpperCase();
+  document.getElementById('home-avatar').textContent = letter;
+  document.getElementById('home-greeting').textContent = t('greeting', {name: user.first_name});
+  document.getElementById('lbl-balance').textContent = t('balance');
+  document.getElementById('btn-deposit').textContent = t('deposit');
+  document.getElementById('btn-withdraw').textContent = t('withdraw');
+  document.getElementById('lbl-recent').textContent = t('recent');
+
+  // TODO: fetch from API
+  const prices = {BTC:0,ETH:0,USDT:0,GRAM:0,STARS:0};
+  const total = balances.reduce((s,b) => s + b.balance * (prices[b.currency]||0), 0);
+
+  const balEl = document.getElementById('balance-amount');
+  if (balanceVisible) {
+    balEl.textContent = '$' + total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    balEl.classList.remove('blurred');
+  } else {
+    balEl.textContent = '****';
+    balEl.classList.remove('blurred');
+  }
+
+  document.getElementById('eye-btn').innerHTML = balanceVisible ? eyeOpen : eyeClosed;
+
+  // Crypto icons row
+  const iconsRow = document.getElementById('crypto-icons-row');
+  iconsRow.innerHTML = balances.map(b =>
+    `<div class="crypto-icon"><span class="sym">${cryptoImg(b.currency)}</span><span class="name">${b.currency}</span></div>`
+  ).join('');
+
+  renderBanners();
+  renderRecentDeals();
+}
+
+function toggleBalance() {
+  if (balanceAnimating) return;
+  const balEl = document.getElementById('balance-amount');
+
+  if (balanceVisible) {
+    balanceAnimating = true;
+    balEl.classList.add('blurred');
+    setTimeout(() => {
+      balanceVisible = false;
+      balEl.textContent = '****';
+      balEl.classList.remove('blurred');
+      document.getElementById('eye-btn').innerHTML = eyeClosed;
+      balanceAnimating = false;
+    }, 300);
+  } else {
+    balanceVisible = true;
+    // TODO: fetch from API
+    const prices = {BTC:0,ETH:0,USDT:0,GRAM:0,STARS:0};
+    const total = balances.reduce((s,b) => s + b.balance * (prices[b.currency]||0), 0);
+    balEl.textContent = '$' + total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    document.getElementById('eye-btn').innerHTML = eyeOpen;
+  }
+}
+
+// Banners
+const bannerData = [
+  {img:'assets/swipe card 1.png'},
+  {img:'assets/swipe card 2.png'},
+  {img:'assets/action card(swipe) 3.png'},
+  {img:'assets/action card(swipe)4.png'},
+];
+
+function renderBanners() {
+  const container = document.getElementById('banner-container');
+  const dotsEl = document.getElementById('banner-dots');
+  container.innerHTML = '';
+  dotsEl.innerHTML = '';
+  bannerData.forEach((b, i) => {
+    const div = document.createElement('div');
+    div.className = 'banner ' + (i === bannerIdx ? 'visible' : 'hide-right');
+    div.innerHTML = `<img src="${b.img}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:12px;pointer-events:none" onerror="this.parentElement.style.display='none'">`;
+    div.onclick = () => bannerClick(div);
+    container.appendChild(div);
+
+    const dot = document.createElement('button');
+    dot.className = 'dot' + (i === bannerIdx ? ' active' : '');
+    dot.onclick = () => { bannerIdx = i; updateBanners(); };
+    dotsEl.appendChild(dot);
+  });
+
+  if (bannerTimer) clearInterval(bannerTimer);
+  bannerTimer = setInterval(() => {
+    bannerIdx = (bannerIdx + 1) % bannerData.length;
+    updateBanners();
+  }, 4000);
+
+  let startX = 0;
+  container.ontouchstart = e => startX = e.touches[0].clientX;
+  container.ontouchend = e => {
+    const diff = startX - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 50) {
+      bannerIdx = diff > 0
+        ? (bannerIdx + 1) % bannerData.length
+        : (bannerIdx - 1 + bannerData.length) % bannerData.length;
+      updateBanners();
+    }
+  };
+}
+
+function bannerClick(el) {
+  el.style.transform = 'scale(0.97)';
+  setTimeout(() => { el.style.transform = ''; }, 150);
+}
+
+function updateBanners() {
+  const banners = document.querySelectorAll('#banner-container .banner');
+  const dots = document.querySelectorAll('#banner-dots .dot');
+  banners.forEach((b, i) => {
+    b.className = 'banner ' + (i === bannerIdx ? 'visible' : (i < bannerIdx ? 'hide-left' : 'hide-right'));
+  });
+  dots.forEach((d, i) => d.className = 'dot' + (i === bannerIdx ? ' active' : ''));
+}
+
+function renderRecentDeals() {
+  const el = document.getElementById('recent-deals');
+  if (!deals.length) { el.innerHTML = `<div class="empty">${t('no_txn')}</div>`; return; }
+  el.innerHTML = deals.slice(0, 5).map(d => {
+    const isBuy = d.buyer_id === user.id;
+    return `<div class="txn-row" onclick="openDeal(${d.id})">
+      <div class="txn-left">
+        <div class="txn-icon ${isBuy?'buy':'sell'}">${isBuy?'↓':'↑'}</div>
+        <div><div style="font-size:14px;font-weight:500">${isBuy?t('buy'):t('sell')} ${d.crypto_currency}</div>
+          <div style="color:var(--t2);font-size:12px">${new Date(d.created_at).toLocaleDateString()}</div></div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:14px;font-weight:500">${d.crypto_amount} ${d.crypto_currency}</div>
+        <span class="badge badge-${d.status}">${t(d.status)}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════
+// EXCHANGE
+// ═══════════════════════════════
+function setExSide(s) {
+  exSide = s;
+  document.getElementById('ex-buy-btn').className = 'toggle-btn' + (s==='buy' ? ' active-buy' : '');
+  document.getElementById('ex-sell-btn').className = 'toggle-btn' + (s==='sell' ? ' active-sell' : '');
+  document.getElementById('ex-buy-btn').textContent = t('buy');
+  document.getElementById('ex-sell-btn').textContent = t('sell');
+  renderOrders();
+}
+
+function renderOrders() {
+  document.getElementById('ex-buy-btn').textContent = t('buy');
+  document.getElementById('ex-sell-btn').textContent = t('sell');
+
+  const crypto = document.getElementById('ex-crypto').value;
+  const fiat = document.getElementById('ex-fiat').value;
+
+  const filtered = orders.filter(o => {
+    const matchSide = exSide === 'buy' ? o.side === 'sell' : o.side === 'buy';
+    const matchCrypto = !crypto || o.crypto_currency === crypto;
+    const matchFiat = !fiat || o.fiat_currency === fiat;
+    return matchSide && matchCrypto && matchFiat && o.status === 'active';
+  });
+
+  const el = document.getElementById('orders-list');
+  if (!filtered.length) { el.innerHTML = `<div class="empty">${t('no_orders')}</div>`; return; }
+
+  el.innerHTML = filtered.map(o => {
+    const isSell = o.side === 'sell';
+    const btnStyle = isSell
+      ? 'background:var(--green);color:#fff;border-radius:8px;padding:6px 20px;font-weight:600;font-size:13px;border:none;cursor:pointer;transition:transform .1s'
+      : 'background:var(--red);color:#fff;border-radius:8px;padding:6px 20px;font-weight:600;font-size:13px;border:none;cursor:pointer;transition:transform .1s';
+    const btnText = isSell ? t('buy') : t('sell');
+    const payments = (o.payment_method||'').split(',').map(m =>
+      `<span class="pay-badge">${m.trim()}</span>`).join('');
+    const limits = (o.min_limit && o.max_limit)
+      ? `<div style="color:var(--t2);font-size:12px;margin-top:8px">${t('min_limit')}: ${o.min_limit.toLocaleString()} - ${t('max_limit')}: ${o.max_limit.toLocaleString()} ${o.fiat_currency}</div>` : '';
+    return `<div class="order-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="avatar" style="width:32px;height:32px;font-size:13px">${(o.first_name||'U')[0]}</div>
+          <div><span style="font-size:14px;font-weight:500">${o.first_name}</span>
+            <span style="color:var(--t2);font-size:12px;margin-left:4px">@${o.username}</span></div>
+        </div>
+        <button style="${btnStyle}" onclick="openDealFromOrder(${o.id})">${btnText}</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
+        <div><span style="color:var(--t2)">${t('price')}</span>
+          <p style="font-weight:500">${o.price.toLocaleString()} ${o.fiat_currency}</p></div>
+        <div><span style="color:var(--t2)">${t('available')}</span>
+          <p style="font-weight:500">${o.amount} ${o.crypto_currency}</p></div>
+      </div>${limits}
+      <div class="pay-badges">${payments}</div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════
+// CREATE ORDER
+// ═══════════════════════════════
+function setCoSide(s) {
+  coSide = s;
+  document.getElementById('co-buy-btn').className = 'toggle-btn' + (s==='buy' ? ' active-buy' : '');
+  document.getElementById('co-sell-btn').className = 'toggle-btn' + (s==='sell' ? ' active-sell' : '');
+  updateCreateOrderLabels();
+}
+
+function updateCreateOrderLabels() {
+  document.getElementById('lbl-create-order').textContent = t('create_order');
+  document.getElementById('lbl-side').textContent = t('side');
+  document.getElementById('co-buy-btn').textContent = t('buy');
+  document.getElementById('co-sell-btn').textContent = t('sell');
+  document.getElementById('lbl-co-crypto').textContent = t('crypto');
+  document.getElementById('lbl-co-fiat').textContent = t('fiat');
+  document.getElementById('lbl-co-price').textContent = t('price_unit');
+  document.getElementById('lbl-co-amount').textContent = t('amount');
+  document.getElementById('lbl-co-min').textContent = t('min_limit');
+  document.getElementById('lbl-co-max').textContent = t('max_limit');
+  document.getElementById('lbl-co-payment').textContent = t('payment_method');
+  document.getElementById('lbl-co-terms').textContent = t('terms');
+  document.getElementById('btn-submit-order').textContent = t('submit');
+}
+
+function submitOrder() {
+  const price = document.getElementById('co-price').value;
+  const amount = document.getElementById('co-amount').value;
+  if (!price || !amount) return;
+  alert(`Order created: ${coSide} ${amount} ${document.getElementById('co-crypto').value} @ ${price} ${document.getElementById('co-fiat').value}`);
+  showPage('exchange');
+}
+
+// ═══════════════════════════════
+// DEAL
+// ═══════════════════════════════
+let dealTimeLeft = 1800;
+
+function openDeal(id) {
+  const deal = deals.find(d => d.id === id);
+  if (!deal) return;
+  currentDeal = {...deal};
+  dealTimeLeft = 1800;
+  chatMessages = [{id:1,sender_id:2,first_name:'Alex',text:'Ready to trade. Please send payment.',
+    created_at:new Date().toISOString()}];
+  renderDeal();
+  showPage('deal');
+}
+
+function openDealFromOrder(orderId) {
+  currentDeal = {id: deals.length+1, order_id:orderId, buyer_id:1, seller_id:2,
+    crypto_currency:'USDT', fiat_currency:'RUB', price:0, crypto_amount:0,
+    fiat_amount:0, status:'pending', created_at:new Date().toISOString()};
+  const order = orders.find(o => o.id === orderId);
+  if (order) {
+    currentDeal.crypto_currency = order.crypto_currency;
+    currentDeal.fiat_currency = order.fiat_currency;
+    currentDeal.price = order.price;
+  }
+  dealTimeLeft = 1800;
+  chatMessages = [];
+  renderDeal();
+  showPage('deal');
+}
+
+function renderDeal() {
+  if (!currentDeal) return;
+  const d = currentDeal;
+  document.getElementById('deal-title').textContent = t('deal_title',{id:String(d.id)});
+  document.getElementById('deal-badge').innerHTML = `<span class="badge badge-${d.status}">${t(d.status)}</span>`;
+
+  document.getElementById('deal-info').innerHTML = `
+    <div class="row"><span class="label">${t('crypto')}</span><span class="value">${d.crypto_currency}</span></div>
+    <div class="row"><span class="label">${t('fiat')}</span><span class="value">${d.fiat_currency}</span></div>
+    <div class="row"><span class="label">${t('price')}</span><span class="value">${d.price.toLocaleString()} ${d.fiat_currency}</span></div>
+    <div class="row"><span class="label">${t('amount')}</span><span class="value">${d.crypto_amount} ${d.crypto_currency}</span></div>
+    <div style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px;display:flex;justify-content:space-between;align-items:center">
+      <span style="color:var(--t2);font-size:13px">${t('total')}</span>
+      <span style="font-size:18px;font-weight:700">${d.fiat_amount.toLocaleString()} ${d.fiat_currency}</span>
+    </div>`;
+
+  if (d.status === 'pending') {
+    document.getElementById('deal-timer').innerHTML = `<div class="timer-box">
+      <div class="label">${t('time_left')}</div>
+      <div class="time" id="timer-display">${fmtTime(dealTimeLeft)}</div></div>`;
+    if (dealTimerInterval) clearInterval(dealTimerInterval);
+    dealTimerInterval = setInterval(() => {
+      dealTimeLeft = Math.max(0, dealTimeLeft - 1);
+      const el = document.getElementById('timer-display');
+      if (el) el.textContent = fmtTime(dealTimeLeft);
+    }, 1000);
+  } else {
+    document.getElementById('deal-timer').innerHTML = '';
+    if (dealTimerInterval) clearInterval(dealTimerInterval);
+  }
+
+  const isBuyer = d.buyer_id === user.id;
+  let actions = '';
+  if (d.status === 'pending' && isBuyer) {
+    actions = `<button class="btn-green" style="flex:1" onclick="dealMarkPaid()">${t('mark_paid')}</button>
+      <button class="btn-red-o" style="flex:1" onclick="dealCancel()">${t('cancel_deal')}</button>`;
+  } else if (d.status === 'paid' && !isBuyer) {
+    actions = `<button class="btn-green" style="flex:1" onclick="dealConfirm()">${t('confirm_receipt')}</button>`;
+  } else if (d.status === 'pending' && !isBuyer) {
+    actions = `<p style="color:var(--t2);font-size:14px;text-align:center;width:100%;padding:12px">${t('buyer')}: ${t('pending')}...</p>`;
+  }
+  document.getElementById('deal-actions').innerHTML = actions;
+
+  document.getElementById('lbl-chat').textContent = t('chat');
+  document.getElementById('btn-chat-send').textContent = t('send');
+  renderChat();
+}
+
+function fmtTime(s) {
+  return String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
+}
+
+function dealMarkPaid() {
+  if (!currentDeal) return;
+  currentDeal.status = 'paid';
+  renderDeal();
+}
+function dealConfirm() {
+  if (!currentDeal) return;
+  currentDeal.status = 'completed';
+  renderDeal();
+}
+function dealCancel() {
+  if (!currentDeal) return;
+  currentDeal.status = 'cancelled';
+  renderDeal();
+}
+
+function renderChat() {
+  const el = document.getElementById('chat-messages');
+  el.innerHTML = chatMessages.map(m => {
+    const mine = m.sender_id === user.id;
+    return `<div class="chat-msg ${mine?'mine':'other'}">
+      ${!mine ? `<div class="sender">${m.first_name||'User'}</div>` : ''}
+      <div>${m.text}</div>
+      <div class="time">${new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>
+    </div>`;
+  }).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+function sendChatMsg() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  chatMessages.push({id:chatMessages.length+1, sender_id:user.id, first_name:user.first_name,
+    text, created_at:new Date().toISOString()});
+  input.value = '';
+  renderChat();
+}
+
+// ═══════════════════════════════
+// PROFILE
+// ═══════════════════════════════
+function renderProfile() {
+  const letter = (user.first_name||'U')[0].toUpperCase();
+  document.getElementById('prof-avatar').textContent = letter;
+  document.getElementById('prof-name').textContent = user.first_name;
+  document.getElementById('prof-username').textContent = user.username ? '@'+user.username : '';
+  document.getElementById('prof-tgid').textContent = t('tg_id') + ': ' + user.telegram_id;
+  document.getElementById('lbl-completed').textContent = t('deals_done');
+  document.getElementById('prof-completed').textContent = deals.filter(d=>d.status==='completed').length;
+  document.getElementById('lbl-profile-title').textContent = t('profile');
+  document.getElementById('lbl-language').textContent = t('language') + ':';
+  document.getElementById('prof-orders-btn').textContent = t('my_orders');
+  document.getElementById('prof-deals-btn').textContent = t('my_deals');
+  document.getElementById('btn-close').textContent = t('close_app');
+
+  document.getElementById('lang-en').className = 'lang-btn' + (locale==='en'?' active':'');
+  document.getElementById('lang-ru').className = 'lang-btn' + (locale==='ru'?' active':'');
+
+  renderProfileTab();
+}
+
+function setProfileTab(tab) {
+  profileTab = tab;
+  document.getElementById('prof-orders-btn').className = 'toggle-btn' + (tab==='orders'?' active-yellow':'');
+  document.getElementById('prof-deals-btn').className = 'toggle-btn' + (tab==='deals'?' active-yellow':'');
+  renderProfileTab();
+}
+
+function renderProfileTab() {
+  const el = document.getElementById('prof-tab-content');
+  if (profileTab === 'orders') {
+    el.innerHTML = `<div class="empty">${t('no_orders')}</div>`;
+  } else {
+    if (!deals.length) { el.innerHTML = `<div class="empty">${t('no_txn')}</div>`; return; }
+    el.innerHTML = deals.map(d => `
+      <div class="order-card" onclick="openDeal(${d.id})" style="cursor:pointer">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><span style="font-size:14px;font-weight:500">${d.crypto_currency}/${d.fiat_currency}</span>
+            <span style="color:var(--t2);font-size:12px;margin-left:8px">#${d.id}</span></div>
+          <span class="badge badge-${d.status}">${t(d.status)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;color:var(--t2);font-size:12px">
+          <span>${d.crypto_amount} ${d.crypto_currency}</span>
+          <span>${d.fiat_amount.toLocaleString()} ${d.fiat_currency}</span>
+        </div>
+      </div>
+    `).join('');
+  }
+}
+
+function setLang(l) {
+  locale = l;
+  localStorage.setItem('p2p_locale', l);
+  updateNavLabels();
+  renderProfile();
+  if (currentPage === 'home') renderHome();
+  if (currentPage === 'exchange') renderOrders();
+}
+
+function updateNavLabels() {
+  document.querySelector('#nav-home span').textContent = t('nav.home');
+  document.querySelector('#nav-exchange span').textContent = t('nav.exchange');
+  document.querySelector('#nav-profile span').textContent = t('nav.profile');
+}
+
+function closeApp() {
+  try { Telegram.WebApp.close(); } catch(e) { alert('Close'); }
+}
+
+// ═══════════════════════════════
+// INIT
+// ═══════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  if (APP_NAME) document.title = APP_NAME;
+
+  document.getElementById('splash-title').textContent = t('splash_title');
+
+  setTimeout(() => {
+    document.getElementById('splash').style.opacity = '0';
+    document.getElementById('splash').style.transition = 'opacity .3s';
+    setTimeout(() => {
+      document.getElementById('splash').style.display = 'none';
+      document.getElementById('bottom-nav').style.display = 'flex';
+      updateNavLabels();
+      showPage('home');
+    }, 300);
+  }, 2000);
+
+  document.getElementById('chat-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') sendChatMsg();
+  });
+});
+</script>
+</body>
+</html>
