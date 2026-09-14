@@ -29,13 +29,11 @@ button:active{transform:scale(0.96)}
 .page.active{display:block;animation:fadeIn .3s ease}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 
-/* Splash */
 #splash{display:flex;align-items:center;justify-content:center;flex-direction:column;
   position:fixed;inset:0;background:var(--bg);z-index:100}
 #splash .splash-logo{opacity:0;transform:scale(.8);animation:splashLogoIn .8s ease forwards}
 @keyframes splashLogoIn{to{opacity:1;transform:scale(1)}}
 
-/* Bottom Nav */
 .bottom-nav{position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;
   background:var(--bg2);border-top:1px solid var(--border);display:flex;
   justify-content:space-around;align-items:center;height:64px;z-index:50}
@@ -48,24 +46,29 @@ button:active{transform:scale(0.96)}
 .nav-btn:not(.active) svg{stroke:var(--t2)}
 .nav-btn:not(.active) span{color:var(--t2)}
 
-/* Cards & Components */
 .wallet-card{margin:0 16px;border-radius:16px;padding:20px;
   background:linear-gradient(to bottom,var(--card),var(--bg2))}
 .topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 16px}
 .avatar{border-radius:50%;display:flex;align-items:center;justify-content:center;
   font-weight:700;color:var(--bg);background:var(--yellow)}
 
-/* Balance hide/show */
 #balance-amount{cursor:pointer;transition:filter .3s ease;user-select:none}
 #balance-amount.blurred{filter:blur(8px)}
 
-.banner-wrap{margin:16px;position:relative;overflow:hidden;border-radius:12px;height:140px;background:var(--bg2)}
+.pnl-row{display:flex;align-items:center;gap:6px;margin-top:2px}
+.pnl-label{color:var(--t2);font-size:12px}
+.pnl-value{font-size:12px;font-weight:600}
+.pnl-value.up{color:var(--green)}
+.pnl-value.down{color:var(--red)}
+
+.banner-wrap{margin:16px;position:relative;overflow:hidden;border-radius:16px;aspect-ratio:2.2/1}
 .banner{position:absolute;inset:0;padding:0;display:flex;align-items:center;justify-content:center;
-  border-radius:12px;transition:transform .3s,opacity .3s;cursor:pointer;overflow:hidden;background:var(--bg2)}
+  border-radius:16px;transition:transform .35s ease,opacity .35s ease;cursor:pointer;overflow:hidden}
 .banner.hide-left{transform:translateX(-100%);opacity:0}
 .banner.hide-right{transform:translateX(100%);opacity:0}
 .banner.visible{transform:translateX(0);opacity:1}
 .banner:active{transform:scale(0.97)!important}
+.banner img{width:100%;height:100%;object-fit:cover;border-radius:16px;pointer-events:none}
 .dots{display:flex;justify-content:center;gap:6px;margin-top:12px}
 .dot{width:6px;height:6px;border-radius:3px;background:var(--card);transition:all .3s;cursor:pointer}
 .dot.active{width:16px;background:var(--yellow)}
@@ -95,9 +98,9 @@ button:active{transform:scale(0.96)}
 .btn-outline{padding:10px 20px;background:none;border:1px solid var(--yellow);color:var(--yellow);
   border-radius:8px;font-size:14px;font-weight:500;transition:all .2s}
 .btn-outline:hover{background:var(--yellow);color:var(--bg)}
-.btn-green{background:var(--green);color:#fff;border-radius:8px;padding:12px;font-weight:600;font-size:14px;transition:transform .1s}
+.btn-green{background:var(--green);color:#fff;border-radius:8px;padding:12px;font-weight:600;font-size:14px}
 .btn-red-o{background:var(--card);color:var(--red);border:1px solid var(--red);border-radius:8px;
-  padding:12px;font-weight:600;font-size:14px;transition:transform .1s}
+  padding:12px;font-weight:600;font-size:14px}
 
 .badge{display:inline-block;padding:2px 12px;border-radius:20px;font-size:11px;font-weight:500}
 .badge-pending{background:rgba(240,185,11,.2);color:var(--yellow)}
@@ -131,13 +134,6 @@ button:active{transform:scale(0.96)}
 .chat-input button{background:var(--yellow);color:var(--bg);border-radius:8px;padding:8px 16px;
   font-size:13px;font-weight:600}
 
-.fab{position:fixed;bottom:80px;right:16px;width:56px;height:56px;border-radius:50%;
-  background:var(--yellow);display:flex;align-items:center;justify-content:center;
-  box-shadow:0 4px 12px rgba(240,185,11,.3);z-index:30;transition:transform .2s}
-.fab:hover{transform:scale(1.05)}
-.fab:active{transform:scale(0.95)!important}
-.fab svg{width:24px;height:24px;stroke:var(--bg);stroke-width:3}
-
 .back-btn{background:none;color:var(--t2);padding:8px}
 .back-btn svg{width:24px;height:24px;stroke:currentColor;stroke-width:2}
 .page-header{display:flex;align-items:center;gap:12px;padding:12px 16px}
@@ -149,14 +145,11 @@ button:active{transform:scale(0.96)}
 
 .profile-card{background:var(--card);border-radius:12px;padding:20px;display:flex;
   flex-direction:column;align-items:center;margin:0 16px 16px}
-.profile-stat{margin-top:12px;padding:8px 16px;background:var(--bg2);border-radius:8px;text-align:center}
-.profile-stat .label{color:var(--t2);font-size:12px}
-.profile-stat .val{color:var(--yellow);font-size:20px;font-weight:700}
 
 .crypto-icons{display:flex;gap:12px;margin-bottom:20px}
 .crypto-icon{display:flex;align-items:center;gap:4px}
 .crypto-icon .sym{color:var(--yellow);font-size:14px;display:flex;align-items:center}
-.crypto-icon .sym img{width:20px;height:20px;border-radius:50%;object-fit:cover}
+.crypto-icon .sym img{width:20px;height:20px;border-radius:50%;object-fit:cover;background:rgba(255,255,255,0.08)}
 .crypto-icon .name{color:var(--t2);font-size:12px}
 
 .pay-badges{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
@@ -173,7 +166,7 @@ button:active{transform:scale(0.96)}
 
 .market-card{background:var(--card);border-radius:12px;padding:12px 16px;margin-bottom:8px;
   display:flex;align-items:center;gap:12px}
-.market-icon{width:32px;height:32px;border-radius:50%;object-fit:cover}
+.market-icon{width:32px;height:32px;border-radius:50%;object-fit:cover;background:rgba(255,255,255,0.08)}
 .market-info{flex:1;min-width:0}
 .market-name{font-size:14px;font-weight:600;color:var(--t1)}
 .market-sym{font-size:12px;color:var(--t2)}
@@ -183,41 +176,90 @@ button:active{transform:scale(0.96)}
 .market-change.up{color:var(--green);background:rgba(14,203,129,.15)}
 .market-change.down{color:var(--red);background:rgba(246,70,93,.15)}
 
+.create-deal-btn{display:flex;align-items:center;justify-content:center;gap:8px;
+  margin:16px;padding:14px;background:var(--yellow);color:var(--bg);border-radius:12px;
+  font-size:15px;font-weight:700;box-shadow:0 4px 16px rgba(240,185,11,.25)}
+.create-deal-btn:hover{background:var(--yellow-h)}
+.create-deal-btn svg{width:20px;height:20px;stroke:var(--bg);stroke-width:2.5}
+
 /* Stats Grid */
-.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 16px 16px}
-.stats-grid-inner{background:var(--card);border-radius:12px;padding:16px}
+.stats-grid-wrap{background:var(--card);border-radius:12px;padding:16px;margin:0 16px 16px}
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .stat-mini{background:var(--bg2);border-radius:10px;padding:14px 10px;text-align:center}
 .stat-mini .stat-val{font-size:20px;font-weight:700;color:var(--yellow)}
 .stat-mini .stat-label{font-size:11px;color:var(--t2);margin-top:4px}
 
-/* Wallet Addresses */
-.wallet-section{background:var(--card);border-radius:12px;padding:16px;margin:0 16px 16px}
-.wallet-section h3{font-size:15px;font-weight:600;color:var(--t1);margin-bottom:12px}
-.wallet-row{margin-bottom:14px}
-.wallet-row:last-child{margin-bottom:0}
-.wallet-row label{display:flex;align-items:center;gap:6px;color:var(--t2);font-size:13px;margin-bottom:6px}
-.wallet-row label img{width:18px;height:18px;border-radius:50%}
-.wallet-input-wrap{position:relative;display:flex;gap:8px}
-.wallet-input-wrap input{flex:1;background:var(--bg2);color:var(--t1);border:1px solid var(--border);
-  border-radius:8px;padding:10px 12px;font-size:13px;font-family:monospace;transition:border-color .2s}
-.wallet-input-wrap input.valid{border-color:var(--green)}
-.wallet-input-wrap input.invalid{border-color:var(--red)}
-.wallet-input-wrap .wallet-save-btn{background:var(--yellow);color:var(--bg);border-radius:8px;
-  padding:0 14px;font-size:13px;font-weight:600;white-space:nowrap}
-.wallet-masked{display:flex;align-items:center;gap:8px;background:var(--bg2);border-radius:8px;
-  padding:10px 12px;font-size:13px;font-family:monospace;color:var(--t1)}
-.wallet-masked .addr{flex:1;overflow:hidden;text-overflow:ellipsis}
-.wallet-edit-btn{background:none;color:var(--yellow);font-size:12px;font-weight:600;padding:4px 8px}
-.wallet-status{font-size:11px;margin-top:4px;height:14px}
-.wallet-status.ok{color:var(--green)}
-.wallet-status.err{color:var(--red)}
+/* ═══ WALLET PAGE ═══ */
+.wallet-hero{display:flex;flex-direction:column;align-items:center;padding:24px 16px 8px}
+.coin-3d-wrap{perspective:800px;margin-bottom:20px;cursor:grab}
+.coin-3d-wrap:active{cursor:grabbing}
+.coin-3d{
+  width:90px;height:90px;border-radius:50%;
+  background:linear-gradient(145deg,#F5CE42 0%,#F0B90B 40%,#D4A20A 100%);
+  display:flex;align-items:center;justify-content:center;
+  transform-style:preserve-3d;
+  animation:coinFloat 4s ease-in-out infinite;
+  box-shadow:0 8px 32px rgba(240,185,11,0.35),0 0 60px rgba(240,185,11,0.12);
+  transition:transform .15s ease-out;
+  position:relative;
+}
+.coin-3d::after{
+  content:'';position:absolute;inset:3px;border-radius:50%;
+  border:2px solid rgba(255,255,255,0.25);pointer-events:none;
+}
+.coin-3d svg{width:40px;height:40px;fill:#fff;filter:drop-shadow(0 1px 2px rgba(0,0,0,.25))}
+.coin-3d.interacting{animation:none}
+@keyframes coinFloat{
+  0%,100%{transform:translateY(0) rotateY(0deg) rotateX(5deg)}
+  25%{transform:translateY(-10px) rotateY(90deg) rotateX(0deg)}
+  50%{transform:translateY(-16px) rotateY(180deg) rotateX(-5deg)}
+  75%{transform:translateY(-10px) rotateY(270deg) rotateX(0deg)}
+}
 
-/* Create Deal Button */
-.create-deal-btn{display:flex;align-items:center;justify-content:center;gap:8px;
-  margin:16px;padding:14px;background:var(--yellow);color:var(--bg);border-radius:12px;
-  font-size:15px;font-weight:700;box-shadow:0 4px 16px rgba(240,185,11,.25);transition:transform .1s,background .2s}
-.create-deal-btn:hover{background:var(--yellow-h)}
-.create-deal-btn svg{width:20px;height:20px;stroke:var(--bg);stroke-width:2.5}
+.bind-wallet-btn{display:flex;align-items:center;justify-content:center;gap:10px;
+  margin:0 16px 20px;padding:14px;background:var(--yellow);color:var(--bg);border-radius:12px;
+  font-size:15px;font-weight:700;box-shadow:0 4px 16px rgba(240,185,11,.25)}
+.bind-wallet-btn:hover{background:var(--yellow-h)}
+.bind-wallet-btn svg{width:22px;height:22px}
+
+.wcrypto-card{background:var(--card);border-radius:12px;margin:0 16px 8px;overflow:hidden;
+  transition:transform .1s}
+.wcrypto-card:active{transform:scale(0.98)}
+.wcrypto-header{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer}
+.wcrypto-icon{width:36px;height:36px;border-radius:50%;object-fit:cover;
+  background:rgba(255,255,255,0.08);flex-shrink:0}
+.wcrypto-info{flex:1;min-width:0}
+.wcrypto-name{font-size:14px;font-weight:600;color:var(--t1)}
+.wcrypto-sym{font-size:12px;color:var(--t2)}
+.wcrypto-bal{text-align:right}
+.wcrypto-bal .amt{font-size:14px;font-weight:600;color:var(--t1)}
+.wcrypto-bal .usd{font-size:11px;color:var(--t2)}
+.wcrypto-chevron{color:var(--t2);transition:transform .2s;flex-shrink:0}
+.wcrypto-chevron.open{transform:rotate(180deg)}
+.wcrypto-expand{padding:0 16px 14px;display:none}
+.wcrypto-expand.open{display:block}
+.wcrypto-input-row{display:flex;gap:8px}
+.wcrypto-input-row input{flex:1;background:var(--bg2);color:var(--t1);border:1px solid var(--border);
+  border-radius:8px;padding:9px 12px;font-size:12px;font-family:'Inter',monospace;transition:border-color .2s}
+.wcrypto-input-row input.valid{border-color:var(--green)}
+.wcrypto-input-row input.invalid{border-color:var(--red)}
+.wcrypto-input-row button{background:var(--yellow);color:var(--bg);border-radius:8px;
+  padding:0 14px;font-size:12px;font-weight:600;white-space:nowrap}
+.wcrypto-status{font-size:11px;margin-top:4px;min-height:14px}
+.wcrypto-status.ok{color:var(--green)}
+.wcrypto-status.err{color:var(--red)}
+.wcrypto-saved{display:flex;align-items:center;gap:8px;background:var(--bg2);border-radius:8px;
+  padding:9px 12px;font-size:12px;font-family:'Inter',monospace;color:var(--t1)}
+.wcrypto-saved .addr{flex:1;overflow:hidden;text-overflow:ellipsis}
+.wcrypto-saved button{background:none;color:var(--yellow);font-size:11px;font-weight:600;padding:2px 6px}
+
+.wfiat-card{background:var(--card);border-radius:12px;padding:14px 16px;margin:0 16px 8px;
+  display:flex;align-items:center;gap:12px}
+.wfiat-flag{font-size:24px;width:36px;text-align:center;flex-shrink:0}
+.wfiat-info{flex:1}
+.wfiat-name{font-size:14px;font-weight:600;color:var(--t1)}
+.wfiat-sym{font-size:12px;color:var(--t2)}
+.wfiat-bal{font-size:14px;font-weight:600;color:var(--t1)}
 </style>
 </head>
 <body>
@@ -244,15 +286,20 @@ button:active{transform:scale(0.96)}
     </button>
   </div>
 
-  <!-- Wallet Card -->
   <div class="wallet-card">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
       <span style="color:var(--t2);font-size:13px" id="lbl-balance">Estimated Balance</span>
       <button onclick="toggleBalance()" style="background:none;padding:4px" id="eye-btn"></button>
     </div>
-    <div style="margin-bottom:16px">
+    <div>
       <span style="font-size:28px;font-weight:700" id="balance-amount" onclick="toggleBalance()"></span>
     </div>
+    <div class="pnl-row" id="pnl-row">
+      <span class="pnl-label" id="pnl-label">PnL Today</span>
+      <span class="pnl-value up" id="pnl-value">+$0.00</span>
+      <span class="pnl-value up" id="pnl-pct">+0.00%</span>
+    </div>
+    <div style="margin-top:14px"></div>
     <div class="crypto-icons" id="crypto-icons-row"></div>
     <div style="display:flex;gap:12px">
       <button class="btn-outline" style="flex:1" id="btn-deposit">Deposit</button>
@@ -260,7 +307,6 @@ button:active{transform:scale(0.96)}
     </div>
   </div>
 
-  <!-- Create Deal Button -->
   <button class="create-deal-btn" onclick="showPage('create-order')" id="btn-create-deal">
     <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
       <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -268,48 +314,48 @@ button:active{transform:scale(0.96)}
     <span id="lbl-create-deal">Create Deal</span>
   </button>
 
-  <!-- Banners -->
   <div class="banner-wrap" id="banner-container"></div>
   <div class="dots" id="banner-dots"></div>
 
-  <!-- Markets -->
   <div class="section-title" id="lbl-markets">Markets</div>
   <div style="padding:0 16px" id="markets-list"></div>
 
-  <!-- Recent Transactions -->
   <div class="section-title" id="lbl-recent">Recent Transactions</div>
   <div style="padding:0 16px" id="recent-deals"></div>
 </div>
 
-<!-- EXCHANGE -->
-<div id="page-exchange" class="page">
-  <div class="toggle-row" id="ex-toggle">
-    <button class="toggle-btn active-buy" onclick="setExSide('buy')" id="ex-buy-btn">Buy</button>
-    <button class="toggle-btn" onclick="setExSide('sell')" id="ex-sell-btn">Sell</button>
+<!-- WALLET -->
+<div id="page-wallet" class="page">
+  <div class="page-header"><h1 id="lbl-wallet-title">Wallet</h1></div>
+
+  <div class="wallet-hero">
+    <div class="coin-3d-wrap" id="coin3d-wrap">
+      <div class="coin-3d" id="coin3d">
+        <svg viewBox="0 0 126.6 126.6" xmlns="http://www.w3.org/2000/svg">
+          <path d="M38.7 53.4L63.3 28.8l24.6 24.6-14.3 14.3L63.3 57.4l-10.3 10.3zm0 19.8l14.3-14.3 10.3 10.3 10.3-10.3 14.3 14.3L63.3 97.8zm24.6-9.9l10.3-10.3 14.3 14.3-10.3 10.3zm-24.6 0L24.4 49.1 38.7 34.8l14.3 14.3zm0 0L24.4 77.5l14.3 14.3 14.3-14.3zM63.3 0a63.3 63.3 0 100 126.6A63.3 63.3 0 0063.3 0z"/>
+        </svg>
+      </div>
+    </div>
   </div>
-  <div class="filter-row">
-    <select id="ex-crypto" onchange="renderOrders()">
-      <option value="">All Crypto</option>
-      <option>BTC</option><option>ETH</option><option>USDT</option><option>GRAM</option><option>STARS</option>
-    </select>
-    <select id="ex-fiat" onchange="renderOrders()">
-      <option value="">All Fiat</option>
-      <option>USD</option><option>EUR</option><option>RUB</option><option>UAH</option>
-      <option>MDL</option><option>TRY</option><option>CNY</option><option>GBP</option>
-    </select>
-  </div>
-  <div style="padding:16px" id="orders-list"></div>
-  <button class="fab" onclick="showPage('create-order')">
-    <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round">
-      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+
+  <button class="bind-wallet-btn" onclick="scrollToWalletCrypto()" id="btn-bind-wallet">
+    <svg viewBox="0 0 126.6 126.6" fill="#fff" xmlns="http://www.w3.org/2000/svg">
+      <path d="M38.7 53.4L63.3 28.8l24.6 24.6-14.3 14.3L63.3 57.4l-10.3 10.3zm0 19.8l14.3-14.3 10.3 10.3 10.3-10.3 14.3 14.3L63.3 97.8zm24.6-9.9l10.3-10.3 14.3 14.3-10.3 10.3zm-24.6 0L24.4 49.1 38.7 34.8l14.3 14.3zm0 0L24.4 77.5l14.3 14.3 14.3-14.3zM63.3 0a63.3 63.3 0 100 126.6A63.3 63.3 0 0063.3 0z"/>
     </svg>
+    <span id="lbl-bind-wallet">Bind Wallet</span>
   </button>
+
+  <div class="section-title" id="lbl-crypto-section">Cryptocurrencies</div>
+  <div id="wallet-crypto-list"></div>
+
+  <div class="section-title" id="lbl-fiat-section">Fiat Currencies</div>
+  <div id="wallet-fiat-list"></div>
 </div>
 
 <!-- CREATE ORDER -->
 <div id="page-create-order" class="page">
   <div class="page-header">
-    <button class="back-btn" onclick="showPage('exchange')"><svg viewBox="0 0 24 24" fill="none"><polyline points="15,18 9,12 15,6"/></svg></button>
+    <button class="back-btn" onclick="showPage('home')"><svg viewBox="0 0 24 24" fill="none"><polyline points="15,18 9,12 15,6"/></svg></button>
     <h1 id="lbl-create-order">Create Order</h1>
   </div>
   <div style="padding:0 16px">
@@ -366,7 +412,7 @@ button:active{transform:scale(0.96)}
 <!-- DEAL -->
 <div id="page-deal" class="page">
   <div class="page-header">
-    <button class="back-btn" onclick="showPage('exchange')"><svg viewBox="0 0 24 24" fill="none"><polyline points="15,18 9,12 15,6"/></svg></button>
+    <button class="back-btn" onclick="showPage('home')"><svg viewBox="0 0 24 24" fill="none"><polyline points="15,18 9,12 15,6"/></svg></button>
     <h1 id="deal-title">Deal #1</h1>
     <div style="margin-left:auto" id="deal-badge"></div>
   </div>
@@ -395,8 +441,7 @@ button:active{transform:scale(0.96)}
     <p style="color:var(--t2);font-size:12px;margin-top:4px" id="prof-tgid">Telegram ID: 123456789</p>
   </div>
 
-  <!-- Stats Grid -->
-  <div class="stats-grid-inner" style="margin:0 16px 16px">
+  <div class="stats-grid-wrap">
     <div class="stats-grid">
       <div class="stat-mini">
         <div class="stat-val" id="stat-total">0</div>
@@ -415,12 +460,6 @@ button:active{transform:scale(0.96)}
         <div class="stat-label" id="lbl-stat-active">Active</div>
       </div>
     </div>
-  </div>
-
-  <!-- Wallet Addresses -->
-  <div class="wallet-section" id="wallet-section">
-    <h3 id="lbl-payment-details">Payment Details</h3>
-    <div id="wallet-addresses"></div>
   </div>
 
   <div style="padding:0 16px 16px">
@@ -452,12 +491,14 @@ button:active{transform:scale(0.96)}
     </svg>
     <span>Home</span>
   </button>
-  <button class="nav-btn" onclick="showPage('exchange')" id="nav-exchange">
+  <button class="nav-btn" onclick="showPage('wallet')" id="nav-wallet">
     <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <polyline points="17,1 21,5 17,9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/>
-      <polyline points="7,23 3,19 7,15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+      <rect x="2" y="6" width="20" height="14" rx="2"/>
+      <path d="M16 14a1 1 0 100-2 1 1 0 000 2z" fill="currentColor" stroke="none"/>
+      <path d="M2 10h20"/>
+      <path d="M6 6V4a2 2 0 012-2h8a2 2 0 012 2v2"/>
     </svg>
-    <span>Exchange</span>
+    <span>Wallet</span>
   </button>
   <button class="nav-btn" onclick="showPage('profile')" id="nav-profile">
     <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -468,32 +509,31 @@ button:active{transform:scale(0.96)}
 </div>
 
 <script>
-// CONFIG
-const APP_NAME = '';
+var APP_NAME = '';
 
 // STATE
-let locale = localStorage.getItem('p2p_locale') || 'en';
-let balanceVisible = true;
-let balanceAnimating = false;
-let currentPage = 'home';
-let exSide = 'buy';
-let coSide = 'buy';
-let profileTab = 'orders';
-let bannerIdx = 0;
-let bannerTimer = null;
-let dealTimerInterval = null;
-let currentDeal = null;
-let chatMessages = [];
+var locale = 'en';
+try { locale = localStorage.getItem('p2p_locale') || 'en'; } catch(e){}
+var balanceVisible = true;
+var balanceAnimating = false;
+var currentPage = 'home';
+var coSide = 'buy';
+var profileTab = 'orders';
+var bannerIdx = 0;
+var bannerTimer = null;
+var dealTimerInterval = null;
+var currentDeal = null;
+var chatMessages = [];
+var expandedCrypto = {};
 
-const user = {id:1, telegram_id:123456789, username:'demo_user', first_name:'Demo'};
+var user = {id:1, telegram_id:123456789, username:'demo_user', first_name:'Demo'};
 
-// Saved wallet addresses
-let savedWallets = {};
-try { savedWallets = JSON.parse(localStorage.getItem('p2p_wallets')||'{}'); } catch(e) {}
+var savedWallets = {};
+try { savedWallets = JSON.parse(localStorage.getItem('p2p_wallets')||'{}'); } catch(e){}
 
 try {
   if (window.Telegram && Telegram.WebApp && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user) {
-    const tg = Telegram.WebApp.initDataUnsafe.user;
+    var tg = Telegram.WebApp.initDataUnsafe.user;
     user.telegram_id = tg.id;
     user.username = tg.username || '';
     user.first_name = tg.first_name || 'User';
@@ -504,26 +544,26 @@ try {
   }
 } catch(e) {}
 
-// CRYPTO ICON HELPERS
-const cryptoIcons = {BTC:'assets/Bitcoin-Logo.png',ETH:'assets/ethereum-eth-logo.png',USDT:'assets/tether.png',GRAM:'assets/Gram Diamond Mark.png',STARS:'assets/stars.png',BNB:'assets/bnb-bnb-logo.png',SOL:'assets/solana logo.png'};
-const cryptoFallback = {BTC:'&#8383;',ETH:'&#926;',USDT:'&#8382;',GRAM:'&#9670;',STARS:'&#9733;'};
+// CRYPTO
+var cryptoIcons = {BTC:'assets/Bitcoin-Logo.png',ETH:'assets/ethereum-eth-logo.png',USDT:'assets/tether.png',GRAM:'assets/Gram Diamond Mark.png',TON:'assets/Gram Diamond Mark.png',STARS:'assets/stars.png',BNB:'assets/bnb-bnb-logo.png',SOL:'assets/solana logo.png'};
+var cryptoFallback = {BTC:'₿',ETH:'Ξ',USDT:'₮',GRAM:'◆',TON:'◆',STARS:'★',BNB:'◇',SOL:'◎'};
 
 function cryptoImg(cur) {
-  const src = cryptoIcons[cur];
-  const fb = cryptoFallback[cur] || cur[0];
+  var src = cryptoIcons[cur];
+  var fb = cryptoFallback[cur] || cur[0];
   if (!src) return fb;
-  return '<img src="'+src+'" alt="'+cur+'" width="20" height="20" style="border-radius:50%" onerror="this.outerHTML=\''+fb+'\'">';
+  return '<img src="'+src+'" alt="'+cur+'" width="20" height="20" style="border-radius:50%;background:rgba(255,255,255,0.08)" onerror="this.outerHTML=\''+fb+'\'">';
 }
 
-// EYE ICON SVGs
-const eyeOpen = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#848E9C" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
-const eyeClosed = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#848E9C" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+var eyeOpen = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#848E9C" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+var eyeClosed = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#848E9C" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
 
 // i18n
-const L = {
+var L = {
   en: {
-    'nav.home':'Home','nav.exchange':'Exchange','nav.profile':'Profile',
+    'nav.home':'Home','nav.wallet':'Wallet','nav.profile':'Profile',
     'greeting':'Hi, {name}','balance':'Estimated Balance','deposit':'Deposit','withdraw':'Withdraw',
+    'pnl_today':'PnL Today',
     'recent':'Recent Transactions','no_txn':'No transactions yet',
     'buy':'Buy','sell':'Sell','crypto':'Crypto','fiat':'Fiat','price':'Price','amount':'Amount',
     'available':'Available','payment':'Payment','create_order':'Create Order','no_orders':'No orders yet',
@@ -536,17 +576,18 @@ const L = {
     'profile':'Profile','language':'Language','my_orders':'My Orders','my_deals':'My Deals',
     'deals_done':'Deals Completed','close_app':'Close App','tg_id':'Telegram ID',
     'all_crypto':'All Crypto','all_fiat':'All Fiat',
-    'markets':'Markets',
-    'create_deal':'Create Deal',
-    'payment_details':'Payment Details',
-    'wallet_ton':'TON Wallet','wallet_btc':'Bitcoin Wallet','wallet_eth':'Ethereum Wallet',
+    'markets':'Markets','create_deal':'Create Deal',
+    'wallet':'Wallet','bind_wallet':'Bind Wallet',
+    'crypto_currencies':'Cryptocurrencies','fiat_currencies':'Fiat Currencies',
     'save':'Save','edit':'Edit',
     'valid_address':'Valid address','invalid_address':'Invalid address',
+    'enter_address':'Enter wallet address',
     'stat_total':'Deals','stat_turnover':'Turnover','stat_completed':'Completed','stat_active':'Active'
   },
   ru: {
-    'nav.home':'Главная','nav.exchange':'Обмен','nav.profile':'Профиль',
+    'nav.home':'Главная','nav.wallet':'Кошелёк','nav.profile':'Профиль',
     'greeting':'Привет, {name}','balance':'Примерный баланс','deposit':'Пополнить','withdraw':'Вывести',
+    'pnl_today':'PnL за день',
     'recent':'Последние сделки','no_txn':'Сделок пока нет',
     'buy':'Купить','sell':'Продать','crypto':'Крипто','fiat':'Фиат','price':'Цена','amount':'Количество',
     'available':'Доступно','payment':'Оплата','create_order':'Создать ордер','no_orders':'Ордеров пока нет',
@@ -559,30 +600,32 @@ const L = {
     'profile':'Профиль','language':'Язык','my_orders':'Мои ордера','my_deals':'Мои сделки',
     'deals_done':'Завершённых сделок','close_app':'Закрыть приложение','tg_id':'Telegram ID',
     'all_crypto':'Все крипто','all_fiat':'Все фиат',
-    'markets':'Рынки',
-    'create_deal':'Создать сделку',
-    'payment_details':'Реквизиты',
-    'wallet_ton':'TON Кошелёк','wallet_btc':'Bitcoin Кошелёк','wallet_eth':'Ethereum Кошелёк',
+    'markets':'Рынки','create_deal':'Создать сделку',
+    'wallet':'Кошелёк','bind_wallet':'Привязать кошелёк',
+    'crypto_currencies':'Криптовалюты','fiat_currencies':'Фиатные валюты',
     'save':'Сохранить','edit':'Изменить',
     'valid_address':'Адрес верный','invalid_address':'Неверный адрес',
+    'enter_address':'Введите адрес кошелька',
     'stat_total':'Сделок','stat_turnover':'Оборот сделок','stat_completed':'Завершённых','stat_active':'Текущих'
   }
 };
 
 function t(key, params) {
-  let s = (L[locale] && L[locale][key]) || L.en[key] || key;
-  if (params) Object.entries(params).forEach(([k,v]) => s = s.replace('{'+k+'}', v));
+  var s = (L[locale] && L[locale][key]) || L.en[key] || key;
+  if (params) {
+    Object.keys(params).forEach(function(k) { s = s.replace('{'+k+'}', params[k]); });
+  }
   return s;
 }
 
-// MOCK DATA
-const balances = [
+// DATA
+var balances = [
   {currency:'BTC',balance:0,frozen:0},{currency:'ETH',balance:0,frozen:0},
   {currency:'USDT',balance:0,frozen:0},{currency:'GRAM',balance:0,frozen:0},
   {currency:'STARS',balance:0,frozen:0}
 ];
 
-const orders = [
+var orders = [
   {id:1,user_id:2,username:'crypto_trader',first_name:'Alex',side:'sell',crypto_currency:'USDT',
    fiat_currency:'RUB',price:0,amount:0,min_limit:0,max_limit:0,
    payment_method:'Sberbank, Tinkoff',terms:'Fast transfer',status:'active'},
@@ -597,32 +640,54 @@ const orders = [
    payment_method:'SEPA, Revolut',status:'active'},
 ];
 
-const deals = [
+var deals = [
   {id:1,buyer_id:1,seller_id:2,crypto_currency:'USDT',fiat_currency:'RUB',price:0,
    crypto_amount:0,fiat_amount:0,status:'completed',created_at:'2024-01-14T15:00:00'},
   {id:2,buyer_id:1,seller_id:3,crypto_currency:'BTC',fiat_currency:'USD',price:0,
    crypto_amount:0,fiat_amount:0,status:'pending',created_at:'2024-01-15T12:00:00'},
 ];
 
+// WALLET CURRENCIES CONFIG
+var walletCryptos = [
+  {sym:'BTC', name:'Bitcoin',icon:'assets/Bitcoin-Logo.png'},
+  {sym:'ETH', name:'Ethereum',icon:'assets/ethereum-eth-logo.png'},
+  {sym:'USDT',name:'Tether',icon:'assets/tether.png'},
+  {sym:'TON', name:'Toncoin',icon:'assets/Gram Diamond Mark.png'},
+  {sym:'BNB', name:'BNB',icon:'assets/bnb-bnb-logo.png'},
+  {sym:'SOL', name:'Solana',icon:'assets/solana logo.png'},
+  {sym:'STARS',name:'Telegram Stars',icon:'assets/stars.png'},
+];
+
+var walletFiats = [
+  {sym:'USD',name:'US Dollar',flag:'🇺🇸'},
+  {sym:'EUR',name:'Euro',flag:'🇪🇺'},
+  {sym:'RUB',name:'Russian Ruble',flag:'🇷🇺'},
+  {sym:'UAH',name:'Ukrainian Hryvnia',flag:'🇺🇦'},
+  {sym:'TRY',name:'Turkish Lira',flag:'🇹🇷'},
+  {sym:'CNY',name:'Chinese Yuan',flag:'🇨🇳'},
+  {sym:'GBP',name:'British Pound',flag:'🇬🇧'},
+  {sym:'MDL',name:'Moldovan Leu',flag:'🇲🇩'},
+];
+
 // NAVIGATION
 function showPage(name) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  const el = document.getElementById('page-' + name);
+  document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
+  var el = document.getElementById('page-' + name);
   if (el) el.classList.add('active');
   currentPage = name;
 
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  const nb = document.getElementById('nav-' + name);
+  document.querySelectorAll('.nav-btn').forEach(function(b) { b.classList.remove('active'); });
+  var nb = document.getElementById('nav-' + name);
   if (nb) nb.classList.add('active');
 
   if (name === 'home') renderHome();
-  if (name === 'exchange') renderOrders();
+  if (name === 'wallet') renderWallet();
   if (name === 'profile') renderProfile();
 }
 
 // HOME
 function renderHome() {
-  const letter = (user.first_name || 'U')[0].toUpperCase();
+  var letter = (user.first_name || 'U')[0].toUpperCase();
   document.getElementById('home-avatar').textContent = letter;
   document.getElementById('home-greeting').textContent = t('greeting', {name: user.first_name});
   document.getElementById('lbl-balance').textContent = t('balance');
@@ -631,11 +696,12 @@ function renderHome() {
   document.getElementById('lbl-recent').textContent = t('recent');
   document.getElementById('lbl-markets').textContent = t('markets');
   document.getElementById('lbl-create-deal').textContent = t('create_deal');
+  document.getElementById('pnl-label').textContent = t('pnl_today');
 
-  const prices = {BTC:0,ETH:0,USDT:0,GRAM:0,STARS:0};
-  const total = balances.reduce((s,b) => s + b.balance * (prices[b.currency]||0), 0);
+  var prices = {BTC:0,ETH:0,USDT:0,GRAM:0,STARS:0};
+  var total = balances.reduce(function(s,b) { return s + b.balance * (prices[b.currency]||0); }, 0);
 
-  const balEl = document.getElementById('balance-amount');
+  var balEl = document.getElementById('balance-amount');
   if (balanceVisible) {
     balEl.textContent = '$' + total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
     balEl.classList.remove('blurred');
@@ -643,13 +709,12 @@ function renderHome() {
     balEl.textContent = '****';
     balEl.classList.remove('blurred');
   }
-
   document.getElementById('eye-btn').innerHTML = balanceVisible ? eyeOpen : eyeClosed;
 
-  const iconsRow = document.getElementById('crypto-icons-row');
-  iconsRow.innerHTML = balances.map(b =>
-    '<div class="crypto-icon"><span class="sym">'+cryptoImg(b.currency)+'</span><span class="name">'+b.currency+'</span></div>'
-  ).join('');
+  var iconsRow = document.getElementById('crypto-icons-row');
+  iconsRow.innerHTML = balances.map(function(b) {
+    return '<div class="crypto-icon"><span class="sym">'+cryptoImg(b.currency)+'</span><span class="name">'+b.currency+'</span></div>';
+  }).join('');
 
   renderBanners();
   renderMarkets();
@@ -658,8 +723,7 @@ function renderHome() {
 
 function toggleBalance() {
   if (balanceAnimating) return;
-  const balEl = document.getElementById('balance-amount');
-
+  var balEl = document.getElementById('balance-amount');
   if (balanceVisible) {
     balanceAnimating = true;
     balEl.classList.add('blurred');
@@ -672,15 +736,15 @@ function toggleBalance() {
     }, 300);
   } else {
     balanceVisible = true;
-    const prices = {BTC:0,ETH:0,USDT:0,GRAM:0,STARS:0};
-    const total = balances.reduce((s,b) => s + b.balance * (prices[b.currency]||0), 0);
+    var prices = {BTC:0,ETH:0,USDT:0,GRAM:0,STARS:0};
+    var total = balances.reduce(function(s,b) { return s + b.balance * (prices[b.currency]||0); }, 0);
     balEl.textContent = '$' + total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
     document.getElementById('eye-btn').innerHTML = eyeOpen;
   }
 }
 
-// Banners
-const bannerData = [
+// BANNERS
+var bannerData = [
   {img:'assets/swipe card 1.png'},
   {img:'assets/swipe card 2.png'},
   {img:'assets/action card(swipe) 3.png'},
@@ -688,14 +752,14 @@ const bannerData = [
 ];
 
 function renderBanners() {
-  const container = document.getElementById('banner-container');
-  const dotsEl = document.getElementById('banner-dots');
+  var container = document.getElementById('banner-container');
+  var dotsEl = document.getElementById('banner-dots');
   container.innerHTML = '';
   dotsEl.innerHTML = '';
   bannerData.forEach(function(b, i) {
     var div = document.createElement('div');
     div.className = 'banner ' + (i === bannerIdx ? 'visible' : 'hide-right');
-    div.innerHTML = '<img src="'+b.img+'" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:12px;pointer-events:none" onerror="this.parentElement.style.display=\'none\'">';
+    div.innerHTML = '<img src="'+b.img+'" alt="" onerror="this.parentElement.style.display=\'none\'">';
     div.onclick = function() { bannerClick(div); };
     container.appendChild(div);
 
@@ -745,19 +809,18 @@ function renderRecentDeals() {
     var isBuy = d.buyer_id === user.id;
     return '<div class="txn-row" onclick="openDeal('+d.id+')">'+
       '<div class="txn-left">'+
-        '<div class="txn-icon '+(isBuy?'buy':'sell')+'">'+(isBuy?'&#8595;':'&#8593;')+'</div>'+
+        '<div class="txn-icon '+(isBuy?'buy':'sell')+'">'+(isBuy?'↓':'↑')+'</div>'+
         '<div><div style="font-size:14px;font-weight:500">'+(isBuy?t('buy'):t('sell'))+' '+d.crypto_currency+'</div>'+
           '<div style="color:var(--t2);font-size:12px">'+new Date(d.created_at).toLocaleDateString()+'</div></div>'+
       '</div>'+
       '<div style="text-align:right">'+
         '<div style="font-size:14px;font-weight:500">'+d.crypto_amount+' '+d.crypto_currency+'</div>'+
-        '<span class="badge badge-'+d.status+'">'+t(d.status)+'</span>'+
-      '</div></div>';
+        '<span class="badge badge-'+d.status+'">'+t(d.status)+'</span></div></div>';
   }).join('');
 }
 
-// MARKETS (CoinGecko)
-const cgMap = {
+// MARKETS
+var cgMap = {
   BTC:{id:'bitcoin',name:'Bitcoin'},
   ETH:{id:'ethereum',name:'Ethereum'},
   USDT:{id:'tether',name:'Tether'},
@@ -765,7 +828,7 @@ const cgMap = {
   BNB:{id:'binancecoin',name:'BNB'},
   SOL:{id:'solana',name:'Solana'},
 };
-let marketCache = null;
+var marketCache = null;
 
 function sampleArr(arr, n) {
   if (arr.length <= n) return arr;
@@ -800,7 +863,7 @@ function renderMarkets() {
     el.innerHTML = coins.map(function(sym) {
       var info = cgMap[sym];
       return '<div class="market-card">'+
-        '<img class="market-icon" src="'+(cryptoIcons[sym]||'')+'" alt="'+sym+'" onerror="this.style.display=\'none\'">'+
+        '<img class="market-icon" src="'+(cryptoIcons[sym]||'')+'" alt="'+sym+'" onerror="this.outerHTML=\'<div class=market-icon style=display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--yellow)>'+(cryptoFallback[sym]||sym[0])+'</div>\'">'+
         '<div class="market-info"><div class="market-name">'+info.name+'</div><div class="market-sym">'+sym+'</div></div>'+
         '<div class="market-right"><span class="market-price" style="color:var(--t2)">--</span></div></div>';
     }).join('');
@@ -817,7 +880,7 @@ function renderMarkets() {
       ? '$'+coin.current_price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})
       : '$'+coin.current_price.toFixed(4);
     return '<div class="market-card">'+
-      '<img class="market-icon" src="'+(cryptoIcons[sym]||'')+'" alt="'+sym+'" onerror="this.style.display=\'none\'">'+
+      '<img class="market-icon" src="'+(cryptoIcons[sym]||'')+'" alt="'+sym+'" onerror="this.outerHTML=\'<div class=market-icon style=display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--yellow)>'+(cryptoFallback[sym]||sym[0])+'</div>\'">'+
       '<div class="market-info"><div class="market-name">'+info.name+'</div><div class="market-sym">'+sym+'</div></div>'+
       '<div class="market-right">'+sparkSvg(spark,up,56,24)+
         '<div><div class="market-price">'+prc+'</div>'+
@@ -825,57 +888,201 @@ function renderMarkets() {
   }).join('');
 }
 
-// EXCHANGE
-function setExSide(s) {
-  exSide = s;
-  document.getElementById('ex-buy-btn').className = 'toggle-btn' + (s==='buy' ? ' active-buy' : '');
-  document.getElementById('ex-sell-btn').className = 'toggle-btn' + (s==='sell' ? ' active-sell' : '');
-  document.getElementById('ex-buy-btn').textContent = t('buy');
-  document.getElementById('ex-sell-btn').textContent = t('sell');
-  renderOrders();
+// WALLET VALIDATION
+function validateBTC(addr) {
+  if (!addr) return false;
+  addr = addr.trim();
+  if (/^(1|3)[A-HJ-NP-Za-km-z1-9]{25,34}$/.test(addr)) return true;
+  if (/^bc1[a-zA-HJ-NP-Z0-9]{25,62}$/.test(addr)) return true;
+  return false;
+}
+function validateETH(addr) {
+  if (!addr) return false;
+  return /^0x[0-9a-fA-F]{40}$/.test(addr.trim());
+}
+function validateTON(addr) {
+  if (!addr) return false;
+  addr = addr.trim();
+  if (/^(UQ|EQ|kQ|0Q)[A-Za-z0-9_-]{46}$/.test(addr)) return true;
+  if (/^[A-Fa-f0-9]{64}$/.test(addr)) return true;
+  return false;
+}
+function validateBNB(addr) {
+  if (!addr) return false;
+  addr = addr.trim();
+  if (/^bnb1[a-z0-9]{38}$/.test(addr)) return true;
+  if (/^0x[0-9a-fA-F]{40}$/.test(addr)) return true;
+  return false;
+}
+function validateSOL(addr) {
+  if (!addr) return false;
+  return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr.trim());
+}
+function validateUSDT(addr) {
+  if (!addr) return false;
+  addr = addr.trim();
+  if (/^0x[0-9a-fA-F]{40}$/.test(addr)) return true;
+  if (/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(addr)) return true;
+  return false;
 }
 
-function renderOrders() {
-  document.getElementById('ex-buy-btn').textContent = t('buy');
-  document.getElementById('ex-sell-btn').textContent = t('sell');
+var cryptoValidators = {
+  BTC: validateBTC, ETH: validateETH, USDT: validateUSDT,
+  TON: validateTON, BNB: validateBNB, SOL: validateSOL, STARS: null
+};
 
-  var crypto = document.getElementById('ex-crypto').value;
-  var fiat = document.getElementById('ex-fiat').value;
+function maskAddress(addr) {
+  if (!addr || addr.length < 12) return addr || '';
+  return addr.substring(0,6) + '••••••' + addr.substring(addr.length - 4);
+}
 
-  var filtered = orders.filter(function(o) {
-    var matchSide = exSide === 'buy' ? o.side === 'sell' : o.side === 'buy';
-    var matchCrypto = !crypto || o.crypto_currency === crypto;
-    var matchFiat = !fiat || o.fiat_currency === fiat;
-    return matchSide && matchCrypto && matchFiat && o.status === 'active';
-  });
+// WALLET PAGE
+function renderWallet() {
+  document.getElementById('lbl-wallet-title').textContent = t('wallet');
+  document.getElementById('lbl-bind-wallet').textContent = t('bind_wallet');
+  document.getElementById('lbl-crypto-section').textContent = t('crypto_currencies');
+  document.getElementById('lbl-fiat-section').textContent = t('fiat_currencies');
 
-  var el = document.getElementById('orders-list');
-  if (!filtered.length) { el.innerHTML = '<div class="empty">'+t('no_orders')+'</div>'; return; }
+  renderWalletCryptoList();
+  renderWalletFiatList();
+}
 
-  el.innerHTML = filtered.map(function(o) {
-    var isSell = o.side === 'sell';
-    var btnBg = isSell ? 'var(--green)' : 'var(--red)';
-    var btnText = isSell ? t('buy') : t('sell');
-    var payments = (o.payment_method||'').split(',').map(function(m) {
-      return '<span class="pay-badge">'+m.trim()+'</span>';
-    }).join('');
-    var limits = (o.min_limit && o.max_limit)
-      ? '<div style="color:var(--t2);font-size:12px;margin-top:8px">'+t('min_limit')+': '+o.min_limit.toLocaleString()+' - '+t('max_limit')+': '+o.max_limit.toLocaleString()+' '+o.fiat_currency+'</div>' : '';
-    return '<div class="order-card">'+
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'+
-        '<div style="display:flex;align-items:center;gap:8px">'+
-          '<div class="avatar" style="width:32px;height:32px;font-size:13px">'+(o.first_name||'U')[0]+'</div>'+
-          '<div><span style="font-size:14px;font-weight:500">'+o.first_name+'</span>'+
-            '<span style="color:var(--t2);font-size:12px;margin-left:4px">@'+o.username+'</span></div>'+
-        '</div>'+
-        '<button style="background:'+btnBg+';color:#fff;border-radius:8px;padding:6px 20px;font-weight:600;font-size:13px;border:none;cursor:pointer" onclick="openDealFromOrder('+o.id+')">'+btnText+'</button>'+
-      '</div>'+
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">'+
-        '<div><span style="color:var(--t2)">'+t('price')+'</span><p style="font-weight:500">'+o.price.toLocaleString()+' '+o.fiat_currency+'</p></div>'+
-        '<div><span style="color:var(--t2)">'+t('available')+'</span><p style="font-weight:500">'+o.amount+' '+o.crypto_currency+'</p></div>'+
-      '</div>'+limits+
-      '<div class="pay-badges">'+payments+'</div></div>';
+function renderWalletCryptoList() {
+  var el = document.getElementById('wallet-crypto-list');
+  el.innerHTML = walletCryptos.map(function(c) {
+    var isOpen = expandedCrypto[c.sym] || false;
+    var saved = savedWallets[c.sym.toLowerCase()] || '';
+    var chevronSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"/></svg>';
+    var fb = cryptoFallback[c.sym] || c.sym[0];
+
+    var expandHtml = '';
+    if (isOpen) {
+      if (saved) {
+        expandHtml = '<div class="wcrypto-expand open">'+
+          '<div class="wcrypto-saved">'+
+            '<span class="addr">'+maskAddress(saved)+'</span>'+
+            '<button onclick="event.stopPropagation();editWalletCrypto(\''+c.sym+'\')">'+t('edit')+'</button>'+
+          '</div></div>';
+      } else {
+        var hasValidator = !!cryptoValidators[c.sym];
+        expandHtml = '<div class="wcrypto-expand open">'+
+          '<div class="wcrypto-input-row">'+
+            '<input type="text" id="winput-'+c.sym+'" placeholder="'+t('enter_address')+'" oninput="onWalletCryptoInput(\''+c.sym+'\')" onclick="event.stopPropagation()">'+
+            '<button onclick="event.stopPropagation();saveWalletCrypto(\''+c.sym+'\')">'+t('save')+'</button>'+
+          '</div>'+
+          '<div class="wcrypto-status" id="wstatus-'+c.sym+'"></div></div>';
+      }
+    }
+
+    return '<div class="wcrypto-card" onclick="toggleCryptoExpand(\''+c.sym+'\')">'+
+      '<div class="wcrypto-header">'+
+        '<img class="wcrypto-icon" src="'+c.icon+'" alt="'+c.sym+'" onerror="this.outerHTML=\'<div class=wcrypto-icon style=display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--yellow)>'+fb+'</div>\'">'+
+        '<div class="wcrypto-info"><div class="wcrypto-name">'+c.name+'</div><div class="wcrypto-sym">'+c.sym+'</div></div>'+
+        '<div class="wcrypto-bal"><div class="amt">0.00</div><div class="usd">$0.00</div></div>'+
+        '<span class="wcrypto-chevron'+(isOpen?' open':'')+'">'+chevronSvg+'</span>'+
+      '</div>'+expandHtml+'</div>';
   }).join('');
+}
+
+function renderWalletFiatList() {
+  var el = document.getElementById('wallet-fiat-list');
+  el.innerHTML = walletFiats.map(function(f) {
+    return '<div class="wfiat-card">'+
+      '<span class="wfiat-flag">'+f.flag+'</span>'+
+      '<div class="wfiat-info"><div class="wfiat-name">'+f.name+'</div><div class="wfiat-sym">'+f.sym+'</div></div>'+
+      '<span class="wfiat-bal">0.00</span></div>';
+  }).join('');
+}
+
+function toggleCryptoExpand(sym) {
+  expandedCrypto[sym] = !expandedCrypto[sym];
+  renderWalletCryptoList();
+}
+
+function onWalletCryptoInput(sym) {
+  var input = document.getElementById('winput-' + sym);
+  var status = document.getElementById('wstatus-' + sym);
+  if (!input || !status) return;
+  var val = input.value.trim();
+  if (!val) {
+    input.classList.remove('valid','invalid');
+    status.textContent = '';
+    status.className = 'wcrypto-status';
+    return;
+  }
+  var validator = cryptoValidators[sym];
+  if (!validator) { status.textContent = ''; return; }
+  var valid = validator(val);
+  if (valid) {
+    input.classList.add('valid'); input.classList.remove('invalid');
+    status.textContent = t('valid_address');
+    status.className = 'wcrypto-status ok';
+  } else {
+    input.classList.add('invalid'); input.classList.remove('valid');
+    status.textContent = t('invalid_address');
+    status.className = 'wcrypto-status err';
+  }
+}
+
+function saveWalletCrypto(sym) {
+  var input = document.getElementById('winput-' + sym);
+  if (!input) return;
+  var val = input.value.trim();
+  if (!val) return;
+  var validator = cryptoValidators[sym];
+  if (validator && !validator(val)) { onWalletCryptoInput(sym); return; }
+  savedWallets[sym.toLowerCase()] = val;
+  try { localStorage.setItem('p2p_wallets', JSON.stringify(savedWallets)); } catch(e){}
+  renderWalletCryptoList();
+}
+
+function editWalletCrypto(sym) {
+  delete savedWallets[sym.toLowerCase()];
+  try { localStorage.setItem('p2p_wallets', JSON.stringify(savedWallets)); } catch(e){}
+  renderWalletCryptoList();
+}
+
+function scrollToWalletCrypto() {
+  var el = document.getElementById('wallet-crypto-list');
+  if (el) el.scrollIntoView({behavior:'smooth'});
+  walletCryptos.forEach(function(c) { expandedCrypto[c.sym] = true; });
+  renderWalletCryptoList();
+}
+
+// 3D COIN INTERACTION
+function initCoin3D() {
+  var wrap = document.getElementById('coin3d-wrap');
+  var coin = document.getElementById('coin3d');
+  if (!wrap || !coin) return;
+
+  var isInteracting = false;
+  function onMove(x, y) {
+    var rect = wrap.getBoundingClientRect();
+    var cx = (x - rect.left) / rect.width - 0.5;
+    var cy = (y - rect.top) / rect.height - 0.5;
+    coin.style.transform = 'rotateY('+( cx*40)+'deg) rotateX('+(-cy*40)+'deg) translateY(-8px)';
+  }
+  wrap.addEventListener('mouseenter', function() {
+    isInteracting = true; coin.classList.add('interacting');
+  });
+  wrap.addEventListener('mousemove', function(e) {
+    if (isInteracting) onMove(e.clientX, e.clientY);
+  });
+  wrap.addEventListener('mouseleave', function() {
+    isInteracting = false; coin.classList.remove('interacting');
+    coin.style.transform = '';
+  });
+  wrap.addEventListener('touchstart', function(e) {
+    isInteracting = true; coin.classList.add('interacting');
+    onMove(e.touches[0].clientX, e.touches[0].clientY);
+  }, {passive:true});
+  wrap.addEventListener('touchmove', function(e) {
+    if (isInteracting) onMove(e.touches[0].clientX, e.touches[0].clientY);
+  }, {passive:true});
+  wrap.addEventListener('touchend', function() {
+    isInteracting = false; coin.classList.remove('interacting');
+    coin.style.transform = '';
+  });
 }
 
 // CREATE ORDER
@@ -907,7 +1114,7 @@ function submitOrder() {
   var amount = document.getElementById('co-amount').value;
   if (!price || !amount) return;
   alert('Order created: '+coSide+' '+amount+' '+document.getElementById('co-crypto').value+' @ '+price+' '+document.getElementById('co-fiat').value);
-  showPage('exchange');
+  showPage('home');
 }
 
 // DEAL
@@ -990,22 +1197,9 @@ function renderDeal() {
 function fmtTime(s) {
   return String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
 }
-
-function dealMarkPaid() {
-  if (!currentDeal) return;
-  currentDeal.status = 'paid';
-  renderDeal();
-}
-function dealConfirm() {
-  if (!currentDeal) return;
-  currentDeal.status = 'completed';
-  renderDeal();
-}
-function dealCancel() {
-  if (!currentDeal) return;
-  currentDeal.status = 'cancelled';
-  renderDeal();
-}
+function dealMarkPaid() { if (!currentDeal) return; currentDeal.status = 'paid'; renderDeal(); }
+function dealConfirm() { if (!currentDeal) return; currentDeal.status = 'completed'; renderDeal(); }
+function dealCancel() { if (!currentDeal) return; currentDeal.status = 'cancelled'; renderDeal(); }
 
 function renderChat() {
   var el = document.getElementById('chat-messages');
@@ -1029,34 +1223,6 @@ function sendChatMsg() {
   renderChat();
 }
 
-// WALLET ADDRESS VALIDATION
-function validateTON(addr) {
-  if (!addr) return false;
-  addr = addr.trim();
-  if (/^(UQ|EQ|kQ|0Q)[A-Za-z0-9_-]{46}$/.test(addr)) return true;
-  if (/^[A-Fa-f0-9]{64}$/.test(addr)) return true;
-  return false;
-}
-
-function validateBTC(addr) {
-  if (!addr) return false;
-  addr = addr.trim();
-  if (/^(1|3)[A-HJ-NP-Za-km-z1-9]{25,34}$/.test(addr)) return true;
-  if (/^bc1[a-zA-HJ-NP-Z0-9]{25,62}$/.test(addr)) return true;
-  return false;
-}
-
-function validateETH(addr) {
-  if (!addr) return false;
-  addr = addr.trim();
-  return /^0x[0-9a-fA-F]{40}$/.test(addr);
-}
-
-function maskAddress(addr) {
-  if (!addr || addr.length < 12) return addr || '';
-  return addr.substring(0, 6) + '••••••' + addr.substring(addr.length - 4);
-}
-
 // PROFILE
 function renderProfile() {
   var letter = (user.first_name||'U')[0].toUpperCase();
@@ -1069,13 +1235,11 @@ function renderProfile() {
   document.getElementById('prof-orders-btn').textContent = t('my_orders');
   document.getElementById('prof-deals-btn').textContent = t('my_deals');
   document.getElementById('btn-close').textContent = t('close_app');
-  document.getElementById('lbl-payment-details').textContent = t('payment_details');
 
   document.getElementById('lang-en').className = 'lang-btn' + (locale==='en'?' active':'');
   document.getElementById('lang-ru').className = 'lang-btn' + (locale==='ru'?' active':'');
 
   renderStats();
-  renderWalletAddresses();
   renderProfileTab();
 }
 
@@ -1094,90 +1258,6 @@ function renderStats() {
   document.getElementById('lbl-stat-turnover').textContent = t('stat_turnover');
   document.getElementById('lbl-stat-completed').textContent = t('stat_completed');
   document.getElementById('lbl-stat-active').textContent = t('stat_active');
-}
-
-function renderWalletAddresses() {
-  var walletTypes = [
-    {key:'ton', label:'wallet_ton', icon:'assets/Gram Diamond Mark.png', validate:validateTON},
-    {key:'btc', label:'wallet_btc', icon:'assets/Bitcoin-Logo.png', validate:validateBTC},
-    {key:'eth', label:'wallet_eth', icon:'assets/ethereum-eth-logo.png', validate:validateETH},
-  ];
-
-  var el = document.getElementById('wallet-addresses');
-  el.innerHTML = walletTypes.map(function(w) {
-    var saved = savedWallets[w.key] || '';
-    if (saved) {
-      return '<div class="wallet-row">'+
-        '<label><img src="'+w.icon+'" onerror="this.style.display=\'none\'"> '+t(w.label)+'</label>'+
-        '<div class="wallet-masked">'+
-          '<span class="addr">'+maskAddress(saved)+'</span>'+
-          '<button class="wallet-edit-btn" onclick="editWallet(\''+w.key+'\')">'+t('edit')+'</button>'+
-        '</div></div>';
-    }
-    return '<div class="wallet-row">'+
-      '<label><img src="'+w.icon+'" onerror="this.style.display=\'none\'"> '+t(w.label)+'</label>'+
-      '<div class="wallet-input-wrap">'+
-        '<input type="text" id="wallet-input-'+w.key+'" placeholder="'+t(w.label)+'" oninput="onWalletInput(\''+w.key+'\')">'+
-        '<button class="wallet-save-btn" onclick="saveWallet(\''+w.key+'\')">'+t('save')+'</button>'+
-      '</div>'+
-      '<div class="wallet-status" id="wallet-status-'+w.key+'"></div></div>';
-  }).join('');
-}
-
-function onWalletInput(key) {
-  var input = document.getElementById('wallet-input-' + key);
-  var status = document.getElementById('wallet-status-' + key);
-  if (!input || !status) return;
-  var val = input.value.trim();
-  if (!val) {
-    input.classList.remove('valid','invalid');
-    status.textContent = '';
-    status.className = 'wallet-status';
-    return;
-  }
-  var valid = false;
-  if (key === 'ton') valid = validateTON(val);
-  else if (key === 'btc') valid = validateBTC(val);
-  else if (key === 'eth') valid = validateETH(val);
-
-  if (valid) {
-    input.classList.add('valid');
-    input.classList.remove('invalid');
-    status.textContent = t('valid_address');
-    status.className = 'wallet-status ok';
-  } else {
-    input.classList.add('invalid');
-    input.classList.remove('valid');
-    status.textContent = t('invalid_address');
-    status.className = 'wallet-status err';
-  }
-}
-
-function saveWallet(key) {
-  var input = document.getElementById('wallet-input-' + key);
-  if (!input) return;
-  var val = input.value.trim();
-  if (!val) return;
-
-  var valid = false;
-  if (key === 'ton') valid = validateTON(val);
-  else if (key === 'btc') valid = validateBTC(val);
-  else if (key === 'eth') valid = validateETH(val);
-
-  if (!valid) {
-    onWalletInput(key);
-    return;
-  }
-
-  savedWallets[key] = val;
-  try { localStorage.setItem('p2p_wallets', JSON.stringify(savedWallets)); } catch(e) {}
-  renderWalletAddresses();
-}
-
-function editWallet(key) {
-  delete savedWallets[key];
-  try { localStorage.setItem('p2p_wallets', JSON.stringify(savedWallets)); } catch(e) {}
-  renderWalletAddresses();
 }
 
 function setProfileTab(tab) {
@@ -1208,16 +1288,16 @@ function renderProfileTab() {
 
 function setLang(l) {
   locale = l;
-  localStorage.setItem('p2p_locale', l);
+  try { localStorage.setItem('p2p_locale', l); } catch(e){}
   updateNavLabels();
-  renderProfile();
   if (currentPage === 'home') renderHome();
-  if (currentPage === 'exchange') renderOrders();
+  if (currentPage === 'wallet') renderWallet();
+  if (currentPage === 'profile') renderProfile();
 }
 
 function updateNavLabels() {
   document.querySelector('#nav-home span').textContent = t('nav.home');
-  document.querySelector('#nav-exchange span').textContent = t('nav.exchange');
+  document.querySelector('#nav-wallet span').textContent = t('nav.wallet');
   document.querySelector('#nav-profile span').textContent = t('nav.profile');
 }
 
@@ -1239,6 +1319,7 @@ window.addEventListener('DOMContentLoaded', function() {
       showPage('home');
       fetchMarkets();
       setInterval(fetchMarkets, 60000);
+      initCoin3D();
     }, 300);
   }, 2000);
 
