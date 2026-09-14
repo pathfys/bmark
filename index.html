@@ -31,20 +31,9 @@ button:active{transform:scale(0.96)}
 
 /* Splash */
 #splash{display:flex;align-items:center;justify-content:center;flex-direction:column;
-  position:fixed;inset:0;background:var(--bg);z-index:100;gap:24px}
+  position:fixed;inset:0;background:var(--bg);z-index:100}
 #splash .splash-logo{opacity:0;transform:scale(.8);animation:splashLogoIn .8s ease forwards}
-#splash .splash-card{opacity:0;transform:translateY(20px);
-  animation:splashCardIn .5s .3s ease forwards}
 @keyframes splashLogoIn{to{opacity:1;transform:scale(1)}}
-@keyframes splashCardIn{to{opacity:1;transform:translateY(0)}}
-.splash-card-inner{display:flex;align-items:center;gap:12px;
-  background:rgba(30,35,45,0.95);border-radius:12px;padding:14px 20px;
-  box-shadow:0 0 24px rgba(240,185,11,0.08),0 0 60px rgba(0,0,0,0.4);
-  backdrop-filter:blur(8px)}
-.splash-card-inner .splash-text{display:flex;flex-direction:column;gap:2px}
-.splash-card-inner .splash-title{color:var(--t1);font-size:14px;font-weight:600}
-.splash-card-inner .splash-sub{color:var(--t2);font-size:12px}
-.splash-card-inner .splash-lock{color:var(--yellow);font-size:22px;margin-left:8px}
 
 /* Bottom Nav */
 .bottom-nav{position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;
@@ -70,15 +59,13 @@ button:active{transform:scale(0.96)}
 #balance-amount{cursor:pointer;transition:filter .3s ease;user-select:none}
 #balance-amount.blurred{filter:blur(8px)}
 
-.banner-wrap{margin:16px;position:relative;overflow:hidden;border-radius:12px;height:110px}
-.banner{position:absolute;inset:0;padding:0;display:flex;align-items:center;
-  border-radius:12px;transition:transform .3s,opacity .3s;cursor:pointer;overflow:hidden}
+.banner-wrap{margin:16px;position:relative;overflow:hidden;border-radius:12px;height:140px;background:var(--bg2)}
+.banner{position:absolute;inset:0;padding:0;display:flex;align-items:center;justify-content:center;
+  border-radius:12px;transition:transform .3s,opacity .3s;cursor:pointer;overflow:hidden;background:var(--bg2)}
 .banner.hide-left{transform:translateX(-100%);opacity:0}
 .banner.hide-right{transform:translateX(100%);opacity:0}
 .banner.visible{transform:translateX(0);opacity:1}
 .banner:active{transform:scale(0.97)!important}
-.banner .lock-watermark{position:absolute;right:16px;top:50%;transform:translateY(-50%);
-  opacity:.15;width:48px;height:48px;pointer-events:none}
 .dots{display:flex;justify-content:center;gap:6px;margin-top:12px}
 .dot{width:6px;height:6px;border-radius:3px;background:var(--card);transition:all .3s;cursor:pointer}
 .dot.active{width:16px;background:var(--yellow)}
@@ -195,28 +182,55 @@ button:active{transform:scale(0.96)}
 .market-change{font-size:11px;font-weight:600;padding:2px 6px;border-radius:4px;margin-top:2px}
 .market-change.up{color:var(--green);background:rgba(14,203,129,.15)}
 .market-change.down{color:var(--red);background:rgba(246,70,93,.15)}
+
+/* Stats Grid */
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 16px 16px}
+.stats-grid-inner{background:var(--card);border-radius:12px;padding:16px}
+.stat-mini{background:var(--bg2);border-radius:10px;padding:14px 10px;text-align:center}
+.stat-mini .stat-val{font-size:20px;font-weight:700;color:var(--yellow)}
+.stat-mini .stat-label{font-size:11px;color:var(--t2);margin-top:4px}
+
+/* Wallet Addresses */
+.wallet-section{background:var(--card);border-radius:12px;padding:16px;margin:0 16px 16px}
+.wallet-section h3{font-size:15px;font-weight:600;color:var(--t1);margin-bottom:12px}
+.wallet-row{margin-bottom:14px}
+.wallet-row:last-child{margin-bottom:0}
+.wallet-row label{display:flex;align-items:center;gap:6px;color:var(--t2);font-size:13px;margin-bottom:6px}
+.wallet-row label img{width:18px;height:18px;border-radius:50%}
+.wallet-input-wrap{position:relative;display:flex;gap:8px}
+.wallet-input-wrap input{flex:1;background:var(--bg2);color:var(--t1);border:1px solid var(--border);
+  border-radius:8px;padding:10px 12px;font-size:13px;font-family:monospace;transition:border-color .2s}
+.wallet-input-wrap input.valid{border-color:var(--green)}
+.wallet-input-wrap input.invalid{border-color:var(--red)}
+.wallet-input-wrap .wallet-save-btn{background:var(--yellow);color:var(--bg);border-radius:8px;
+  padding:0 14px;font-size:13px;font-weight:600;white-space:nowrap}
+.wallet-masked{display:flex;align-items:center;gap:8px;background:var(--bg2);border-radius:8px;
+  padding:10px 12px;font-size:13px;font-family:monospace;color:var(--t1)}
+.wallet-masked .addr{flex:1;overflow:hidden;text-overflow:ellipsis}
+.wallet-edit-btn{background:none;color:var(--yellow);font-size:12px;font-weight:600;padding:4px 8px}
+.wallet-status{font-size:11px;margin-top:4px;height:14px}
+.wallet-status.ok{color:var(--green)}
+.wallet-status.err{color:var(--red)}
+
+/* Create Deal Button */
+.create-deal-btn{display:flex;align-items:center;justify-content:center;gap:8px;
+  margin:16px;padding:14px;background:var(--yellow);color:var(--bg);border-radius:12px;
+  font-size:15px;font-weight:700;box-shadow:0 4px 16px rgba(240,185,11,.25);transition:transform .1s,background .2s}
+.create-deal-btn:hover{background:var(--yellow-h)}
+.create-deal-btn svg{width:20px;height:20px;stroke:var(--bg);stroke-width:2.5}
 </style>
 </head>
 <body>
 
-<!-- ═══ SPLASH ═══ -->
+<!-- SPLASH -->
 <div id="splash">
   <div class="splash-logo">
-    <img src="assets/Binance-welcome screen.png" alt="Logo" width="140"
+    <img src="assets/Binance-welcome screen.png" alt="Logo" width="160"
          style="border-radius:0" onerror="this.style.display='none'">
-  </div>
-  <div class="splash-card">
-    <div class="splash-card-inner">
-      <div class="splash-text">
-        <span class="splash-title" id="splash-title">Secure & Fast Trades</span>
-        <span class="splash-sub">Escrow protection</span>
-      </div>
-      <span class="splash-lock">🔒</span>
-    </div>
   </div>
 </div>
 
-<!-- ═══ HOME ═══ -->
+<!-- HOME -->
 <div id="page-home" class="page">
   <div class="topbar">
     <div style="display:flex;align-items:center;gap:12px">
@@ -246,6 +260,14 @@ button:active{transform:scale(0.96)}
     </div>
   </div>
 
+  <!-- Create Deal Button -->
+  <button class="create-deal-btn" onclick="showPage('create-order')" id="btn-create-deal">
+    <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>
+    <span id="lbl-create-deal">Create Deal</span>
+  </button>
+
   <!-- Banners -->
   <div class="banner-wrap" id="banner-container"></div>
   <div class="dots" id="banner-dots"></div>
@@ -259,7 +281,7 @@ button:active{transform:scale(0.96)}
   <div style="padding:0 16px" id="recent-deals"></div>
 </div>
 
-<!-- ═══ EXCHANGE ═══ -->
+<!-- EXCHANGE -->
 <div id="page-exchange" class="page">
   <div class="toggle-row" id="ex-toggle">
     <button class="toggle-btn active-buy" onclick="setExSide('buy')" id="ex-buy-btn">Buy</button>
@@ -284,7 +306,7 @@ button:active{transform:scale(0.96)}
   </button>
 </div>
 
-<!-- ═══ CREATE ORDER ═══ -->
+<!-- CREATE ORDER -->
 <div id="page-create-order" class="page">
   <div class="page-header">
     <button class="back-btn" onclick="showPage('exchange')"><svg viewBox="0 0 24 24" fill="none"><polyline points="15,18 9,12 15,6"/></svg></button>
@@ -341,7 +363,7 @@ button:active{transform:scale(0.96)}
   </div>
 </div>
 
-<!-- ═══ DEAL ═══ -->
+<!-- DEAL -->
 <div id="page-deal" class="page">
   <div class="page-header">
     <button class="back-btn" onclick="showPage('exchange')"><svg viewBox="0 0 24 24" fill="none"><polyline points="15,18 9,12 15,6"/></svg></button>
@@ -363,7 +385,7 @@ button:active{transform:scale(0.96)}
   </div>
 </div>
 
-<!-- ═══ PROFILE ═══ -->
+<!-- PROFILE -->
 <div id="page-profile" class="page">
   <div class="page-header"><h1 id="lbl-profile-title">Profile</h1></div>
   <div class="profile-card">
@@ -371,10 +393,34 @@ button:active{transform:scale(0.96)}
     <p style="font-size:18px;font-weight:600;margin-top:12px" id="prof-name">Demo</p>
     <p style="color:var(--t2);font-size:14px" id="prof-username">@demo_user</p>
     <p style="color:var(--t2);font-size:12px;margin-top:4px" id="prof-tgid">Telegram ID: 123456789</p>
-    <div class="profile-stat">
-      <div class="label" id="lbl-completed">Deals Completed</div>
-      <div class="val" id="prof-completed">0</div>
+  </div>
+
+  <!-- Stats Grid -->
+  <div class="stats-grid-inner" style="margin:0 16px 16px">
+    <div class="stats-grid">
+      <div class="stat-mini">
+        <div class="stat-val" id="stat-total">0</div>
+        <div class="stat-label" id="lbl-stat-total">Deals</div>
+      </div>
+      <div class="stat-mini">
+        <div class="stat-val" id="stat-turnover">$0</div>
+        <div class="stat-label" id="lbl-stat-turnover">Turnover</div>
+      </div>
+      <div class="stat-mini">
+        <div class="stat-val" id="stat-completed">0</div>
+        <div class="stat-label" id="lbl-stat-completed">Completed</div>
+      </div>
+      <div class="stat-mini">
+        <div class="stat-val" id="stat-active">0</div>
+        <div class="stat-label" id="lbl-stat-active">Active</div>
+      </div>
     </div>
+  </div>
+
+  <!-- Wallet Addresses -->
+  <div class="wallet-section" id="wallet-section">
+    <h3 id="lbl-payment-details">Payment Details</h3>
+    <div id="wallet-addresses"></div>
   </div>
 
   <div style="padding:0 16px 16px">
@@ -398,7 +444,7 @@ button:active{transform:scale(0.96)}
   </div>
 </div>
 
-<!-- ═══ BOTTOM NAV ═══ -->
+<!-- BOTTOM NAV -->
 <div class="bottom-nav" id="bottom-nav" style="display:none">
   <button class="nav-btn active" onclick="showPage('home')" id="nav-home">
     <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -422,14 +468,10 @@ button:active{transform:scale(0.96)}
 </div>
 
 <script>
-// ═══════════════════════════════
 // CONFIG
-// ═══════════════════════════════
 const APP_NAME = '';
 
-// ═══════════════════════════════
 // STATE
-// ═══════════════════════════════
 let locale = localStorage.getItem('p2p_locale') || 'en';
 let balanceVisible = true;
 let balanceAnimating = false;
@@ -445,6 +487,10 @@ let chatMessages = [];
 
 const user = {id:1, telegram_id:123456789, username:'demo_user', first_name:'Demo'};
 
+// Saved wallet addresses
+let savedWallets = {};
+try { savedWallets = JSON.parse(localStorage.getItem('p2p_wallets')||'{}'); } catch(e) {}
+
 try {
   if (window.Telegram && Telegram.WebApp && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user) {
     const tg = Telegram.WebApp.initDataUnsafe.user;
@@ -458,40 +504,27 @@ try {
   }
 } catch(e) {}
 
-// ═══════════════════════════════
 // CRYPTO ICON HELPERS
-// ═══════════════════════════════
 const cryptoIcons = {BTC:'assets/Bitcoin-Logo.png',ETH:'assets/ethereum-eth-logo.png',USDT:'assets/tether.png',GRAM:'assets/Gram Diamond Mark.png',STARS:'assets/stars.png',BNB:'assets/bnb-bnb-logo.png',SOL:'assets/solana logo.png'};
-const cryptoFallback = {BTC:'₿',ETH:'Ξ',USDT:'₮',GRAM:'◆',STARS:'★'};
+const cryptoFallback = {BTC:'&#8383;',ETH:'&#926;',USDT:'&#8382;',GRAM:'&#9670;',STARS:'&#9733;'};
 
 function cryptoImg(cur) {
   const src = cryptoIcons[cur];
   const fb = cryptoFallback[cur] || cur[0];
   if (!src) return fb;
-  return `<img src="${src}" alt="${cur}" width="20" height="20" style="border-radius:50%" onerror="this.outerHTML='${fb}'">`;
+  return '<img src="'+src+'" alt="'+cur+'" width="20" height="20" style="border-radius:50%" onerror="this.outerHTML=\''+fb+'\'">';
 }
 
-// ═══════════════════════════════
 // EYE ICON SVGs
-// ═══════════════════════════════
-const eyeOpen = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#848E9C" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
-const eyeClosed = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#848E9C" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+const eyeOpen = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#848E9C" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+const eyeClosed = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#848E9C" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
 
-// ═══════════════════════════════
-// LOCK WATERMARK SVG (for banners)
-// ═══════════════════════════════
-const lockSvg = `<svg class="lock-watermark" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;
-
-// ═══════════════════════════════
 // i18n
-// ═══════════════════════════════
 const L = {
   en: {
     'nav.home':'Home','nav.exchange':'Exchange','nav.profile':'Profile',
     'greeting':'Hi, {name}','balance':'Estimated Balance','deposit':'Deposit','withdraw':'Withdraw',
     'recent':'Recent Transactions','no_txn':'No transactions yet',
-    'b1':'Trading Available','b2':'New: Telegram Stars Support','b3':'Trade GRAM Now',
-    'b4':'Secure & Fast Trades','b5':'Low Fees, High Speed',
     'buy':'Buy','sell':'Sell','crypto':'Crypto','fiat':'Fiat','price':'Price','amount':'Amount',
     'available':'Available','payment':'Payment','create_order':'Create Order','no_orders':'No orders yet',
     'min_limit':'Min Limit','max_limit':'Max Limit','payment_method':'Payment Method',
@@ -503,15 +536,18 @@ const L = {
     'profile':'Profile','language':'Language','my_orders':'My Orders','my_deals':'My Deals',
     'deals_done':'Deals Completed','close_app':'Close App','tg_id':'Telegram ID',
     'all_crypto':'All Crypto','all_fiat':'All Fiat',
-    'splash_title':'Secure & Fast Trades',
-    'markets':'Markets'
+    'markets':'Markets',
+    'create_deal':'Create Deal',
+    'payment_details':'Payment Details',
+    'wallet_ton':'TON Wallet','wallet_btc':'Bitcoin Wallet','wallet_eth':'Ethereum Wallet',
+    'save':'Save','edit':'Edit',
+    'valid_address':'Valid address','invalid_address':'Invalid address',
+    'stat_total':'Deals','stat_turnover':'Turnover','stat_completed':'Completed','stat_active':'Active'
   },
   ru: {
     'nav.home':'Главная','nav.exchange':'Обмен','nav.profile':'Профиль',
     'greeting':'Привет, {name}','balance':'Примерный баланс','deposit':'Пополнить','withdraw':'Вывести',
     'recent':'Последние сделки','no_txn':'Сделок пока нет',
-    'b1':'Торговля доступна','b2':'Новое: Telegram Stars','b3':'Торгуйте GRAM',
-    'b4':'Безопасные и быстрые сделки','b5':'Низкие комиссии',
     'buy':'Купить','sell':'Продать','crypto':'Крипто','fiat':'Фиат','price':'Цена','amount':'Количество',
     'available':'Доступно','payment':'Оплата','create_order':'Создать ордер','no_orders':'Ордеров пока нет',
     'min_limit':'Мин. лимит','max_limit':'Макс. лимит','payment_method':'Способ оплаты',
@@ -523,8 +559,13 @@ const L = {
     'profile':'Профиль','language':'Язык','my_orders':'Мои ордера','my_deals':'Мои сделки',
     'deals_done':'Завершённых сделок','close_app':'Закрыть приложение','tg_id':'Telegram ID',
     'all_crypto':'Все крипто','all_fiat':'Все фиат',
-    'splash_title':'Безопасные и быстрые сделки',
-    'markets':'Рынки'
+    'markets':'Рынки',
+    'create_deal':'Создать сделку',
+    'payment_details':'Реквизиты',
+    'wallet_ton':'TON Кошелёк','wallet_btc':'Bitcoin Кошелёк','wallet_eth':'Ethereum Кошелёк',
+    'save':'Сохранить','edit':'Изменить',
+    'valid_address':'Адрес верный','invalid_address':'Неверный адрес',
+    'stat_total':'Сделок','stat_turnover':'Оборот сделок','stat_completed':'Завершённых','stat_active':'Текущих'
   }
 };
 
@@ -534,18 +575,13 @@ function t(key, params) {
   return s;
 }
 
-// ═══════════════════════════════
 // MOCK DATA
-// ═══════════════════════════════
-
-// TODO: fetch from API
 const balances = [
   {currency:'BTC',balance:0,frozen:0},{currency:'ETH',balance:0,frozen:0},
   {currency:'USDT',balance:0,frozen:0},{currency:'GRAM',balance:0,frozen:0},
   {currency:'STARS',balance:0,frozen:0}
 ];
 
-// TODO: fetch from API
 const orders = [
   {id:1,user_id:2,username:'crypto_trader',first_name:'Alex',side:'sell',crypto_currency:'USDT',
    fiat_currency:'RUB',price:0,amount:0,min_limit:0,max_limit:0,
@@ -561,7 +597,6 @@ const orders = [
    payment_method:'SEPA, Revolut',status:'active'},
 ];
 
-// TODO: fetch from API
 const deals = [
   {id:1,buyer_id:1,seller_id:2,crypto_currency:'USDT',fiat_currency:'RUB',price:0,
    crypto_amount:0,fiat_amount:0,status:'completed',created_at:'2024-01-14T15:00:00'},
@@ -569,9 +604,7 @@ const deals = [
    crypto_amount:0,fiat_amount:0,status:'pending',created_at:'2024-01-15T12:00:00'},
 ];
 
-// ═══════════════════════════════
 // NAVIGATION
-// ═══════════════════════════════
 function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const el = document.getElementById('page-' + name);
@@ -587,9 +620,7 @@ function showPage(name) {
   if (name === 'profile') renderProfile();
 }
 
-// ═══════════════════════════════
 // HOME
-// ═══════════════════════════════
 function renderHome() {
   const letter = (user.first_name || 'U')[0].toUpperCase();
   document.getElementById('home-avatar').textContent = letter;
@@ -599,8 +630,8 @@ function renderHome() {
   document.getElementById('btn-withdraw').textContent = t('withdraw');
   document.getElementById('lbl-recent').textContent = t('recent');
   document.getElementById('lbl-markets').textContent = t('markets');
+  document.getElementById('lbl-create-deal').textContent = t('create_deal');
 
-  // TODO: fetch from API
   const prices = {BTC:0,ETH:0,USDT:0,GRAM:0,STARS:0};
   const total = balances.reduce((s,b) => s + b.balance * (prices[b.currency]||0), 0);
 
@@ -615,10 +646,9 @@ function renderHome() {
 
   document.getElementById('eye-btn').innerHTML = balanceVisible ? eyeOpen : eyeClosed;
 
-  // Crypto icons row
   const iconsRow = document.getElementById('crypto-icons-row');
   iconsRow.innerHTML = balances.map(b =>
-    `<div class="crypto-icon"><span class="sym">${cryptoImg(b.currency)}</span><span class="name">${b.currency}</span></div>`
+    '<div class="crypto-icon"><span class="sym">'+cryptoImg(b.currency)+'</span><span class="name">'+b.currency+'</span></div>'
   ).join('');
 
   renderBanners();
@@ -633,7 +663,7 @@ function toggleBalance() {
   if (balanceVisible) {
     balanceAnimating = true;
     balEl.classList.add('blurred');
-    setTimeout(() => {
+    setTimeout(function() {
       balanceVisible = false;
       balEl.textContent = '****';
       balEl.classList.remove('blurred');
@@ -642,7 +672,6 @@ function toggleBalance() {
     }, 300);
   } else {
     balanceVisible = true;
-    // TODO: fetch from API
     const prices = {BTC:0,ETH:0,USDT:0,GRAM:0,STARS:0};
     const total = balances.reduce((s,b) => s + b.balance * (prices[b.currency]||0), 0);
     balEl.textContent = '$' + total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -663,29 +692,29 @@ function renderBanners() {
   const dotsEl = document.getElementById('banner-dots');
   container.innerHTML = '';
   dotsEl.innerHTML = '';
-  bannerData.forEach((b, i) => {
-    const div = document.createElement('div');
+  bannerData.forEach(function(b, i) {
+    var div = document.createElement('div');
     div.className = 'banner ' + (i === bannerIdx ? 'visible' : 'hide-right');
-    div.innerHTML = `<img src="${b.img}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:12px;pointer-events:none" onerror="this.parentElement.style.display='none'">`;
-    div.onclick = () => bannerClick(div);
+    div.innerHTML = '<img src="'+b.img+'" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:12px;pointer-events:none" onerror="this.parentElement.style.display=\'none\'">';
+    div.onclick = function() { bannerClick(div); };
     container.appendChild(div);
 
-    const dot = document.createElement('button');
+    var dot = document.createElement('button');
     dot.className = 'dot' + (i === bannerIdx ? ' active' : '');
-    dot.onclick = () => { bannerIdx = i; updateBanners(); };
+    dot.onclick = (function(idx) { return function() { bannerIdx = idx; updateBanners(); }; })(i);
     dotsEl.appendChild(dot);
   });
 
   if (bannerTimer) clearInterval(bannerTimer);
-  bannerTimer = setInterval(() => {
+  bannerTimer = setInterval(function() {
     bannerIdx = (bannerIdx + 1) % bannerData.length;
     updateBanners();
   }, 4000);
 
-  let startX = 0;
-  container.ontouchstart = e => startX = e.touches[0].clientX;
-  container.ontouchend = e => {
-    const diff = startX - e.changedTouches[0].clientX;
+  var startX = 0;
+  container.ontouchstart = function(e) { startX = e.touches[0].clientX; };
+  container.ontouchend = function(e) {
+    var diff = startX - e.changedTouches[0].clientX;
     if (Math.abs(diff) > 50) {
       bannerIdx = diff > 0
         ? (bannerIdx + 1) % bannerData.length
@@ -697,40 +726,37 @@ function renderBanners() {
 
 function bannerClick(el) {
   el.style.transform = 'scale(0.97)';
-  setTimeout(() => { el.style.transform = ''; }, 150);
+  setTimeout(function() { el.style.transform = ''; }, 150);
 }
 
 function updateBanners() {
-  const banners = document.querySelectorAll('#banner-container .banner');
-  const dots = document.querySelectorAll('#banner-dots .dot');
-  banners.forEach((b, i) => {
+  var banners = document.querySelectorAll('#banner-container .banner');
+  var dots = document.querySelectorAll('#banner-dots .dot');
+  banners.forEach(function(b, i) {
     b.className = 'banner ' + (i === bannerIdx ? 'visible' : (i < bannerIdx ? 'hide-left' : 'hide-right'));
   });
-  dots.forEach((d, i) => d.className = 'dot' + (i === bannerIdx ? ' active' : ''));
+  dots.forEach(function(d, i) { d.className = 'dot' + (i === bannerIdx ? ' active' : ''); });
 }
 
 function renderRecentDeals() {
-  const el = document.getElementById('recent-deals');
-  if (!deals.length) { el.innerHTML = `<div class="empty">${t('no_txn')}</div>`; return; }
-  el.innerHTML = deals.slice(0, 5).map(d => {
-    const isBuy = d.buyer_id === user.id;
-    return `<div class="txn-row" onclick="openDeal(${d.id})">
-      <div class="txn-left">
-        <div class="txn-icon ${isBuy?'buy':'sell'}">${isBuy?'↓':'↑'}</div>
-        <div><div style="font-size:14px;font-weight:500">${isBuy?t('buy'):t('sell')} ${d.crypto_currency}</div>
-          <div style="color:var(--t2);font-size:12px">${new Date(d.created_at).toLocaleDateString()}</div></div>
-      </div>
-      <div style="text-align:right">
-        <div style="font-size:14px;font-weight:500">${d.crypto_amount} ${d.crypto_currency}</div>
-        <span class="badge badge-${d.status}">${t(d.status)}</span>
-      </div>
-    </div>`;
+  var el = document.getElementById('recent-deals');
+  if (!deals.length) { el.innerHTML = '<div class="empty">'+t('no_txn')+'</div>'; return; }
+  el.innerHTML = deals.slice(0, 5).map(function(d) {
+    var isBuy = d.buyer_id === user.id;
+    return '<div class="txn-row" onclick="openDeal('+d.id+')">'+
+      '<div class="txn-left">'+
+        '<div class="txn-icon '+(isBuy?'buy':'sell')+'">'+(isBuy?'&#8595;':'&#8593;')+'</div>'+
+        '<div><div style="font-size:14px;font-weight:500">'+(isBuy?t('buy'):t('sell'))+' '+d.crypto_currency+'</div>'+
+          '<div style="color:var(--t2);font-size:12px">'+new Date(d.created_at).toLocaleDateString()+'</div></div>'+
+      '</div>'+
+      '<div style="text-align:right">'+
+        '<div style="font-size:14px;font-weight:500">'+d.crypto_amount+' '+d.crypto_currency+'</div>'+
+        '<span class="badge badge-'+d.status+'">'+t(d.status)+'</span>'+
+      '</div></div>';
   }).join('');
 }
 
-// ═══════════════════════════════
 // MARKETS (CoinGecko)
-// ═══════════════════════════════
 const cgMap = {
   BTC:{id:'bitcoin',name:'Bitcoin'},
   ETH:{id:'ethereum',name:'Ethereum'},
@@ -743,23 +769,23 @@ let marketCache = null;
 
 function sampleArr(arr, n) {
   if (arr.length <= n) return arr;
-  const step = (arr.length - 1) / (n - 1);
-  return Array.from({length:n}, (_,i) => arr[Math.round(i * step)]);
+  var step = (arr.length - 1) / (n - 1);
+  return Array.from({length:n}, function(_,i) { return arr[Math.round(i * step)]; });
 }
 
 function sparkSvg(prices, up, w, h) {
   if (!prices || prices.length < 2) return '';
-  const step = w / (prices.length - 1);
-  const mn = Math.min(...prices), mx = Math.max(...prices), rng = mx - mn || 1;
-  const pts = prices.map((p,i) => `${(i*step).toFixed(1)},${(h-((p-mn)/rng)*(h-4)-2).toFixed(1)}`).join(' ');
-  const c = up ? '#0ECB81' : '#F6465D';
-  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline fill="none" stroke="${c}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="${pts}"/></svg>`;
+  var step = w / (prices.length - 1);
+  var mn = Math.min.apply(null, prices), mx = Math.max.apply(null, prices), rng = mx - mn || 1;
+  var pts = prices.map(function(p,i) { return (i*step).toFixed(1)+','+((h-((p-mn)/rng)*(h-4)-2)).toFixed(1); }).join(' ');
+  var c = up ? '#0ECB81' : '#F6465D';
+  return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'"><polyline fill="none" stroke="'+c+'" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="'+pts+'"/></svg>';
 }
 
 async function fetchMarkets() {
-  const ids = Object.values(cgMap).map(c => c.id).join(',');
+  var ids = Object.values(cgMap).map(function(c) { return c.id; }).join(',');
   try {
-    const r = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids='+ids+'&sparkline=true&price_change_percentage=24h');
+    var r = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids='+ids+'&sparkline=true&price_change_percentage=24h');
     if (!r.ok) return;
     marketCache = await r.json();
     renderMarkets();
@@ -767,45 +793,39 @@ async function fetchMarkets() {
 }
 
 function renderMarkets() {
-  const el = document.getElementById('markets-list');
+  var el = document.getElementById('markets-list');
   if (!el) return;
-  const coins = ['BTC','ETH','USDT','GRAM','BNB','SOL'];
+  var coins = ['BTC','ETH','USDT','GRAM','BNB','SOL'];
   if (!marketCache) {
-    el.innerHTML = coins.map(sym => {
-      const info = cgMap[sym];
-      return `<div class="market-card">
-        <img class="market-icon" src="${cryptoIcons[sym]||''}" alt="${sym}" onerror="this.style.display='none'">
-        <div class="market-info"><div class="market-name">${info.name}</div><div class="market-sym">${sym}</div></div>
-        <div class="market-right"><span class="market-price" style="color:var(--t2)">--</span></div>
-      </div>`;
+    el.innerHTML = coins.map(function(sym) {
+      var info = cgMap[sym];
+      return '<div class="market-card">'+
+        '<img class="market-icon" src="'+(cryptoIcons[sym]||'')+'" alt="'+sym+'" onerror="this.style.display=\'none\'">'+
+        '<div class="market-info"><div class="market-name">'+info.name+'</div><div class="market-sym">'+sym+'</div></div>'+
+        '<div class="market-right"><span class="market-price" style="color:var(--t2)">--</span></div></div>';
     }).join('');
     return;
   }
-  el.innerHTML = coins.map(sym => {
-    const info = cgMap[sym];
-    const coin = marketCache.find(c => c.id === info.id);
+  el.innerHTML = coins.map(function(sym) {
+    var info = cgMap[sym];
+    var coin = marketCache.find(function(c) { return c.id === info.id; });
     if (!coin) return '';
-    const up = (coin.price_change_percentage_24h||0) >= 0;
-    const ch = (coin.price_change_percentage_24h||0).toFixed(2);
-    const spark = coin.sparkline_in_7d ? sampleArr(coin.sparkline_in_7d.price, 30) : [];
-    const prc = coin.current_price >= 1
+    var up = (coin.price_change_percentage_24h||0) >= 0;
+    var ch = (coin.price_change_percentage_24h||0).toFixed(2);
+    var spark = coin.sparkline_in_7d ? sampleArr(coin.sparkline_in_7d.price, 30) : [];
+    var prc = coin.current_price >= 1
       ? '$'+coin.current_price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})
       : '$'+coin.current_price.toFixed(4);
-    return `<div class="market-card">
-      <img class="market-icon" src="${cryptoIcons[sym]||''}" alt="${sym}" onerror="this.style.display='none'">
-      <div class="market-info"><div class="market-name">${info.name}</div><div class="market-sym">${sym}</div></div>
-      <div class="market-right">
-        ${sparkSvg(spark,up,56,24)}
-        <div><div class="market-price">${prc}</div>
-          <div class="market-change ${up?'up':'down'}">${up?'+':''}${ch}%</div></div>
-      </div>
-    </div>`;
+    return '<div class="market-card">'+
+      '<img class="market-icon" src="'+(cryptoIcons[sym]||'')+'" alt="'+sym+'" onerror="this.style.display=\'none\'">'+
+      '<div class="market-info"><div class="market-name">'+info.name+'</div><div class="market-sym">'+sym+'</div></div>'+
+      '<div class="market-right">'+sparkSvg(spark,up,56,24)+
+        '<div><div class="market-price">'+prc+'</div>'+
+          '<div class="market-change '+(up?'up':'down')+'">'+(up?'+':'')+ch+'%</div></div></div></div>';
   }).join('');
 }
 
-// ═══════════════════════════════
 // EXCHANGE
-// ═══════════════════════════════
 function setExSide(s) {
   exSide = s;
   document.getElementById('ex-buy-btn').className = 'toggle-btn' + (s==='buy' ? ' active-buy' : '');
@@ -819,52 +839,46 @@ function renderOrders() {
   document.getElementById('ex-buy-btn').textContent = t('buy');
   document.getElementById('ex-sell-btn').textContent = t('sell');
 
-  const crypto = document.getElementById('ex-crypto').value;
-  const fiat = document.getElementById('ex-fiat').value;
+  var crypto = document.getElementById('ex-crypto').value;
+  var fiat = document.getElementById('ex-fiat').value;
 
-  const filtered = orders.filter(o => {
-    const matchSide = exSide === 'buy' ? o.side === 'sell' : o.side === 'buy';
-    const matchCrypto = !crypto || o.crypto_currency === crypto;
-    const matchFiat = !fiat || o.fiat_currency === fiat;
+  var filtered = orders.filter(function(o) {
+    var matchSide = exSide === 'buy' ? o.side === 'sell' : o.side === 'buy';
+    var matchCrypto = !crypto || o.crypto_currency === crypto;
+    var matchFiat = !fiat || o.fiat_currency === fiat;
     return matchSide && matchCrypto && matchFiat && o.status === 'active';
   });
 
-  const el = document.getElementById('orders-list');
-  if (!filtered.length) { el.innerHTML = `<div class="empty">${t('no_orders')}</div>`; return; }
+  var el = document.getElementById('orders-list');
+  if (!filtered.length) { el.innerHTML = '<div class="empty">'+t('no_orders')+'</div>'; return; }
 
-  el.innerHTML = filtered.map(o => {
-    const isSell = o.side === 'sell';
-    const btnStyle = isSell
-      ? 'background:var(--green);color:#fff;border-radius:8px;padding:6px 20px;font-weight:600;font-size:13px;border:none;cursor:pointer;transition:transform .1s'
-      : 'background:var(--red);color:#fff;border-radius:8px;padding:6px 20px;font-weight:600;font-size:13px;border:none;cursor:pointer;transition:transform .1s';
-    const btnText = isSell ? t('buy') : t('sell');
-    const payments = (o.payment_method||'').split(',').map(m =>
-      `<span class="pay-badge">${m.trim()}</span>`).join('');
-    const limits = (o.min_limit && o.max_limit)
-      ? `<div style="color:var(--t2);font-size:12px;margin-top:8px">${t('min_limit')}: ${o.min_limit.toLocaleString()} - ${t('max_limit')}: ${o.max_limit.toLocaleString()} ${o.fiat_currency}</div>` : '';
-    return `<div class="order-card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div style="display:flex;align-items:center;gap:8px">
-          <div class="avatar" style="width:32px;height:32px;font-size:13px">${(o.first_name||'U')[0]}</div>
-          <div><span style="font-size:14px;font-weight:500">${o.first_name}</span>
-            <span style="color:var(--t2);font-size:12px;margin-left:4px">@${o.username}</span></div>
-        </div>
-        <button style="${btnStyle}" onclick="openDealFromOrder(${o.id})">${btnText}</button>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
-        <div><span style="color:var(--t2)">${t('price')}</span>
-          <p style="font-weight:500">${o.price.toLocaleString()} ${o.fiat_currency}</p></div>
-        <div><span style="color:var(--t2)">${t('available')}</span>
-          <p style="font-weight:500">${o.amount} ${o.crypto_currency}</p></div>
-      </div>${limits}
-      <div class="pay-badges">${payments}</div>
-    </div>`;
+  el.innerHTML = filtered.map(function(o) {
+    var isSell = o.side === 'sell';
+    var btnBg = isSell ? 'var(--green)' : 'var(--red)';
+    var btnText = isSell ? t('buy') : t('sell');
+    var payments = (o.payment_method||'').split(',').map(function(m) {
+      return '<span class="pay-badge">'+m.trim()+'</span>';
+    }).join('');
+    var limits = (o.min_limit && o.max_limit)
+      ? '<div style="color:var(--t2);font-size:12px;margin-top:8px">'+t('min_limit')+': '+o.min_limit.toLocaleString()+' - '+t('max_limit')+': '+o.max_limit.toLocaleString()+' '+o.fiat_currency+'</div>' : '';
+    return '<div class="order-card">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'+
+        '<div style="display:flex;align-items:center;gap:8px">'+
+          '<div class="avatar" style="width:32px;height:32px;font-size:13px">'+(o.first_name||'U')[0]+'</div>'+
+          '<div><span style="font-size:14px;font-weight:500">'+o.first_name+'</span>'+
+            '<span style="color:var(--t2);font-size:12px;margin-left:4px">@'+o.username+'</span></div>'+
+        '</div>'+
+        '<button style="background:'+btnBg+';color:#fff;border-radius:8px;padding:6px 20px;font-weight:600;font-size:13px;border:none;cursor:pointer" onclick="openDealFromOrder('+o.id+')">'+btnText+'</button>'+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">'+
+        '<div><span style="color:var(--t2)">'+t('price')+'</span><p style="font-weight:500">'+o.price.toLocaleString()+' '+o.fiat_currency+'</p></div>'+
+        '<div><span style="color:var(--t2)">'+t('available')+'</span><p style="font-weight:500">'+o.amount+' '+o.crypto_currency+'</p></div>'+
+      '</div>'+limits+
+      '<div class="pay-badges">'+payments+'</div></div>';
   }).join('');
 }
 
-// ═══════════════════════════════
 // CREATE ORDER
-// ═══════════════════════════════
 function setCoSide(s) {
   coSide = s;
   document.getElementById('co-buy-btn').className = 'toggle-btn' + (s==='buy' ? ' active-buy' : '');
@@ -889,22 +903,20 @@ function updateCreateOrderLabels() {
 }
 
 function submitOrder() {
-  const price = document.getElementById('co-price').value;
-  const amount = document.getElementById('co-amount').value;
+  var price = document.getElementById('co-price').value;
+  var amount = document.getElementById('co-amount').value;
   if (!price || !amount) return;
-  alert(`Order created: ${coSide} ${amount} ${document.getElementById('co-crypto').value} @ ${price} ${document.getElementById('co-fiat').value}`);
+  alert('Order created: '+coSide+' '+amount+' '+document.getElementById('co-crypto').value+' @ '+price+' '+document.getElementById('co-fiat').value);
   showPage('exchange');
 }
 
-// ═══════════════════════════════
 // DEAL
-// ═══════════════════════════════
-let dealTimeLeft = 1800;
+var dealTimeLeft = 1800;
 
 function openDeal(id) {
-  const deal = deals.find(d => d.id === id);
+  var deal = deals.find(function(d) { return d.id === id; });
   if (!deal) return;
-  currentDeal = {...deal};
+  currentDeal = Object.assign({}, deal);
   dealTimeLeft = 1800;
   chatMessages = [{id:1,sender_id:2,first_name:'Alex',text:'Ready to trade. Please send payment.',
     created_at:new Date().toISOString()}];
@@ -916,7 +928,7 @@ function openDealFromOrder(orderId) {
   currentDeal = {id: deals.length+1, order_id:orderId, buyer_id:1, seller_id:2,
     crypto_currency:'USDT', fiat_currency:'RUB', price:0, crypto_amount:0,
     fiat_amount:0, status:'pending', created_at:new Date().toISOString()};
-  const order = orders.find(o => o.id === orderId);
+  var order = orders.find(function(o) { return o.id === orderId; });
   if (order) {
     currentDeal.crypto_currency = order.crypto_currency;
     currentDeal.fiat_currency = order.fiat_currency;
@@ -930,28 +942,27 @@ function openDealFromOrder(orderId) {
 
 function renderDeal() {
   if (!currentDeal) return;
-  const d = currentDeal;
+  var d = currentDeal;
   document.getElementById('deal-title').textContent = t('deal_title',{id:String(d.id)});
-  document.getElementById('deal-badge').innerHTML = `<span class="badge badge-${d.status}">${t(d.status)}</span>`;
+  document.getElementById('deal-badge').innerHTML = '<span class="badge badge-'+d.status+'">'+t(d.status)+'</span>';
 
-  document.getElementById('deal-info').innerHTML = `
-    <div class="row"><span class="label">${t('crypto')}</span><span class="value">${d.crypto_currency}</span></div>
-    <div class="row"><span class="label">${t('fiat')}</span><span class="value">${d.fiat_currency}</span></div>
-    <div class="row"><span class="label">${t('price')}</span><span class="value">${d.price.toLocaleString()} ${d.fiat_currency}</span></div>
-    <div class="row"><span class="label">${t('amount')}</span><span class="value">${d.crypto_amount} ${d.crypto_currency}</span></div>
-    <div style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px;display:flex;justify-content:space-between;align-items:center">
-      <span style="color:var(--t2);font-size:13px">${t('total')}</span>
-      <span style="font-size:18px;font-weight:700">${d.fiat_amount.toLocaleString()} ${d.fiat_currency}</span>
-    </div>`;
+  document.getElementById('deal-info').innerHTML =
+    '<div class="row"><span class="label">'+t('crypto')+'</span><span class="value">'+d.crypto_currency+'</span></div>'+
+    '<div class="row"><span class="label">'+t('fiat')+'</span><span class="value">'+d.fiat_currency+'</span></div>'+
+    '<div class="row"><span class="label">'+t('price')+'</span><span class="value">'+d.price.toLocaleString()+' '+d.fiat_currency+'</span></div>'+
+    '<div class="row"><span class="label">'+t('amount')+'</span><span class="value">'+d.crypto_amount+' '+d.crypto_currency+'</span></div>'+
+    '<div style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px;display:flex;justify-content:space-between;align-items:center">'+
+      '<span style="color:var(--t2);font-size:13px">'+t('total')+'</span>'+
+      '<span style="font-size:18px;font-weight:700">'+d.fiat_amount.toLocaleString()+' '+d.fiat_currency+'</span></div>';
 
   if (d.status === 'pending') {
-    document.getElementById('deal-timer').innerHTML = `<div class="timer-box">
-      <div class="label">${t('time_left')}</div>
-      <div class="time" id="timer-display">${fmtTime(dealTimeLeft)}</div></div>`;
+    document.getElementById('deal-timer').innerHTML = '<div class="timer-box">'+
+      '<div class="label">'+t('time_left')+'</div>'+
+      '<div class="time" id="timer-display">'+fmtTime(dealTimeLeft)+'</div></div>';
     if (dealTimerInterval) clearInterval(dealTimerInterval);
-    dealTimerInterval = setInterval(() => {
+    dealTimerInterval = setInterval(function() {
       dealTimeLeft = Math.max(0, dealTimeLeft - 1);
-      const el = document.getElementById('timer-display');
+      var el = document.getElementById('timer-display');
       if (el) el.textContent = fmtTime(dealTimeLeft);
     }, 1000);
   } else {
@@ -959,15 +970,15 @@ function renderDeal() {
     if (dealTimerInterval) clearInterval(dealTimerInterval);
   }
 
-  const isBuyer = d.buyer_id === user.id;
-  let actions = '';
+  var isBuyer = d.buyer_id === user.id;
+  var actions = '';
   if (d.status === 'pending' && isBuyer) {
-    actions = `<button class="btn-green" style="flex:1" onclick="dealMarkPaid()">${t('mark_paid')}</button>
-      <button class="btn-red-o" style="flex:1" onclick="dealCancel()">${t('cancel_deal')}</button>`;
+    actions = '<button class="btn-green" style="flex:1" onclick="dealMarkPaid()">'+t('mark_paid')+'</button>'+
+      '<button class="btn-red-o" style="flex:1" onclick="dealCancel()">'+t('cancel_deal')+'</button>';
   } else if (d.status === 'paid' && !isBuyer) {
-    actions = `<button class="btn-green" style="flex:1" onclick="dealConfirm()">${t('confirm_receipt')}</button>`;
+    actions = '<button class="btn-green" style="flex:1" onclick="dealConfirm()">'+t('confirm_receipt')+'</button>';
   } else if (d.status === 'pending' && !isBuyer) {
-    actions = `<p style="color:var(--t2);font-size:14px;text-align:center;width:100%;padding:12px">${t('buyer')}: ${t('pending')}...</p>`;
+    actions = '<p style="color:var(--t2);font-size:14px;text-align:center;width:100%;padding:12px">'+t('buyer')+': '+t('pending')+'...</p>';
   }
   document.getElementById('deal-actions').innerHTML = actions;
 
@@ -997,49 +1008,176 @@ function dealCancel() {
 }
 
 function renderChat() {
-  const el = document.getElementById('chat-messages');
-  el.innerHTML = chatMessages.map(m => {
-    const mine = m.sender_id === user.id;
-    return `<div class="chat-msg ${mine?'mine':'other'}">
-      ${!mine ? `<div class="sender">${m.first_name||'User'}</div>` : ''}
-      <div>${m.text}</div>
-      <div class="time">${new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>
-    </div>`;
+  var el = document.getElementById('chat-messages');
+  el.innerHTML = chatMessages.map(function(m) {
+    var mine = m.sender_id === user.id;
+    return '<div class="chat-msg '+(mine?'mine':'other')+'">'+
+      (!mine ? '<div class="sender">'+(m.first_name||'User')+'</div>' : '')+
+      '<div>'+m.text+'</div>'+
+      '<div class="time">'+new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</div></div>';
   }).join('');
   el.scrollTop = el.scrollHeight;
 }
 
 function sendChatMsg() {
-  const input = document.getElementById('chat-input');
-  const text = input.value.trim();
+  var input = document.getElementById('chat-input');
+  var text = input.value.trim();
   if (!text) return;
   chatMessages.push({id:chatMessages.length+1, sender_id:user.id, first_name:user.first_name,
-    text, created_at:new Date().toISOString()});
+    text:text, created_at:new Date().toISOString()});
   input.value = '';
   renderChat();
 }
 
-// ═══════════════════════════════
+// WALLET ADDRESS VALIDATION
+function validateTON(addr) {
+  if (!addr) return false;
+  addr = addr.trim();
+  if (/^(UQ|EQ|kQ|0Q)[A-Za-z0-9_-]{46}$/.test(addr)) return true;
+  if (/^[A-Fa-f0-9]{64}$/.test(addr)) return true;
+  return false;
+}
+
+function validateBTC(addr) {
+  if (!addr) return false;
+  addr = addr.trim();
+  if (/^(1|3)[A-HJ-NP-Za-km-z1-9]{25,34}$/.test(addr)) return true;
+  if (/^bc1[a-zA-HJ-NP-Z0-9]{25,62}$/.test(addr)) return true;
+  return false;
+}
+
+function validateETH(addr) {
+  if (!addr) return false;
+  addr = addr.trim();
+  return /^0x[0-9a-fA-F]{40}$/.test(addr);
+}
+
+function maskAddress(addr) {
+  if (!addr || addr.length < 12) return addr || '';
+  return addr.substring(0, 6) + '••••••' + addr.substring(addr.length - 4);
+}
+
 // PROFILE
-// ═══════════════════════════════
 function renderProfile() {
-  const letter = (user.first_name||'U')[0].toUpperCase();
+  var letter = (user.first_name||'U')[0].toUpperCase();
   document.getElementById('prof-avatar').textContent = letter;
   document.getElementById('prof-name').textContent = user.first_name;
   document.getElementById('prof-username').textContent = user.username ? '@'+user.username : '';
   document.getElementById('prof-tgid').textContent = t('tg_id') + ': ' + user.telegram_id;
-  document.getElementById('lbl-completed').textContent = t('deals_done');
-  document.getElementById('prof-completed').textContent = deals.filter(d=>d.status==='completed').length;
   document.getElementById('lbl-profile-title').textContent = t('profile');
   document.getElementById('lbl-language').textContent = t('language') + ':';
   document.getElementById('prof-orders-btn').textContent = t('my_orders');
   document.getElementById('prof-deals-btn').textContent = t('my_deals');
   document.getElementById('btn-close').textContent = t('close_app');
+  document.getElementById('lbl-payment-details').textContent = t('payment_details');
 
   document.getElementById('lang-en').className = 'lang-btn' + (locale==='en'?' active':'');
   document.getElementById('lang-ru').className = 'lang-btn' + (locale==='ru'?' active':'');
 
+  renderStats();
+  renderWalletAddresses();
   renderProfileTab();
+}
+
+function renderStats() {
+  var totalDeals = deals.length;
+  var completedDeals = deals.filter(function(d) { return d.status === 'completed'; }).length;
+  var activeDeals = deals.filter(function(d) { return d.status === 'pending' || d.status === 'paid'; }).length;
+  var turnover = deals.reduce(function(sum, d) { return sum + (d.fiat_amount || 0); }, 0);
+
+  document.getElementById('stat-total').textContent = totalDeals;
+  document.getElementById('stat-turnover').textContent = '$' + turnover.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2});
+  document.getElementById('stat-completed').textContent = completedDeals;
+  document.getElementById('stat-active').textContent = activeDeals;
+
+  document.getElementById('lbl-stat-total').textContent = t('stat_total');
+  document.getElementById('lbl-stat-turnover').textContent = t('stat_turnover');
+  document.getElementById('lbl-stat-completed').textContent = t('stat_completed');
+  document.getElementById('lbl-stat-active').textContent = t('stat_active');
+}
+
+function renderWalletAddresses() {
+  var walletTypes = [
+    {key:'ton', label:'wallet_ton', icon:'assets/Gram Diamond Mark.png', validate:validateTON},
+    {key:'btc', label:'wallet_btc', icon:'assets/Bitcoin-Logo.png', validate:validateBTC},
+    {key:'eth', label:'wallet_eth', icon:'assets/ethereum-eth-logo.png', validate:validateETH},
+  ];
+
+  var el = document.getElementById('wallet-addresses');
+  el.innerHTML = walletTypes.map(function(w) {
+    var saved = savedWallets[w.key] || '';
+    if (saved) {
+      return '<div class="wallet-row">'+
+        '<label><img src="'+w.icon+'" onerror="this.style.display=\'none\'"> '+t(w.label)+'</label>'+
+        '<div class="wallet-masked">'+
+          '<span class="addr">'+maskAddress(saved)+'</span>'+
+          '<button class="wallet-edit-btn" onclick="editWallet(\''+w.key+'\')">'+t('edit')+'</button>'+
+        '</div></div>';
+    }
+    return '<div class="wallet-row">'+
+      '<label><img src="'+w.icon+'" onerror="this.style.display=\'none\'"> '+t(w.label)+'</label>'+
+      '<div class="wallet-input-wrap">'+
+        '<input type="text" id="wallet-input-'+w.key+'" placeholder="'+t(w.label)+'" oninput="onWalletInput(\''+w.key+'\')">'+
+        '<button class="wallet-save-btn" onclick="saveWallet(\''+w.key+'\')">'+t('save')+'</button>'+
+      '</div>'+
+      '<div class="wallet-status" id="wallet-status-'+w.key+'"></div></div>';
+  }).join('');
+}
+
+function onWalletInput(key) {
+  var input = document.getElementById('wallet-input-' + key);
+  var status = document.getElementById('wallet-status-' + key);
+  if (!input || !status) return;
+  var val = input.value.trim();
+  if (!val) {
+    input.classList.remove('valid','invalid');
+    status.textContent = '';
+    status.className = 'wallet-status';
+    return;
+  }
+  var valid = false;
+  if (key === 'ton') valid = validateTON(val);
+  else if (key === 'btc') valid = validateBTC(val);
+  else if (key === 'eth') valid = validateETH(val);
+
+  if (valid) {
+    input.classList.add('valid');
+    input.classList.remove('invalid');
+    status.textContent = t('valid_address');
+    status.className = 'wallet-status ok';
+  } else {
+    input.classList.add('invalid');
+    input.classList.remove('valid');
+    status.textContent = t('invalid_address');
+    status.className = 'wallet-status err';
+  }
+}
+
+function saveWallet(key) {
+  var input = document.getElementById('wallet-input-' + key);
+  if (!input) return;
+  var val = input.value.trim();
+  if (!val) return;
+
+  var valid = false;
+  if (key === 'ton') valid = validateTON(val);
+  else if (key === 'btc') valid = validateBTC(val);
+  else if (key === 'eth') valid = validateETH(val);
+
+  if (!valid) {
+    onWalletInput(key);
+    return;
+  }
+
+  savedWallets[key] = val;
+  try { localStorage.setItem('p2p_wallets', JSON.stringify(savedWallets)); } catch(e) {}
+  renderWalletAddresses();
+}
+
+function editWallet(key) {
+  delete savedWallets[key];
+  try { localStorage.setItem('p2p_wallets', JSON.stringify(savedWallets)); } catch(e) {}
+  renderWalletAddresses();
 }
 
 function setProfileTab(tab) {
@@ -1050,24 +1188,21 @@ function setProfileTab(tab) {
 }
 
 function renderProfileTab() {
-  const el = document.getElementById('prof-tab-content');
+  var el = document.getElementById('prof-tab-content');
   if (profileTab === 'orders') {
-    el.innerHTML = `<div class="empty">${t('no_orders')}</div>`;
+    el.innerHTML = '<div class="empty">'+t('no_orders')+'</div>';
   } else {
-    if (!deals.length) { el.innerHTML = `<div class="empty">${t('no_txn')}</div>`; return; }
-    el.innerHTML = deals.map(d => `
-      <div class="order-card" onclick="openDeal(${d.id})" style="cursor:pointer">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div><span style="font-size:14px;font-weight:500">${d.crypto_currency}/${d.fiat_currency}</span>
-            <span style="color:var(--t2);font-size:12px;margin-left:8px">#${d.id}</span></div>
-          <span class="badge badge-${d.status}">${t(d.status)}</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;margin-top:8px;color:var(--t2);font-size:12px">
-          <span>${d.crypto_amount} ${d.crypto_currency}</span>
-          <span>${d.fiat_amount.toLocaleString()} ${d.fiat_currency}</span>
-        </div>
-      </div>
-    `).join('');
+    if (!deals.length) { el.innerHTML = '<div class="empty">'+t('no_txn')+'</div>'; return; }
+    el.innerHTML = deals.map(function(d) {
+      return '<div class="order-card" onclick="openDeal('+d.id+')" style="cursor:pointer">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center">'+
+          '<div><span style="font-size:14px;font-weight:500">'+d.crypto_currency+'/'+d.fiat_currency+'</span>'+
+            '<span style="color:var(--t2);font-size:12px;margin-left:8px">#'+d.id+'</span></div>'+
+          '<span class="badge badge-'+d.status+'">'+t(d.status)+'</span></div>'+
+        '<div style="display:flex;justify-content:space-between;margin-top:8px;color:var(--t2);font-size:12px">'+
+          '<span>'+d.crypto_amount+' '+d.crypto_currency+'</span>'+
+          '<span>'+d.fiat_amount.toLocaleString()+' '+d.fiat_currency+'</span></div></div>';
+    }).join('');
   }
 }
 
@@ -1090,18 +1225,14 @@ function closeApp() {
   try { Telegram.WebApp.close(); } catch(e) { alert('Close'); }
 }
 
-// ═══════════════════════════════
 // INIT
-// ═══════════════════════════════
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', function() {
   if (APP_NAME) document.title = APP_NAME;
 
-  document.getElementById('splash-title').textContent = t('splash_title');
-
-  setTimeout(() => {
+  setTimeout(function() {
     document.getElementById('splash').style.opacity = '0';
     document.getElementById('splash').style.transition = 'opacity .3s';
-    setTimeout(() => {
+    setTimeout(function() {
       document.getElementById('splash').style.display = 'none';
       document.getElementById('bottom-nav').style.display = 'flex';
       updateNavLabels();
@@ -1111,7 +1242,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }, 300);
   }, 2000);
 
-  document.getElementById('chat-input').addEventListener('keydown', e => {
+  document.getElementById('chat-input').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') sendChatMsg();
   });
 });
