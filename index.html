@@ -70,7 +70,7 @@ button:active{transform:scale(0.96)}
 #balance-amount{cursor:pointer;transition:filter .3s ease;user-select:none}
 #balance-amount.blurred{filter:blur(8px)}
 
-.banner-wrap{margin:16px;position:relative;overflow:hidden;border-radius:12px;height:160px}
+.banner-wrap{margin:16px;position:relative;overflow:hidden;border-radius:12px;height:110px}
 .banner{position:absolute;inset:0;padding:0;display:flex;align-items:center;
   border-radius:12px;transition:transform .3s,opacity .3s;cursor:pointer;overflow:hidden}
 .banner.hide-left{transform:translateX(-100%);opacity:0}
@@ -183,6 +183,18 @@ button:active{transform:scale(0.96)}
   justify-content:center;font-size:14px}
 .txn-icon.buy{background:rgba(14,203,129,.2);color:var(--green)}
 .txn-icon.sell{background:rgba(246,70,93,.2);color:var(--red)}
+
+.market-card{background:var(--card);border-radius:12px;padding:12px 16px;margin-bottom:8px;
+  display:flex;align-items:center;gap:12px}
+.market-icon{width:32px;height:32px;border-radius:50%;object-fit:cover}
+.market-info{flex:1;min-width:0}
+.market-name{font-size:14px;font-weight:600;color:var(--t1)}
+.market-sym{font-size:12px;color:var(--t2)}
+.market-right{display:flex;align-items:center;gap:8px}
+.market-price{font-size:13px;font-weight:600;color:var(--t1)}
+.market-change{font-size:11px;font-weight:600;padding:2px 6px;border-radius:4px;margin-top:2px}
+.market-change.up{color:var(--green);background:rgba(14,203,129,.15)}
+.market-change.down{color:var(--red);background:rgba(246,70,93,.15)}
 </style>
 </head>
 <body>
@@ -237,6 +249,10 @@ button:active{transform:scale(0.96)}
   <!-- Banners -->
   <div class="banner-wrap" id="banner-container"></div>
   <div class="dots" id="banner-dots"></div>
+
+  <!-- Markets -->
+  <div class="section-title" id="lbl-markets">Markets</div>
+  <div style="padding:0 16px" id="markets-list"></div>
 
   <!-- Recent Transactions -->
   <div class="section-title" id="lbl-recent">Recent Transactions</div>
@@ -487,7 +503,8 @@ const L = {
     'profile':'Profile','language':'Language','my_orders':'My Orders','my_deals':'My Deals',
     'deals_done':'Deals Completed','close_app':'Close App','tg_id':'Telegram ID',
     'all_crypto':'All Crypto','all_fiat':'All Fiat',
-    'splash_title':'Secure & Fast Trades'
+    'splash_title':'Secure & Fast Trades',
+    'markets':'Markets'
   },
   ru: {
     'nav.home':'Главная','nav.exchange':'Обмен','nav.profile':'Профиль',
@@ -506,7 +523,8 @@ const L = {
     'profile':'Профиль','language':'Язык','my_orders':'Мои ордера','my_deals':'Мои сделки',
     'deals_done':'Завершённых сделок','close_app':'Закрыть приложение','tg_id':'Telegram ID',
     'all_crypto':'Все крипто','all_fiat':'Все фиат',
-    'splash_title':'Безопасные и быстрые сделки'
+    'splash_title':'Безопасные и быстрые сделки',
+    'markets':'Рынки'
   }
 };
 
@@ -580,6 +598,7 @@ function renderHome() {
   document.getElementById('btn-deposit').textContent = t('deposit');
   document.getElementById('btn-withdraw').textContent = t('withdraw');
   document.getElementById('lbl-recent').textContent = t('recent');
+  document.getElementById('lbl-markets').textContent = t('markets');
 
   // TODO: fetch from API
   const prices = {BTC:0,ETH:0,USDT:0,GRAM:0,STARS:0};
@@ -603,6 +622,7 @@ function renderHome() {
   ).join('');
 
   renderBanners();
+  renderMarkets();
   renderRecentDeals();
 }
 
@@ -703,6 +723,81 @@ function renderRecentDeals() {
       <div style="text-align:right">
         <div style="font-size:14px;font-weight:500">${d.crypto_amount} ${d.crypto_currency}</div>
         <span class="badge badge-${d.status}">${t(d.status)}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════
+// MARKETS (CoinGecko)
+// ═══════════════════════════════
+const cgMap = {
+  BTC:{id:'bitcoin',name:'Bitcoin'},
+  ETH:{id:'ethereum',name:'Ethereum'},
+  USDT:{id:'tether',name:'Tether'},
+  GRAM:{id:'the-open-network',name:'Toncoin'},
+  BNB:{id:'binancecoin',name:'BNB'},
+  SOL:{id:'solana',name:'Solana'},
+};
+let marketCache = null;
+
+function sampleArr(arr, n) {
+  if (arr.length <= n) return arr;
+  const step = (arr.length - 1) / (n - 1);
+  return Array.from({length:n}, (_,i) => arr[Math.round(i * step)]);
+}
+
+function sparkSvg(prices, up, w, h) {
+  if (!prices || prices.length < 2) return '';
+  const step = w / (prices.length - 1);
+  const mn = Math.min(...prices), mx = Math.max(...prices), rng = mx - mn || 1;
+  const pts = prices.map((p,i) => `${(i*step).toFixed(1)},${(h-((p-mn)/rng)*(h-4)-2).toFixed(1)}`).join(' ');
+  const c = up ? '#0ECB81' : '#F6465D';
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline fill="none" stroke="${c}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="${pts}"/></svg>`;
+}
+
+async function fetchMarkets() {
+  const ids = Object.values(cgMap).map(c => c.id).join(',');
+  try {
+    const r = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids='+ids+'&sparkline=true&price_change_percentage=24h');
+    if (!r.ok) return;
+    marketCache = await r.json();
+    renderMarkets();
+  } catch(e) {}
+}
+
+function renderMarkets() {
+  const el = document.getElementById('markets-list');
+  if (!el) return;
+  const coins = ['BTC','ETH','USDT','GRAM','BNB','SOL'];
+  if (!marketCache) {
+    el.innerHTML = coins.map(sym => {
+      const info = cgMap[sym];
+      return `<div class="market-card">
+        <img class="market-icon" src="${cryptoIcons[sym]||''}" alt="${sym}" onerror="this.style.display='none'">
+        <div class="market-info"><div class="market-name">${info.name}</div><div class="market-sym">${sym}</div></div>
+        <div class="market-right"><span class="market-price" style="color:var(--t2)">--</span></div>
+      </div>`;
+    }).join('');
+    return;
+  }
+  el.innerHTML = coins.map(sym => {
+    const info = cgMap[sym];
+    const coin = marketCache.find(c => c.id === info.id);
+    if (!coin) return '';
+    const up = (coin.price_change_percentage_24h||0) >= 0;
+    const ch = (coin.price_change_percentage_24h||0).toFixed(2);
+    const spark = coin.sparkline_in_7d ? sampleArr(coin.sparkline_in_7d.price, 30) : [];
+    const prc = coin.current_price >= 1
+      ? '$'+coin.current_price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})
+      : '$'+coin.current_price.toFixed(4);
+    return `<div class="market-card">
+      <img class="market-icon" src="${cryptoIcons[sym]||''}" alt="${sym}" onerror="this.style.display='none'">
+      <div class="market-info"><div class="market-name">${info.name}</div><div class="market-sym">${sym}</div></div>
+      <div class="market-right">
+        ${sparkSvg(spark,up,56,24)}
+        <div><div class="market-price">${prc}</div>
+          <div class="market-change ${up?'up':'down'}">${up?'+':''}${ch}%</div></div>
       </div>
     </div>`;
   }).join('');
@@ -1011,6 +1106,8 @@ window.addEventListener('DOMContentLoaded', () => {
       document.getElementById('bottom-nav').style.display = 'flex';
       updateNavLabels();
       showPage('home');
+      fetchMarkets();
+      setInterval(fetchMarkets, 60000);
     }, 300);
   }, 2000);
 
