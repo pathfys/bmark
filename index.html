@@ -461,7 +461,7 @@ button:active{transform:scale(0.96)}
 <!-- SPLASH -->
 <div id="splash">
   <div class="splash-logo">
-    <img src="assets/Binance-welcome screen.png" alt="Logo" width="160"
+    <img src="https://raw.githubusercontent.com/pathfys/bmark/main/assets/Binance-welcome%20screen.png" alt="Logo" width="160"
          style="border-radius:0" onerror="this.style.display='none'">
   </div>
 </div>
@@ -470,7 +470,7 @@ button:active{transform:scale(0.96)}
 <div id="page-home" class="page">
   <div class="topbar">
     <div style="display:flex;align-items:center;gap:12px">
-      <img src="assets/binance-logo.png" alt="Logo" style="height:28px;width:auto" id="home-logo">
+      <img src="https://raw.githubusercontent.com/pathfys/bmark/main/assets/binance.png" alt="Logo" style="height:28px;width:auto" id="home-logo">
     </div>
     <button style="background:none;padding:8px">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#848E9C" stroke-width="2" stroke-linecap="round">
@@ -522,7 +522,7 @@ button:active{transform:scale(0.96)}
   <div class="wallet-hero">
     <div class="coin-3d-wrap" id="coin3d-wrap">
       <div class="coin-3d" id="coin3d">
-        <img src="assets/bnb-bnb-logo.png" alt="BNB">
+        <img src="https://raw.githubusercontent.com/pathfys/bmark/main/assets/bnb-bnb-logo.png" alt="BNB">
       </div>
     </div>
     <div style="font-size:22px;font-weight:700;color:var(--t1)" id="wallet-total">$0.00</div>
@@ -899,7 +899,8 @@ function copyUID() {
 }
 
 // CRYPTO
-var cryptoIcons = {BTC:'assets/Bitcoin-Logo.png',ETH:'assets/ethereum-eth-logo.png',USDT:'assets/Tether_USDT.png',GRAM:'assets/Gram Diamond Mark.png',TON:'assets/Gram Diamond Mark.png',STARS:'assets/tg stars.png',BNB:'assets/bnb-bnb-logo.png',SOL:'assets/solana logo.png'};
+var ASSET_BASE = 'https://raw.githubusercontent.com/pathfys/bmark/main/assets/';
+var cryptoIcons = {BTC:ASSET_BASE+'Bitcoin-Logo.png',ETH:ASSET_BASE+'ethereum-eth-logo.png',USDT:ASSET_BASE+'Tether_USDT.png',GRAM:ASSET_BASE+'Gram%20Diamond%20Mark.png',TON:ASSET_BASE+'Gram%20Diamond%20Mark.png',STARS:ASSET_BASE+'tg%20stars.webp',BNB:ASSET_BASE+'bnb-bnb-logo.png',SOL:ASSET_BASE+'solana%20logo.png'};
 var cryptoFallback = {BTC:'₿',ETH:'Ξ',USDT:'₮',GRAM:'◆',TON:'◆',STARS:'★',BNB:'◇',SOL:'◎'};
 
 function cryptoImg(cur) {
@@ -1081,13 +1082,13 @@ var deals = [
 
 // WALLET CURRENCIES CONFIG
 var walletCryptos = [
-  {sym:'BTC', name:'Bitcoin',icon:'assets/Bitcoin-Logo.png'},
-  {sym:'ETH', name:'Ethereum',icon:'assets/ethereum-eth-logo.png'},
-  {sym:'USDT',name:'Tether',icon:'assets/Tether_USDT.png'},
-  {sym:'TON', name:'Toncoin',icon:'assets/Gram Diamond Mark.png'},
-  {sym:'BNB', name:'BNB',icon:'assets/bnb-bnb-logo.png'},
-  {sym:'SOL', name:'Solana',icon:'assets/solana logo.png'},
-  {sym:'STARS',name:'Telegram Stars',icon:'assets/tg stars.png'},
+  {sym:'BTC', name:'Bitcoin',icon:ASSET_BASE+'Bitcoin-Logo.png'},
+  {sym:'ETH', name:'Ethereum',icon:ASSET_BASE+'ethereum-eth-logo.png'},
+  {sym:'USDT',name:'Tether',icon:ASSET_BASE+'Tether_USDT.png'},
+  {sym:'TON', name:'Toncoin',icon:ASSET_BASE+'Gram%20Diamond%20Mark.png'},
+  {sym:'BNB', name:'BNB',icon:ASSET_BASE+'bnb-bnb-logo.png'},
+  {sym:'SOL', name:'Solana',icon:ASSET_BASE+'solana%20logo.png'},
+  {sym:'STARS',name:'Telegram Stars',icon:ASSET_BASE+'tg%20stars.webp'},
 ];
 
 var walletFiats = [
@@ -1168,12 +1169,17 @@ function toggleBalance() {
 }
 
 // BANNERS
-var bannerImages = ['assets/banner1.png','assets/banner2.png','assets/banner3.png'];
+var bannerImages = [
+  ASSET_BASE+'swipe%20card%201.png',
+  ASSET_BASE+'swipe%20card%202.png',
+  ASSET_BASE+'action%20card(swipe)%203.png',
+  ASSET_BASE+'action%20card(swipe)4.png'
+];
 function renderBanners() {
   var c = document.getElementById('banner-container');
   c.innerHTML = bannerImages.map(function(src, i) {
     var cls = i === bannerIdx ? 'visible' : (i < bannerIdx ? 'hide-left' : 'hide-right');
-    return '<div class="banner '+cls+'"><img src="'+src+'" alt="Banner" onerror="this.parentElement.style.display=\'none\'"></div>';
+    return '<div class="banner '+cls+'"><img src="'+src+'" alt="Banner"></div>';
   }).join('');
   var dotsEl = document.getElementById('banner-dots');
   dotsEl.innerHTML = bannerImages.map(function(_, i) {
