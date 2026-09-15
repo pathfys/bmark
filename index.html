@@ -221,6 +221,84 @@ button:active{transform:scale(0.96)}
 .wallet-sections{display:none}
 .wallet-sections.visible{display:block}
 
+/* ═══ CREATE ORDER WIZARD ═══ */
+.co-steps-ind{display:flex;gap:6px;margin-left:auto}
+.co-dot{width:8px;height:8px;border-radius:50%;background:var(--card);transition:background .3s}
+.co-dot.active{background:var(--yellow)}
+.co-dot.done{background:var(--green)}
+
+.co-step{padding:0 16px;display:none}
+.co-step.active{display:block;animation:fadeIn .3s ease}
+.co-step-q{font-size:18px;font-weight:600;color:var(--t1);text-align:center;padding:32px 0 24px;line-height:1.4}
+
+.co-role-btns{display:flex;gap:12px}
+.co-role-btn{flex:1;background:var(--card);border-radius:16px;padding:32px 16px;
+  display:flex;flex-direction:column;align-items:center;gap:16px;border:2px solid transparent;transition:all .2s}
+.co-role-btn:active{border-color:var(--yellow)}
+.co-role-ico{width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px}
+.co-role-ico.buy{background:rgba(14,203,129,.15);color:var(--green)}
+.co-role-ico.sell{background:rgba(246,70,93,.15);color:var(--red)}
+.co-role-btn span{font-size:16px;font-weight:600;color:var(--t1)}
+
+.co-tabs{display:flex;gap:8px;margin-bottom:16px}
+.co-tab{flex:1;padding:10px;background:var(--card);color:var(--t2);border-radius:10px;
+  font-size:14px;font-weight:600;transition:all .2s}
+.co-tab.active{background:var(--yellow);color:var(--bg)}
+
+.co-cur-item{display:flex;align-items:center;gap:12px;padding:14px;background:var(--card);
+  border-radius:12px;margin-bottom:8px;cursor:pointer;transition:all .15s;border:2px solid transparent}
+.co-cur-item:active{transform:scale(0.98)}
+.co-cur-item.selected{border-color:var(--yellow)}
+.co-cur-icon{width:36px;height:36px;border-radius:50%;object-fit:cover;background:rgba(255,255,255,0.08)}
+.co-cur-flag{width:36px;height:36px;border-radius:50%;background:var(--bg2);
+  display:flex;align-items:center;justify-content:center;font-size:20px}
+.co-cur-info{flex:1}
+.co-cur-name{font-size:14px;font-weight:600;color:var(--t1)}
+.co-cur-sym{font-size:12px;color:var(--t2)}
+.co-cur-bal{text-align:right}
+.co-cur-bal-val{font-size:13px;font-weight:500;color:var(--t1)}
+.co-cur-bal-usd{font-size:11px;color:var(--t2)}
+
+.co-bal-card{background:linear-gradient(135deg,#1E2026 0%,#2B3139 100%);
+  border-radius:16px;padding:20px;margin-bottom:16px;text-align:center}
+.co-bal-card .lbl{font-size:12px;color:var(--t2);margin-bottom:4px}
+.co-bal-card .amt{font-size:28px;font-weight:700;color:var(--t1)}
+
+.co-link-input{width:100%;background:var(--card);color:var(--t1);border:1px solid var(--border);
+  border-radius:10px;padding:12px 14px;margin-bottom:8px;font-size:14px}
+.co-link-input:focus{border-color:var(--yellow)}
+.co-add-link{background:none;color:var(--yellow);font-size:14px;font-weight:600;padding:8px 0;margin-bottom:16px}
+.co-next-btn{width:100%;margin-top:8px}
+
+.co-amt-wrap{position:relative;margin-bottom:16px}
+.co-amt-input{width:100%;background:var(--card);color:var(--t1);border:1px solid var(--border);
+  border-radius:12px;padding:16px 60px 16px 16px;font-size:24px;font-weight:700;text-align:center}
+.co-amt-input:focus{border-color:var(--yellow)}
+.co-amt-cur{position:absolute;right:16px;top:50%;transform:translateY(-50%);
+  color:var(--t2);font-size:14px;font-weight:600}
+
+.co-confirm-warn{font-size:16px;font-weight:600;color:var(--yellow);text-align:center;
+  padding:24px 0 20px;line-height:1.4}
+.co-confirm-data{background:var(--card);border-radius:12px;padding:16px;margin-bottom:20px}
+.co-confirm-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)}
+.co-confirm-row:last-child{border-bottom:none}
+.co-confirm-row .lbl{color:var(--t2);font-size:13px}
+.co-confirm-row .val{color:var(--t1);font-size:14px;font-weight:500;text-align:right;max-width:60%;word-break:break-all}
+
+.co-confirm-btns{display:flex;gap:12px;margin-bottom:12px}
+.co-cfm-btn{flex:1;padding:14px;border-radius:12px;font-size:15px;font-weight:700;transition:all .3s}
+.co-cfm-btn.ok{background:var(--green);color:#fff}
+.co-cfm-btn.no{background:var(--card);color:var(--red);border:1px solid var(--red)}
+.co-cfm-btn.disabled{opacity:0.4;pointer-events:none}
+.co-timer-txt{text-align:center;color:var(--t2);font-size:13px}
+
+.co-success{display:flex;flex-direction:column;align-items:center;padding:60px 16px;gap:20px}
+.co-success-check{width:80px;height:80px;border-radius:50%;background:var(--green);
+  display:flex;align-items:center;justify-content:center;box-shadow:0 8px 32px rgba(14,203,129,0.35)}
+.co-success-check svg{width:40px;height:40px;fill:#fff}
+.co-success-title{font-size:20px;font-weight:700;color:var(--t1);text-align:center}
+.co-success-msg{font-size:14px;color:var(--t2);text-align:center;line-height:1.5}
+
 .wcrypto-card{background:var(--card);border-radius:12px;margin:0 16px 8px;overflow:hidden;
   transition:transform .1s}
 .wcrypto-card:active{transform:scale(0.98)}
@@ -349,60 +427,92 @@ button:active{transform:scale(0.96)}
   </div>
 </div>
 
-<!-- CREATE ORDER -->
+<!-- CREATE ORDER WIZARD -->
 <div id="page-create-order" class="page">
   <div class="page-header">
-    <button class="back-btn" onclick="showPage('home')"><svg viewBox="0 0 24 24" fill="none"><polyline points="15,18 9,12 15,6"/></svg></button>
+    <button class="back-btn" onclick="coBack()"><svg viewBox="0 0 24 24" fill="none"><polyline points="15,18 9,12 15,6"/></svg></button>
     <h1 id="lbl-create-order">Create Order</h1>
+    <div class="co-steps-ind" id="co-dots"></div>
   </div>
-  <div style="padding:0 16px">
-    <div class="form-group">
-      <label id="lbl-side">I want to</label>
-      <div class="toggle-row" style="margin:4px 0 0">
-        <button class="toggle-btn active-buy" onclick="setCoSide('buy')" id="co-buy-btn">Buy</button>
-        <button class="toggle-btn" onclick="setCoSide('sell')" id="co-sell-btn">Sell</button>
-      </div>
+
+  <!-- Step 1: Role -->
+  <div class="co-step active" id="co-step-1">
+    <div class="co-step-q" id="co-q1"></div>
+    <div class="co-role-btns">
+      <button class="co-role-btn" onclick="coPickRole('buy')">
+        <div class="co-role-ico buy"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
+        <span id="co-lbl-buyer"></span>
+      </button>
+      <button class="co-role-btn" onclick="coPickRole('sell')">
+        <div class="co-role-ico sell"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></div>
+        <span id="co-lbl-seller"></span>
+      </button>
     </div>
-    <div class="form-group">
-      <label id="lbl-co-crypto">Crypto</label>
-      <select id="co-crypto">
-        <option>BTC</option><option>ETH</option><option selected>USDT</option><option>GRAM</option><option>STARS</option>
-      </select>
+  </div>
+
+  <!-- Step 2: What are you buying/selling -->
+  <div class="co-step" id="co-step-2">
+    <div class="co-step-q" id="co-q2"></div>
+    <div class="co-tabs">
+      <button class="co-tab active" id="co-s2-tab-crypto" onclick="coSetTab(2,'crypto')"></button>
+      <button class="co-tab" id="co-s2-tab-fiat" onclick="coSetTab(2,'fiat')"></button>
     </div>
-    <div class="form-group">
-      <label id="lbl-co-fiat">Fiat</label>
-      <select id="co-fiat">
-        <option selected>USD</option><option>EUR</option><option>RUB</option><option>UAH</option>
-        <option>MDL</option><option>TRY</option><option>CNY</option><option>GBP</option>
-      </select>
+    <div id="co-s2-list"></div>
+  </div>
+
+  <!-- Step 3: Choose order currency -->
+  <div class="co-step" id="co-step-3">
+    <div class="co-step-q" id="co-q3"></div>
+    <div class="co-bal-card">
+      <div class="lbl" id="co-bal-lbl"></div>
+      <div class="amt" id="co-bal-amt">$0.00</div>
     </div>
-    <div class="form-group">
-      <label id="lbl-co-price">Price per unit</label>
-      <input type="number" id="co-price" placeholder="0.00">
+    <div class="co-tabs">
+      <button class="co-tab active" id="co-s3-tab-crypto" onclick="coSetTab(3,'crypto')"></button>
+      <button class="co-tab" id="co-s3-tab-fiat" onclick="coSetTab(3,'fiat')"></button>
     </div>
-    <div class="form-group">
-      <label id="lbl-co-amount">Amount</label>
-      <input type="number" id="co-amount" placeholder="0.00">
+    <div id="co-s3-list"></div>
+  </div>
+
+  <!-- Step 4: Product links -->
+  <div class="co-step" id="co-step-4">
+    <div class="co-step-q" id="co-q4"></div>
+    <div id="co-links-wrap">
+      <input type="url" class="co-link-input" id="co-link-0" placeholder="https://...">
     </div>
-    <div style="display:flex;gap:12px">
-      <div class="form-group" style="flex:1">
-        <label id="lbl-co-min">Min Limit</label>
-        <input type="number" id="co-min" placeholder="0">
-      </div>
-      <div class="form-group" style="flex:1">
-        <label id="lbl-co-max">Max Limit</label>
-        <input type="number" id="co-max" placeholder="0">
-      </div>
+    <button class="co-add-link" onclick="coAddLink()" id="co-add-link-btn"></button>
+    <button class="btn-primary co-next-btn" onclick="coGoStep(5)" id="co-s4-next"></button>
+  </div>
+
+  <!-- Step 5: Amount -->
+  <div class="co-step" id="co-step-5">
+    <div class="co-step-q" id="co-q5"></div>
+    <div class="co-amt-wrap">
+      <input type="number" class="co-amt-input" id="co-amt-input" placeholder="0.00">
+      <span class="co-amt-cur" id="co-amt-cur"></span>
     </div>
-    <div class="form-group">
-      <label id="lbl-co-payment">Payment Method</label>
-      <input type="text" id="co-payment" placeholder="Sberbank, PayPal...">
+    <button class="btn-primary co-next-btn" onclick="coGoStep(6)" id="co-s5-next"></button>
+  </div>
+
+  <!-- Step 6: Confirm -->
+  <div class="co-step" id="co-step-6">
+    <div class="co-confirm-warn" id="co-confirm-warn"></div>
+    <div class="co-confirm-data" id="co-confirm-data"></div>
+    <div class="co-confirm-btns">
+      <button class="co-cfm-btn ok disabled" id="co-cfm-ok" onclick="coSubmit()" disabled></button>
+      <button class="co-cfm-btn no disabled" id="co-cfm-no" onclick="coCancel()" disabled></button>
     </div>
-    <div class="form-group">
-      <label id="lbl-co-terms">Terms & Conditions</label>
-      <textarea id="co-terms" placeholder="..."></textarea>
+    <div class="co-timer-txt" id="co-timer-txt"></div>
+  </div>
+
+  <!-- Step 7: Success -->
+  <div class="co-step" id="co-step-7">
+    <div class="co-success">
+      <div class="co-success-check"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
+      <div class="co-success-title" id="co-ok-title"></div>
+      <div class="co-success-msg" id="co-ok-msg"></div>
+      <button class="btn-primary co-next-btn" onclick="showPage('home')">OK</button>
     </div>
-    <button class="btn-primary" onclick="submitOrder()" id="btn-submit-order">Submit Order</button>
   </div>
 </div>
 
@@ -514,7 +624,7 @@ try { locale = localStorage.getItem('p2p_locale') || 'en'; } catch(e){}
 var balanceVisible = true;
 var balanceAnimating = false;
 var currentPage = 'home';
-var coSide = 'buy';
+
 var profileTab = 'orders';
 var bannerIdx = 0;
 var bannerTimer = null;
@@ -579,7 +689,20 @@ var L = {
     'save':'Save','edit':'Edit',
     'valid_address':'Valid address','invalid_address':'Invalid address',
     'enter_address':'Enter wallet address',
-    'stat_total':'Deals','stat_turnover':'Turnover','stat_completed':'Completed','stat_active':'Active'
+    'stat_total':'Deals','stat_turnover':'Turnover','stat_completed':'Completed','stat_active':'Active',
+    'co_q1':'Who are you in the deal?','co_buyer':'Buyer','co_seller':'Seller',
+    'co_q2_buy':'Specify what you are buying in the order','co_q2_sell':'Specify what you are selling in the order',
+    'co_q3':'Choose the order currency','co_crypto_tab':'Cryptocurrencies','co_fiat_tab':'Fiat Currencies',
+    'co_q4':'Specify the link(s) to the product you are offering in the order',
+    'co_q5_buy':'Specify the purchase amount','co_q5_sell':'Specify the sale amount',
+    'co_confirm_warn':'Make sure all order fields are filled correctly!',
+    'co_confirm':'Confirm','co_cancel':'Cancel',
+    'co_success':'You have successfully created an order!',
+    'co_success_msg':'Go to the bot chat for further trading',
+    'co_role':'Role','co_asset':'Asset','co_currency':'Currency',
+    'co_links_lbl':'Links','co_amount_lbl':'Amount',
+    'co_total_bal':'Total Balance','co_add_link':'+ Add link','co_next':'Next',
+    'co_timer_wait':'Buttons will be active in {s} sec'
   },
   ru: {
     'nav.home':'Главная','nav.wallet':'Кошелёк','nav.profile':'Профиль',
@@ -603,7 +726,20 @@ var L = {
     'save':'Сохранить','edit':'Изменить',
     'valid_address':'Адрес верный','invalid_address':'Неверный адрес',
     'enter_address':'Введите адрес кошелька',
-    'stat_total':'Сделок','stat_turnover':'Оборот сделок','stat_completed':'Завершённых','stat_active':'Текущих'
+    'stat_total':'Сделок','stat_turnover':'Оборот сделок','stat_completed':'Завершённых','stat_active':'Текущих',
+    'co_q1':'Кем вы являетесь в сделке?','co_buyer':'Покупатель','co_seller':'Продавец',
+    'co_q2_buy':'Укажите, что вы покупаете в ордере','co_q2_sell':'Укажите, что вы продаёте в ордере',
+    'co_q3':'Выберите валюту ордера','co_crypto_tab':'Криптовалюты','co_fiat_tab':'Фиатные валюты',
+    'co_q4':'Укажите ссылку(ки) на товар который вы предлагаете в ордере',
+    'co_q5_buy':'Укажите сумму покупки','co_q5_sell':'Укажите сумму продажи',
+    'co_confirm_warn':'Убедитесь в правильности заполнения всех пунктов ордера!',
+    'co_confirm':'Подтвердить','co_cancel':'Отказаться',
+    'co_success':'Вы успешно создали ордер!',
+    'co_success_msg':'Перейдите в чат с ботом, для дальнейшей торговли',
+    'co_role':'Роль','co_asset':'Актив','co_currency':'Валюта',
+    'co_links_lbl':'Ссылки','co_amount_lbl':'Сумма',
+    'co_total_bal':'Общий баланс','co_add_link':'+ Добавить ссылку','co_next':'Далее',
+    'co_timer_wait':'Кнопки будут активны через {s} сек'
   }
 };
 
@@ -680,6 +816,7 @@ function showPage(name) {
   if (name === 'home') renderHome();
   if (name === 'wallet') renderWallet();
   if (name === 'profile') renderProfile();
+  if (name === 'create-order') initCoWizard();
 }
 
 // HOME
@@ -1098,36 +1235,196 @@ function initCoin3D() {
   });
 }
 
-// CREATE ORDER
-function setCoSide(s) {
-  coSide = s;
-  document.getElementById('co-buy-btn').className = 'toggle-btn' + (s==='buy' ? ' active-buy' : '');
-  document.getElementById('co-sell-btn').className = 'toggle-btn' + (s==='sell' ? ' active-sell' : '');
-  updateCreateOrderLabels();
+// CREATE ORDER WIZARD
+var coData = {step:1, role:'', asset:'', assetName:'', assetType:'', currency:'', currencyName:'', currencyType:'', links:[], amount:''};
+var coS2Tab = 'crypto';
+var coS3Tab = 'crypto';
+var coTimerInterval = null;
+var coLinkCount = 1;
+
+function initCoWizard() {
+  coData = {step:1, role:'', asset:'', assetName:'', assetType:'', currency:'', currencyName:'', currencyType:'', links:[], amount:''};
+  coS2Tab = 'crypto'; coS3Tab = 'crypto'; coLinkCount = 1;
+  if (coTimerInterval) { clearInterval(coTimerInterval); coTimerInterval = null; }
+  coShowStep(1);
+  coUpdateLabels();
 }
 
-function updateCreateOrderLabels() {
+function coUpdateLabels() {
   document.getElementById('lbl-create-order').textContent = t('create_order');
-  document.getElementById('lbl-side').textContent = t('side');
-  document.getElementById('co-buy-btn').textContent = t('buy');
-  document.getElementById('co-sell-btn').textContent = t('sell');
-  document.getElementById('lbl-co-crypto').textContent = t('crypto');
-  document.getElementById('lbl-co-fiat').textContent = t('fiat');
-  document.getElementById('lbl-co-price').textContent = t('price_unit');
-  document.getElementById('lbl-co-amount').textContent = t('amount');
-  document.getElementById('lbl-co-min').textContent = t('min_limit');
-  document.getElementById('lbl-co-max').textContent = t('max_limit');
-  document.getElementById('lbl-co-payment').textContent = t('payment_method');
-  document.getElementById('lbl-co-terms').textContent = t('terms');
-  document.getElementById('btn-submit-order').textContent = t('submit');
+  document.getElementById('co-q1').textContent = t('co_q1');
+  document.getElementById('co-lbl-buyer').textContent = t('co_buyer');
+  document.getElementById('co-lbl-seller').textContent = t('co_seller');
 }
 
-function submitOrder() {
-  var price = document.getElementById('co-price').value;
-  var amount = document.getElementById('co-amount').value;
-  if (!price || !amount) return;
-  alert('Order created: '+coSide+' '+amount+' '+document.getElementById('co-crypto').value+' @ '+price+' '+document.getElementById('co-fiat').value);
-  showPage('home');
+function coShowStep(n) {
+  coData.step = n;
+  for (var i = 1; i <= 7; i++) {
+    var el = document.getElementById('co-step-'+i);
+    if (el) el.className = 'co-step' + (i === n ? ' active' : '');
+  }
+  var dots = '';
+  for (var d = 1; d <= 7; d++) {
+    var cls = d < n ? 'done' : (d === n ? 'active' : '');
+    dots += '<div class="co-dot '+cls+'"></div>';
+  }
+  document.getElementById('co-dots').innerHTML = dots;
+
+  if (n === 2) coRenderStep2();
+  if (n === 3) coRenderStep3();
+  if (n === 4) coRenderStep4();
+  if (n === 5) coRenderStep5();
+  if (n === 6) coRenderStep6();
+  if (n === 7) coRenderStep7();
+}
+
+function coBack() {
+  if (coData.step <= 1) { showPage('home'); return; }
+  if (coData.step === 7) { showPage('home'); return; }
+  coShowStep(coData.step - 1);
+}
+
+function coGoStep(n) { coShowStep(n); }
+
+function coPickRole(role) {
+  coData.role = role;
+  coShowStep(2);
+}
+
+function coRenderStep2() {
+  var q = coData.role === 'buy' ? t('co_q2_buy') : t('co_q2_sell');
+  document.getElementById('co-q2').textContent = q;
+  document.getElementById('co-s2-tab-crypto').textContent = t('co_crypto_tab');
+  document.getElementById('co-s2-tab-fiat').textContent = t('co_fiat_tab');
+  document.getElementById('co-s2-tab-crypto').className = 'co-tab' + (coS2Tab==='crypto'?' active':'');
+  document.getElementById('co-s2-tab-fiat').className = 'co-tab' + (coS2Tab==='fiat'?' active':'');
+  coRenderCurList('co-s2-list', coS2Tab, 'coPickAsset');
+}
+
+function coRenderStep3() {
+  document.getElementById('co-q3').textContent = t('co_q3');
+  document.getElementById('co-bal-lbl').textContent = t('co_total_bal');
+  document.getElementById('co-bal-amt').textContent = '$0.00';
+  document.getElementById('co-s3-tab-crypto').textContent = t('co_crypto_tab');
+  document.getElementById('co-s3-tab-fiat').textContent = t('co_fiat_tab');
+  document.getElementById('co-s3-tab-crypto').className = 'co-tab' + (coS3Tab==='crypto'?' active':'');
+  document.getElementById('co-s3-tab-fiat').className = 'co-tab' + (coS3Tab==='fiat'?' active':'');
+  coRenderCurList('co-s3-list', coS3Tab, 'coPickCurrency', true);
+}
+
+function coRenderStep4() {
+  document.getElementById('co-q4').textContent = t('co_q4');
+  document.getElementById('co-add-link-btn').textContent = t('co_add_link');
+  document.getElementById('co-s4-next').textContent = t('co_next');
+  var wrap = document.getElementById('co-links-wrap');
+  wrap.innerHTML = '<input type="url" class="co-link-input" id="co-link-0" placeholder="https://...">';
+  coLinkCount = 1;
+}
+
+function coRenderStep5() {
+  var q = coData.role === 'buy' ? t('co_q5_buy') : t('co_q5_sell');
+  document.getElementById('co-q5').textContent = q;
+  document.getElementById('co-amt-cur').textContent = coData.currency;
+  document.getElementById('co-amt-input').value = '';
+  document.getElementById('co-s5-next').textContent = t('co_next');
+}
+
+function coRenderStep6() {
+  document.getElementById('co-confirm-warn').textContent = t('co_confirm_warn');
+  document.getElementById('co-cfm-ok').textContent = t('co_confirm');
+  document.getElementById('co-cfm-no').textContent = t('co_cancel');
+
+  var amtVal = document.getElementById('co-amt-input');
+  coData.amount = amtVal ? amtVal.value : '';
+  coData.links = [];
+  for (var i = 0; i < coLinkCount; i++) {
+    var inp = document.getElementById('co-link-'+i);
+    if (inp && inp.value.trim()) coData.links.push(inp.value.trim());
+  }
+
+  var roleLabel = coData.role === 'buy' ? t('co_buyer') : t('co_seller');
+  var html = '<div class="co-confirm-row"><span class="lbl">'+t('co_role')+'</span><span class="val">'+roleLabel+'</span></div>'+
+    '<div class="co-confirm-row"><span class="lbl">'+t('co_asset')+'</span><span class="val">'+coData.assetName+' ('+coData.asset+')</span></div>'+
+    '<div class="co-confirm-row"><span class="lbl">'+t('co_currency')+'</span><span class="val">'+coData.currencyName+' ('+coData.currency+')</span></div>';
+  if (coData.links.length) {
+    html += '<div class="co-confirm-row"><span class="lbl">'+t('co_links_lbl')+'</span><span class="val">'+coData.links.join('<br>')+'</span></div>';
+  }
+  html += '<div class="co-confirm-row"><span class="lbl">'+t('co_amount_lbl')+'</span><span class="val">'+coData.amount+' '+coData.currency+'</span></div>';
+  document.getElementById('co-confirm-data').innerHTML = html;
+
+  var okBtn = document.getElementById('co-cfm-ok');
+  var noBtn = document.getElementById('co-cfm-no');
+  okBtn.classList.add('disabled'); okBtn.disabled = true;
+  noBtn.classList.add('disabled'); noBtn.disabled = true;
+
+  var sec = 5;
+  document.getElementById('co-timer-txt').textContent = t('co_timer_wait', {s: sec});
+  if (coTimerInterval) clearInterval(coTimerInterval);
+  coTimerInterval = setInterval(function() {
+    sec--;
+    if (sec <= 0) {
+      clearInterval(coTimerInterval); coTimerInterval = null;
+      document.getElementById('co-timer-txt').textContent = '';
+      okBtn.classList.remove('disabled'); okBtn.disabled = false;
+      noBtn.classList.remove('disabled'); noBtn.disabled = false;
+    } else {
+      document.getElementById('co-timer-txt').textContent = t('co_timer_wait', {s: sec});
+    }
+  }, 1000);
+}
+
+function coRenderStep7() {
+  document.getElementById('co-ok-title').textContent = t('co_success');
+  document.getElementById('co-ok-msg').textContent = t('co_success_msg');
+}
+
+function coSubmit() { coShowStep(7); }
+function coCancel() { showPage('home'); }
+
+function coSetTab(step, tab) {
+  if (step === 2) { coS2Tab = tab; coRenderStep2(); }
+  if (step === 3) { coS3Tab = tab; coRenderStep3(); }
+}
+
+function coAddLink() {
+  var wrap = document.getElementById('co-links-wrap');
+  var inp = document.createElement('input');
+  inp.type = 'url'; inp.className = 'co-link-input';
+  inp.id = 'co-link-' + coLinkCount; inp.placeholder = 'https://...';
+  wrap.appendChild(inp);
+  coLinkCount++;
+}
+
+function coPickAsset(sym, name, type) {
+  coData.asset = sym; coData.assetName = name; coData.assetType = type;
+  coShowStep(3);
+}
+
+function coPickCurrency(sym, name, type) {
+  coData.currency = sym; coData.currencyName = name; coData.currencyType = type;
+  coShowStep(4);
+}
+
+function coRenderCurList(containerId, tab, handler, showBal) {
+  var el = document.getElementById(containerId);
+  if (tab === 'crypto') {
+    el.innerHTML = walletCryptos.map(function(c) {
+      var fb = cryptoFallback[c.sym] || c.sym[0];
+      var balHtml = showBal ? '<div class="co-cur-bal"><div class="co-cur-bal-val">0.00 '+c.sym+'</div><div class="co-cur-bal-usd">$0.00</div></div>' : '';
+      return '<div class="co-cur-item" onclick="'+handler+'(\''+c.sym+'\',\''+c.name+'\',\'crypto\')">'+
+        '<img class="co-cur-icon" src="'+c.icon+'" alt="'+c.sym+'" onerror="this.outerHTML=\'<div class=co-cur-flag>'+fb+'</div>\'">'+
+        '<div class="co-cur-info"><div class="co-cur-name">'+c.name+'</div><div class="co-cur-sym">'+c.sym+'</div></div>'+
+        balHtml+'</div>';
+    }).join('');
+  } else {
+    el.innerHTML = walletFiats.map(function(f) {
+      var balHtml = showBal ? '<div class="co-cur-bal"><div class="co-cur-bal-val">0.00 '+f.sym+'</div></div>' : '';
+      return '<div class="co-cur-item" onclick="'+handler+'(\''+f.sym+'\',\''+f.name+'\',\'fiat\')">'+
+        '<div class="co-cur-flag">'+f.flag+'</div>'+
+        '<div class="co-cur-info"><div class="co-cur-name">'+f.name+'</div><div class="co-cur-sym">'+f.sym+'</div></div>'+
+        balHtml+'</div>';
+    }).join('');
+  }
 }
 
 // DEAL
