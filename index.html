@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' https://telegram.org https://fonts.googleapis.com https://fonts.gstatic.com https://api.coingecko.com; img-src 'self' data: blob:; font-src https://fonts.gstatic.com">
 <title>Exchange</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -734,12 +735,16 @@ if (appTheme === 'light') document.documentElement.setAttribute('data-theme','li
 var notifSettings = {deal:true, pay:true, dispute:true, complete:true};
 try { var ns = JSON.parse(localStorage.getItem('p2p_notifs')||'{}'); if (ns && typeof ns === 'object') notifSettings = Object.assign(notifSettings, ns); } catch(e){}
 
+// SECURITY: initDataUnsafe is NOT cryptographically verified on the client.
+// The backend MUST validate Telegram.WebApp.initData using HMAC-SHA256
+// with the bot token to prevent replay attacks and data spoofing.
+// Never trust initDataUnsafe for authentication or authorization.
 try {
   if (window.Telegram && Telegram.WebApp && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user) {
     var tg = Telegram.WebApp.initDataUnsafe.user;
-    user.telegram_id = tg.id;
-    user.username = tg.username || '';
-    user.first_name = tg.first_name || 'User';
+    user.telegram_id = typeof tg.id === 'number' ? tg.id : 0;
+    user.username = String(tg.username || '').replace(/[^a-zA-Z0-9_]/g, '');
+    user.first_name = escapeHtml(tg.first_name || 'User');
     if (tg.language_code === 'ru') locale = 'ru';
     Telegram.WebApp.expand();
     var tgBg = appTheme === 'light' ? '#FAFAFA' : '#0B0E11';
@@ -748,8 +753,19 @@ try {
   }
 } catch(e) {}
 
+// SECURITY: HTML escaping to prevent XSS
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function isValidUrl(str) {
+  if (!str) return false;
+  try { var u = new URL(str); return u.protocol === 'http:' || u.protocol === 'https:'; } catch(e) { return false; }
+}
+
 // CRYPTO
-var cryptoIcons = {BTC:'assets/Bitcoin-Logo.png',ETH:'assets/ethereum-eth-logo.png',USDT:'assets/tether.png',GRAM:'assets/Gram Diamond Mark.png',TON:'assets/Gram Diamond Mark.png',STARS:'assets/stars.png',BNB:'assets/bnb-bnb-logo.png',SOL:'assets/solana logo.png'};
+var cryptoIcons = {BTC:'assets/Bitcoin-Logo.png',ETH:'assets/ethereum-eth-logo.png',USDT:'assets/Tether_USDT.png',GRAM:'assets/Gram Diamond Mark.png',TON:'assets/Gram Diamond Mark.png',STARS:'assets/tg stars.png',BNB:'assets/bnb-bnb-logo.png',SOL:'assets/solana logo.png'};
 var cryptoFallback = {BTC:'₿',ETH:'Ξ',USDT:'₮',GRAM:'◆',TON:'◆',STARS:'★',BNB:'◇',SOL:'◎'};
 
 function cryptoImg(cur) {
@@ -891,11 +907,11 @@ var deals = [
 var walletCryptos = [
   {sym:'BTC', name:'Bitcoin',icon:'assets/Bitcoin-Logo.png'},
   {sym:'ETH', name:'Ethereum',icon:'assets/ethereum-eth-logo.png'},
-  {sym:'USDT',name:'Tether',icon:'assets/tether.png'},
+  {sym:'USDT',name:'Tether',icon:'assets/Tether_USDT.png'},
   {sym:'TON', name:'Toncoin',icon:'assets/Gram Diamond Mark.png'},
   {sym:'BNB', name:'BNB',icon:'assets/bnb-bnb-logo.png'},
   {sym:'SOL', name:'Solana',icon:'assets/solana logo.png'},
-  {sym:'STARS',name:'Telegram Stars',icon:'assets/stars.png'},
+  {sym:'STARS',name:'Telegram Stars',icon:'assets/tg stars.png'},
 ];
 
 var walletFiats = [
@@ -1209,7 +1225,7 @@ function renderWalletCryptoList() {
       if (saved) {
         expandHtml = '<div class="wcrypto-expand open">'+
           '<div class="wcrypto-saved">'+
-            '<span class="addr">'+maskAddress(saved)+'</span>'+
+            '<span class="addr">'+escapeHtml(maskAddress(saved))+'</span>'+
             '<button onclick="event.stopPropagation();editWalletCrypto(\''+c.sym+'\')">'+t('edit')+'</button>'+
           '</div></div>';
       } else {
@@ -1391,7 +1407,26 @@ function coBack() {
   coShowStep(coData.step - 1);
 }
 
-function coGoStep(n) { coShowStep(n); }
+function coGoStep(n) {
+  if (n === 5) {
+    var hasLink = false;
+    for (var i = 0; i < coLinkCount; i++) {
+      var inp = document.getElementById('co-link-'+i);
+      if (inp && inp.value.trim()) {
+        if (!isValidUrl(inp.value.trim())) { inp.style.borderColor='var(--red)'; return; }
+        inp.style.borderColor='';
+        hasLink = true;
+      }
+    }
+  }
+  if (n === 6) {
+    var amtEl = document.getElementById('co-amt-input');
+    var amt = parseFloat(amtEl ? amtEl.value : '');
+    if (isNaN(amt) || amt <= 0) { if (amtEl) amtEl.style.borderColor='var(--red)'; return; }
+    if (amtEl) amtEl.style.borderColor='';
+  }
+  coShowStep(n);
+}
 
 function coPickRole(role) {
   coData.role = role;
@@ -1450,13 +1485,13 @@ function coRenderStep6() {
   }
 
   var roleLabel = coData.role === 'buy' ? t('co_buyer') : t('co_seller');
-  var html = '<div class="co-confirm-row"><span class="lbl">'+t('co_role')+'</span><span class="val">'+roleLabel+'</span></div>'+
-    '<div class="co-confirm-row"><span class="lbl">'+t('co_asset')+'</span><span class="val">'+coData.assetName+' ('+coData.asset+')</span></div>'+
-    '<div class="co-confirm-row"><span class="lbl">'+t('co_currency')+'</span><span class="val">'+coData.currencyName+' ('+coData.currency+')</span></div>';
+  var html = '<div class="co-confirm-row"><span class="lbl">'+escapeHtml(t('co_role'))+'</span><span class="val">'+escapeHtml(roleLabel)+'</span></div>'+
+    '<div class="co-confirm-row"><span class="lbl">'+escapeHtml(t('co_asset'))+'</span><span class="val">'+escapeHtml(coData.assetName)+' ('+escapeHtml(coData.asset)+')</span></div>'+
+    '<div class="co-confirm-row"><span class="lbl">'+escapeHtml(t('co_currency'))+'</span><span class="val">'+escapeHtml(coData.currencyName)+' ('+escapeHtml(coData.currency)+')</span></div>';
   if (coData.links.length) {
-    html += '<div class="co-confirm-row"><span class="lbl">'+t('co_links_lbl')+'</span><span class="val">'+coData.links.join('<br>')+'</span></div>';
+    html += '<div class="co-confirm-row"><span class="lbl">'+escapeHtml(t('co_links_lbl'))+'</span><span class="val">'+coData.links.map(escapeHtml).join('<br>')+'</span></div>';
   }
-  html += '<div class="co-confirm-row"><span class="lbl">'+t('co_amount_lbl')+'</span><span class="val">'+coData.amount+' '+coData.currency+'</span></div>';
+  html += '<div class="co-confirm-row"><span class="lbl">'+escapeHtml(t('co_amount_lbl'))+'</span><span class="val">'+escapeHtml(coData.amount)+' '+escapeHtml(coData.currency)+'</span></div>';
   document.getElementById('co-confirm-data').innerHTML = html;
 
   var okBtn = document.getElementById('co-cfm-ok');
@@ -1623,8 +1658,8 @@ function renderChat() {
   el.innerHTML = chatMessages.map(function(m) {
     var mine = m.sender_id === user.id;
     return '<div class="chat-msg '+(mine?'mine':'other')+'">'+
-      (!mine ? '<div class="sender">'+(m.first_name||'User')+'</div>' : '')+
-      '<div>'+m.text+'</div>'+
+      (!mine ? '<div class="sender">'+escapeHtml(m.first_name||'User')+'</div>' : '')+
+      '<div>'+escapeHtml(m.text)+'</div>'+
       '<div class="time">'+new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</div></div>';
   }).join('');
   el.scrollTop = el.scrollHeight;
