@@ -15,6 +15,11 @@
   --green:#0ECB81;--red:#F6465D;
   --border:#2B3139;
 }
+[data-theme="light"]{
+  --bg:#FAFAFA;--bg2:#F5F5F5;--card:#FFFFFF;
+  --t1:#1E2329;--t2:#707A8A;
+  --border:#EAECEF;
+}
 body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t1);
   -webkit-font-smoothing:antialiased;overflow-x:hidden;max-width:430px;margin:0 auto}
 input,textarea,select{outline:none;font-family:inherit;font-size:14px}
@@ -188,6 +193,39 @@ button:active{transform:scale(0.96)}
 .stat-mini{background:var(--bg2);border-radius:10px;padding:14px 10px;text-align:center}
 .stat-mini .stat-val{font-size:20px;font-weight:700;color:var(--yellow)}
 .stat-mini .stat-label{font-size:11px;color:var(--t2);margin-top:4px}
+
+/* Profile Extras */
+.prof-block{padding:0 16px;margin-bottom:16px}
+.prof-setting-card{background:var(--card);border-radius:12px;padding:16px;margin-bottom:12px;
+  display:flex;align-items:center;gap:8px}
+.prof-setting-lbl{color:var(--t2);font-size:14px}
+
+.success-card{background:var(--card);border-radius:12px;padding:20px;display:flex;align-items:center;gap:20px}
+.success-ring-wrap{position:relative;flex-shrink:0}
+.success-pct{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  font-size:22px;font-weight:700;color:var(--green)}
+.success-info{flex:1}
+.success-row{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--t2);margin-bottom:8px}
+.success-row:last-child{margin-bottom:0}
+.success-row b{color:var(--t1);margin-left:auto}
+.sdot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+.activity-card{background:var(--card);border-radius:12px;padding:16px}
+.activity-sub{font-size:12px;color:var(--t2);margin-bottom:12px}
+.activity-bars{display:flex;align-items:flex-end;gap:3px;height:80px}
+.activity-bar{flex:1;border-radius:2px 2px 0 0;min-height:2px;transition:height .5s ease}
+
+.notif-list{background:var(--card);border-radius:12px;overflow:hidden}
+.notif-item{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;
+  border-bottom:1px solid var(--border)}
+.notif-item:last-child{border-bottom:none}
+.notif-item span{font-size:14px;color:var(--t1)}
+.notif-toggle{position:relative;width:44px;height:24px;background:var(--card);border:1px solid var(--border);
+  border-radius:12px;cursor:pointer;transition:all .3s;flex-shrink:0}
+.notif-toggle.on{background:var(--green);border-color:var(--green)}
+.notif-toggle .knob{position:absolute;top:1px;left:1px;width:20px;height:20px;
+  background:#fff;border-radius:50%;transition:transform .3s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.notif-toggle.on .knob{transform:translateX(20px)}
 
 /* ═══ WALLET PAGE ═══ */
 .wallet-hero{display:flex;flex-direction:column;align-items:center;padding:24px 16px 8px}
@@ -569,16 +607,69 @@ button:active{transform:scale(0.96)}
     </div>
   </div>
 
+  <!-- Success Rate -->
+  <div class="prof-block">
+    <div class="section-title" id="lbl-success-rate">Success Rate</div>
+    <div class="success-card">
+      <div class="success-ring-wrap">
+        <svg viewBox="0 0 120 120" width="100" height="100">
+          <circle cx="60" cy="60" r="50" fill="none" stroke="var(--bg2)" stroke-width="8"/>
+          <circle id="success-arc" cx="60" cy="60" r="50" fill="none" stroke="var(--green)" stroke-width="8"
+            stroke-dasharray="314.16" stroke-dashoffset="314.16" stroke-linecap="round"
+            transform="rotate(-90 60 60)"/>
+        </svg>
+        <div class="success-pct" id="success-pct">0%</div>
+      </div>
+      <div class="success-info">
+        <div class="success-row"><span class="sdot" style="background:var(--green)"></span><span id="lbl-sr-done"></span><b id="sr-done-val">0</b></div>
+        <div class="success-row"><span class="sdot" style="background:var(--red)"></span><span id="lbl-sr-cancel"></span><b id="sr-cancel-val">0</b></div>
+        <div class="success-row"><span class="sdot" style="background:var(--yellow)"></span><span id="lbl-sr-dispute"></span><b id="sr-dispute-val">0</b></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Activity Chart -->
+  <div class="prof-block">
+    <div class="section-title" id="lbl-activity">Activity</div>
+    <div class="activity-card">
+      <div class="activity-sub" id="lbl-last30">Last 30 days</div>
+      <div class="activity-bars" id="activity-bars"></div>
+    </div>
+  </div>
+
   <div style="padding:0 16px 16px">
-    <div style="background:var(--card);border-radius:12px;padding:16px;margin-bottom:16px;display:flex;align-items:center;gap:8px">
-      <span style="color:var(--t2);font-size:14px" id="lbl-language">Language:</span>
+    <!-- Language -->
+    <div class="prof-setting-card">
+      <span class="prof-setting-lbl" id="lbl-language">Language:</span>
       <div class="lang-switch">
         <button class="lang-btn active" onclick="setLang('en')" id="lang-en">English</button>
         <button class="lang-btn" onclick="setLang('ru')" id="lang-ru">Русский</button>
       </div>
     </div>
 
-    <div class="toggle-row" style="margin:0 0 16px">
+    <!-- Theme -->
+    <div class="prof-setting-card">
+      <span class="prof-setting-lbl" id="lbl-theme">Theme:</span>
+      <div class="lang-switch">
+        <button class="lang-btn active" onclick="setTheme('dark')" id="theme-dark">Dark</button>
+        <button class="lang-btn" onclick="setTheme('light')" id="theme-light">Light</button>
+      </div>
+    </div>
+
+    <!-- Notifications -->
+    <div class="section-title" style="margin:4px 0 12px" id="lbl-notif-title">Notifications</div>
+    <div class="notif-list">
+      <div class="notif-item"><span id="lbl-notif-deal">New Deal</span>
+        <div class="notif-toggle on" id="ntog-deal" onclick="toggleNotif('deal')"><div class="knob"></div></div></div>
+      <div class="notif-item"><span id="lbl-notif-pay">Payment Received</span>
+        <div class="notif-toggle on" id="ntog-pay" onclick="toggleNotif('pay')"><div class="knob"></div></div></div>
+      <div class="notif-item"><span id="lbl-notif-dispute">Dispute Opened</span>
+        <div class="notif-toggle on" id="ntog-dispute" onclick="toggleNotif('dispute')"><div class="knob"></div></div></div>
+      <div class="notif-item"><span id="lbl-notif-complete">Deal Completed</span>
+        <div class="notif-toggle on" id="ntog-complete" onclick="toggleNotif('complete')"><div class="knob"></div></div></div>
+    </div>
+
+    <div class="toggle-row" style="margin:16px 0 16px">
       <button class="toggle-btn active-yellow" onclick="setProfileTab('orders')" id="prof-orders-btn">My Orders</button>
       <button class="toggle-btn" onclick="setProfileTab('deals')" id="prof-deals-btn">My Deals</button>
     </div>
@@ -637,6 +728,11 @@ var user = {id:1, telegram_id:123456789, username:'demo_user', first_name:'Demo'
 
 var savedWallets = {};
 try { savedWallets = JSON.parse(localStorage.getItem('p2p_wallets')||'{}'); } catch(e){}
+var appTheme = 'dark';
+try { appTheme = localStorage.getItem('p2p_theme') || 'dark'; } catch(e){}
+if (appTheme === 'light') document.documentElement.setAttribute('data-theme','light');
+var notifSettings = {deal:true, pay:true, dispute:true, complete:true};
+try { var ns = JSON.parse(localStorage.getItem('p2p_notifs')||'{}'); if (ns && typeof ns === 'object') notifSettings = Object.assign(notifSettings, ns); } catch(e){}
 
 try {
   if (window.Telegram && Telegram.WebApp && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user) {
@@ -646,8 +742,9 @@ try {
     user.first_name = tg.first_name || 'User';
     if (tg.language_code === 'ru') locale = 'ru';
     Telegram.WebApp.expand();
-    Telegram.WebApp.setHeaderColor('#0B0E11');
-    Telegram.WebApp.setBackgroundColor('#0B0E11');
+    var tgBg = appTheme === 'light' ? '#FAFAFA' : '#0B0E11';
+    Telegram.WebApp.setHeaderColor(tgBg);
+    Telegram.WebApp.setBackgroundColor(tgBg);
   }
 } catch(e) {}
 
@@ -702,7 +799,12 @@ var L = {
     'co_role':'Role','co_asset':'Asset','co_currency':'Currency',
     'co_links_lbl':'Links','co_amount_lbl':'Amount',
     'co_total_bal':'Total Balance','co_add_link':'+ Add link','co_next':'Next',
-    'co_timer_wait':'Buttons will be active in {s} sec'
+    'co_timer_wait':'Buttons will be active in {s} sec',
+    'success_rate':'Success Rate','sr_done':'Completed','sr_cancel':'Cancelled','sr_dispute':'Disputed',
+    'activity':'Activity','last_30':'Last 30 days',
+    'theme':'Theme','theme_dark':'Dark','theme_light':'Light',
+    'notif_title':'Notifications','notif_deal':'New Deal','notif_pay':'Payment Received',
+    'notif_dispute':'Dispute Opened','notif_complete':'Deal Completed'
   },
   ru: {
     'nav.home':'Главная','nav.wallet':'Кошелёк','nav.profile':'Профиль',
@@ -739,7 +841,12 @@ var L = {
     'co_role':'Роль','co_asset':'Актив','co_currency':'Валюта',
     'co_links_lbl':'Ссылки','co_amount_lbl':'Сумма',
     'co_total_bal':'Общий баланс','co_add_link':'+ Добавить ссылку','co_next':'Далее',
-    'co_timer_wait':'Кнопки будут активны через {s} сек'
+    'co_timer_wait':'Кнопки будут активны через {s} сек',
+    'success_rate':'Процент успешных','sr_done':'Завершённых','sr_cancel':'Отменённых','sr_dispute':'Споров',
+    'activity':'Активность','last_30':'Последние 30 дней',
+    'theme':'Тема','theme_dark':'Тёмная','theme_light':'Светлая',
+    'notif_title':'Уведомления','notif_deal':'Новая сделка','notif_pay':'Платёж получен',
+    'notif_dispute':'Спор открыт','notif_complete':'Сделка завершена'
   }
 };
 
@@ -1542,14 +1649,35 @@ function renderProfile() {
   document.getElementById('prof-tgid').textContent = t('tg_id') + ': ' + user.telegram_id;
   document.getElementById('lbl-profile-title').textContent = t('profile');
   document.getElementById('lbl-language').textContent = t('language') + ':';
+  document.getElementById('lbl-theme').textContent = t('theme') + ':';
   document.getElementById('prof-orders-btn').textContent = t('my_orders');
   document.getElementById('prof-deals-btn').textContent = t('my_deals');
   document.getElementById('btn-close').textContent = t('close_app');
 
   document.getElementById('lang-en').className = 'lang-btn' + (locale==='en'?' active':'');
   document.getElementById('lang-ru').className = 'lang-btn' + (locale==='ru'?' active':'');
+  document.getElementById('theme-dark').className = 'lang-btn' + (appTheme==='dark'?' active':'');
+  document.getElementById('theme-light').className = 'lang-btn' + (appTheme==='light'?' active':'');
+  document.getElementById('theme-dark').textContent = t('theme_dark');
+  document.getElementById('theme-light').textContent = t('theme_light');
 
+  document.getElementById('lbl-success-rate').textContent = t('success_rate');
+  document.getElementById('lbl-sr-done').textContent = t('sr_done');
+  document.getElementById('lbl-sr-cancel').textContent = t('sr_cancel');
+  document.getElementById('lbl-sr-dispute').textContent = t('sr_dispute');
+  document.getElementById('lbl-activity').textContent = t('activity');
+  document.getElementById('lbl-last30').textContent = t('last_30');
+
+  document.getElementById('lbl-notif-title').textContent = t('notif_title');
+  document.getElementById('lbl-notif-deal').textContent = t('notif_deal');
+  document.getElementById('lbl-notif-pay').textContent = t('notif_pay');
+  document.getElementById('lbl-notif-dispute').textContent = t('notif_dispute');
+  document.getElementById('lbl-notif-complete').textContent = t('notif_complete');
+
+  renderNotifToggles();
   renderStats();
+  renderSuccessRate();
+  renderActivityChart();
   renderProfileTab();
 }
 
@@ -1568,6 +1696,82 @@ function renderStats() {
   document.getElementById('lbl-stat-turnover').textContent = t('stat_turnover');
   document.getElementById('lbl-stat-completed').textContent = t('stat_completed');
   document.getElementById('lbl-stat-active').textContent = t('stat_active');
+}
+
+function renderSuccessRate() {
+  var total = deals.length;
+  var completed = deals.filter(function(d) { return d.status === 'completed'; }).length;
+  var cancelled = deals.filter(function(d) { return d.status === 'cancelled'; }).length;
+  var disputed = deals.filter(function(d) { return d.status === 'disputed'; }).length;
+  var pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  document.getElementById('success-pct').textContent = pct + '%';
+  document.getElementById('sr-done-val').textContent = completed;
+  document.getElementById('sr-cancel-val').textContent = cancelled;
+  document.getElementById('sr-dispute-val').textContent = disputed;
+
+  var circ = 314.16;
+  var offset = circ * (1 - pct / 100);
+  var arc = document.getElementById('success-arc');
+  if (arc) {
+    arc.style.transition = 'stroke-dashoffset 1s ease';
+    setTimeout(function() { arc.setAttribute('stroke-dashoffset', offset); }, 100);
+  }
+}
+
+function renderActivityChart() {
+  var el = document.getElementById('activity-bars');
+  var daily = [];
+  var now = new Date();
+  for (var i = 29; i >= 0; i--) {
+    var day = new Date(now); day.setDate(day.getDate() - i);
+    var dayStr = day.toISOString().split('T')[0];
+    var count = deals.filter(function(d) {
+      return d.created_at && d.created_at.split('T')[0] === dayStr;
+    }).length;
+    daily.push(count);
+  }
+  var mockActivity = [0,1,0,2,1,3,0,1,2,0,1,0,3,2,1,0,1,2,4,1,0,2,1,3,0,1,2,1,0,1];
+  for (var j = 0; j < 30; j++) { daily[j] = daily[j] || mockActivity[j]; }
+  var max = Math.max.apply(null, daily) || 1;
+
+  el.innerHTML = daily.map(function(v, idx) {
+    var h = Math.max(2, (v / max) * 70);
+    var color = v > 0 ? 'var(--yellow)' : 'var(--bg2)';
+    var today = idx === 29;
+    if (today && v > 0) color = 'var(--green)';
+    return '<div class="activity-bar" style="height:'+h+'px;background:'+color+'" title="'+v+'"></div>';
+  }).join('');
+}
+
+function setTheme(th) {
+  appTheme = th;
+  try { localStorage.setItem('p2p_theme', th); } catch(e){}
+  if (th === 'light') {
+    document.documentElement.setAttribute('data-theme','light');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+  try {
+    var bgColor = th === 'light' ? '#FAFAFA' : '#0B0E11';
+    Telegram.WebApp.setHeaderColor(bgColor);
+    Telegram.WebApp.setBackgroundColor(bgColor);
+  } catch(e){}
+  document.getElementById('theme-dark').className = 'lang-btn' + (th==='dark'?' active':'');
+  document.getElementById('theme-light').className = 'lang-btn' + (th==='light'?' active':'');
+}
+
+function toggleNotif(key) {
+  notifSettings[key] = !notifSettings[key];
+  try { localStorage.setItem('p2p_notifs', JSON.stringify(notifSettings)); } catch(e){}
+  renderNotifToggles();
+}
+
+function renderNotifToggles() {
+  ['deal','pay','dispute','complete'].forEach(function(k) {
+    var el = document.getElementById('ntog-'+k);
+    if (el) el.className = 'notif-toggle' + (notifSettings[k] ? ' on' : '');
+  });
 }
 
 function setProfileTab(tab) {
