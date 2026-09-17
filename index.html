@@ -1221,7 +1221,9 @@ var bannerImages = [
   ASSET_BASE+'swipe%20card%201.png',
   ASSET_BASE+'swipe%20card%202.png',
   ASSET_BASE+'action%20card(swipe)%203.png',
-  ASSET_BASE+'action%20card(swipe)4.png'
+  ASSET_BASE+'action%20card(swipe)4.png',
+  ASSET_BASE+'10%20bnb.JPG',
+  ASSET_BASE+'gopro%20%D0%B8%20reddit.JPG'
 ];
 function renderBanners() {
   var c = document.getElementById('banner-container');
@@ -1300,7 +1302,7 @@ function renderMarkets() {
     var imgTag = icon ? '<img class="market-icon" src="'+icon+'" alt="'+sym+'" onerror="this.outerHTML=\'<div class=market-icon style=display:flex;align-items:center;justify-content:center;font-size:14px;background:var(--bg2)>'+fb+'</div>\'">' :
       '<div class="market-icon" style="display:flex;align-items:center;justify-content:center;font-size:14px;background:var(--bg2)">'+fb+'</div>';
     return '<div class="market-card">'+imgTag+
-      '<div class="market-info"><div class="market-name">'+c.name+'</div><div class="market-sym">'+sym+'</div></div>'+
+      '<div class="market-info"><div class="market-name">'+escapeHtml(c.name)+'</div><div class="market-sym">'+escapeHtml(sym)+'</div></div>'+
       '<div class="market-right"><div>'+spark+'</div><div><div class="market-price">$'+c.current_price.toLocaleString('en-US')+'</div>'+
       '<div class="market-change '+dir+'">'+( change >= 0 ? '+' : '')+change.toFixed(2)+'%</div></div></div></div>';
   }).join('');
@@ -1720,7 +1722,7 @@ function renderDeal() {
   var step = getEscrowStep(d.status);
 
   document.getElementById('deal-title').textContent = t('deal_title',{id:String(d.id)});
-  document.getElementById('deal-badge').innerHTML = '<span class="badge badge-'+d.status+'">'+t(d.status)+'</span>';
+  document.getElementById('deal-badge').innerHTML = '<span class="badge badge-'+escapeHtml(d.status)+'">'+t(d.status)+'</span>';
 
   // Escrow Stepper
   var stepperHtml = '<div class="escrow-lines">';
@@ -1740,13 +1742,13 @@ function renderDeal() {
 
   // Deal info card
   document.getElementById('deal-info').innerHTML =
-    '<div class="row"><span class="label">'+t('crypto')+'</span><span class="value">'+d.crypto_currency+'</span></div>'+
-    '<div class="row"><span class="label">'+t('fiat')+'</span><span class="value">'+d.fiat_currency+'</span></div>'+
-    '<div class="row"><span class="label">'+t('price')+'</span><span class="value">'+d.price.toLocaleString()+' '+d.fiat_currency+'</span></div>'+
-    '<div class="row"><span class="label">'+t('amount')+'</span><span class="value">'+d.crypto_amount+' '+d.crypto_currency+'</span></div>'+
+    '<div class="row"><span class="label">'+t('crypto')+'</span><span class="value">'+escapeHtml(d.crypto_currency)+'</span></div>'+
+    '<div class="row"><span class="label">'+t('fiat')+'</span><span class="value">'+escapeHtml(d.fiat_currency)+'</span></div>'+
+    '<div class="row"><span class="label">'+t('price')+'</span><span class="value">'+d.price.toLocaleString()+' '+escapeHtml(d.fiat_currency)+'</span></div>'+
+    '<div class="row"><span class="label">'+t('amount')+'</span><span class="value">'+d.crypto_amount+' '+escapeHtml(d.crypto_currency)+'</span></div>'+
     '<div style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px;display:flex;justify-content:space-between;align-items:center">'+
       '<span style="color:var(--t2);font-size:13px">'+t('total')+'</span>'+
-      '<span style="font-size:18px;font-weight:700">'+d.fiat_amount.toLocaleString()+' '+d.fiat_currency+'</span></div>';
+      '<span style="font-size:18px;font-weight:700">'+d.fiat_amount.toLocaleString()+' '+escapeHtml(d.fiat_currency)+'</span></div>';
 
   // Timer
   if (d.status === 'awaiting_payment') {
@@ -2020,14 +2022,14 @@ function renderProfileTab() {
   } else {
     if (!deals.length) { el.innerHTML = '<div class="empty">'+t('no_txn')+'</div>'; return; }
     el.innerHTML = deals.map(function(d) {
-      return '<div class="order-card" onclick="openDeal('+d.id+')" style="cursor:pointer">'+
+      return '<div class="order-card" onclick="openDeal('+parseInt(d.id)+')" style="cursor:pointer">'+
         '<div style="display:flex;justify-content:space-between;align-items:center">'+
-          '<div><span style="font-size:14px;font-weight:500">'+d.crypto_currency+'/'+d.fiat_currency+'</span>'+
-            '<span style="color:var(--t2);font-size:12px;margin-left:8px">#'+d.id+'</span></div>'+
-          '<span class="badge badge-'+d.status+'">'+t(d.status)+'</span></div>'+
+          '<div><span style="font-size:14px;font-weight:500">'+escapeHtml(d.crypto_currency)+'/'+escapeHtml(d.fiat_currency)+'</span>'+
+            '<span style="color:var(--t2);font-size:12px;margin-left:8px">#'+parseInt(d.id)+'</span></div>'+
+          '<span class="badge badge-'+escapeHtml(d.status)+'">'+t(d.status)+'</span></div>'+
         '<div style="display:flex;justify-content:space-between;margin-top:8px;color:var(--t2);font-size:12px">'+
-          '<span>'+d.crypto_amount+' '+d.crypto_currency+'</span>'+
-          '<span>'+d.fiat_amount.toLocaleString()+' '+d.fiat_currency+'</span></div></div>';
+          '<span>'+d.crypto_amount+' '+escapeHtml(d.crypto_currency)+'</span>'+
+          '<span>'+d.fiat_amount.toLocaleString()+' '+escapeHtml(d.fiat_currency)+'</span></div></div>';
     }).join('');
   }
 }
