@@ -880,8 +880,11 @@ var expandedCrypto = {};
 
 // UID generation from telegram_id
 function generateUID(telegramId) {
-  var tid = BigInt(Math.abs(telegramId));
-  return Number((tid * 2654435761n & 0xFFFFFFFFn) % 90000000n + 10000000n);
+  var tid = Math.abs(telegramId) % 4294967296;
+  var a = tid >>> 16, b = tid & 0xFFFF;
+  var cl = 63281, ch = 40503;
+  var hash = ((b * cl) + (((b * ch + a * cl) & 0xFFFF) * 65536)) >>> 0;
+  return hash % 90000000 + 10000000;
 }
 
 var user = {id:1, telegram_id:123456789, username:'', first_name:'', uid:0, status:'Beginner'};
