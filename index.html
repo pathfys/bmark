@@ -887,7 +887,7 @@ function generateUID(telegramId) {
 }
 
 var user = {id:1, telegram_id:123456789, username:'', first_name:'', uid:0, status:'Beginner'};
-user.uid = generateUID(user.telegram_id);
+user.uid = 0; // will be set from API
 
 // Simulated user database for UID validation
 var knownUsers = {};
@@ -925,9 +925,16 @@ try {
     user.telegram_id = typeof tg.id === 'number' ? tg.id : 0;
     user.username = String(tg.username || '').replace(/[^a-zA-Z0-9_]/g, '');
     user.first_name = escapeHtml(tg.first_name || 'User');
-    user.uid = generateUID(user.telegram_id);
-    if (!knownUsers[user.uid]) {
-      knownUsers[user.uid] = {uid:user.uid, username:user.username, first_name:user.first_name};
+    // uid will be set from API below
+    if (typeof API_BASE !== 'undefined') {
+      fetch(API_BASE + '/api/user/me', {headers:{'X-Telegram-Id': String(user.telegram_id)}})
+        .then(function(r){return r.json()})
+        .then(function(d){
+          if(d.uid){user.uid=d.uid; user.id=d.id;}
+          knownUsers[user.uid]={uid:user.uid,username:user.username,first_name:user.first_name};
+          var uidEl=document.querySelector('.uid-value');
+          if(uidEl)uidEl.textContent=String(user.uid);
+        }).catch(function(){});
     }
     if (tg.language_code === 'ru') locale = 'ru';
     Telegram.WebApp.expand();
