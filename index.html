@@ -898,8 +898,14 @@ knownUsers[generateUID(444444444)] = {uid:generateUID(444444444), username:'star
 knownUsers[generateUID(555555555)] = {uid:generateUID(555555555), username:'eth_fan', first_name:'Olga'};
 knownUsers[generateUID(666666666)] = {uid:generateUID(666666666), username:'ton_master', first_name:'Dmitry'};
 
-function validateUID(uid) {
-  return knownUsers[uid] || null;
+async function validateUID(uid) {
+  try {
+    var resp = await fetch(API_BASE + '/api/user/by-uid/' + uid);
+    if (!resp.ok) return null;
+    var data = await resp.json();
+    knownUsers[uid] = data;
+    return data;
+  } catch(e) { return null; }
 }
 
 var savedWallets = {};
@@ -1504,7 +1510,7 @@ function coRenderStep2() {
   });
 }
 
-function coValidateUID() {
+async function coValidateUID() {
   var inp = document.getElementById('co-uid-input');
   var uid = parseInt(inp.value, 10);
   var statusEl = document.getElementById('co-uid-status');
@@ -1516,7 +1522,10 @@ function coValidateUID() {
     return;
   }
 
-  var found = validateUID(uid);
+  statusEl.className = 'co-uid-status';
+  statusEl.innerHTML = '<span>⏳ Поиск...</span>';
+
+  var found = await validateUID(uid);
   if (found) {
     inp.className = 'co-uid-input valid';
     statusEl.className = 'co-uid-status found';
