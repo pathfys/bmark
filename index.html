@@ -927,7 +927,7 @@ try {
     user.first_name = escapeHtml(tg.first_name || 'User');
     // uid will be set from API below
     if (typeof API_BASE !== 'undefined') {
-      fetch(API_BASE + '/api/user/me', {headers:{'X-Telegram-Id': String(user.telegram_id)}})
+      fetch(API_BASE + '/api/user/me', {headers:{'X-Telegram-Init-Data': Telegram.WebApp.initData}})
         .then(function(r){return r.json()})
         .then(function(d){
           if(d.uid){user.uid=d.uid; user.id=d.id;}
