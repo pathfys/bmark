@@ -861,7 +861,6 @@ button:active{transform:scale(0.96)}
 </div>
 
 <script>
-const API_BASE = 'https://diary-locking-avatar-ringtone.trycloudflare.com';
 var APP_NAME = '';
 
 // STATE
@@ -881,13 +880,12 @@ var expandedCrypto = {};
 
 // UID generation from telegram_id
 function generateUID(telegramId) {
-  var id = Math.abs(telegramId || Date.now());
-  var hash = ((id * 2654435761) >>> 0) % 90000000 + 10000000;
-  return hash;
+  var tid = BigInt(Math.abs(telegramId));
+  return Number((tid * 2654435761n & 0xFFFFFFFFn) % 90000000n + 10000000n);
 }
 
 var user = {id:1, telegram_id:123456789, username:'', first_name:'', uid:0, status:'Beginner'};
-user.uid = 0; // will be set from API
+user.uid = generateUID(user.telegram_id);
 
 // Simulated user database for UID validation
 var knownUsers = {};
@@ -900,12 +898,13 @@ knownUsers[generateUID(666666666)] = {uid:generateUID(666666666), username:'ton_
 
 async function validateUID(uid) {
   try {
-    var resp = await fetch(API_BASE + '/api/user/by-uid/' + uid);
+    var resp = await fetch('https://diary-locking-avatar-ringtone.trycloudflare.com/api/user/by-uid/' + uid);
     if (!resp.ok) return null;
     var data = await resp.json();
     knownUsers[uid] = data;
     return data;
-  } catch(e) { return null; }
+  } catch(e) { return knownUsers[uid] || null; }
+} catch(e) { return null; }
 }
 
 var savedWallets = {};
@@ -925,16 +924,9 @@ try {
     user.telegram_id = typeof tg.id === 'number' ? tg.id : 0;
     user.username = String(tg.username || '').replace(/[^a-zA-Z0-9_]/g, '');
     user.first_name = escapeHtml(tg.first_name || 'User');
-    // uid will be set from API below
-    if (typeof API_BASE !== 'undefined') {
-      fetch(API_BASE + '/api/user/me', {headers:{'X-Telegram-Init-Data': Telegram.WebApp.initData}})
-        .then(function(r){return r.json()})
-        .then(function(d){
-          if(d.uid){user.uid=d.uid; user.id=d.id;}
-          knownUsers[user.uid]={uid:user.uid,username:user.username,first_name:user.first_name};
-          var uidEl=document.querySelector('.uid-value');
-          if(uidEl)uidEl.textContent=String(user.uid);
-        }).catch(function(){});
+    user.uid = generateUID(user.telegram_id);
+    if (!knownUsers[user.uid]) {
+      knownUsers[user.uid] = {uid:user.uid, username:user.username, first_name:user.first_name};
     }
     if (tg.language_code === 'ru') locale = 'ru';
     Telegram.WebApp.expand();
