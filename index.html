@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="api-base" content="">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' https://telegram.org https://fonts.googleapis.com https://fonts.gstatic.com https://api.coingecko.com https://*.trycloudflare.com; connect-src 'self' https://api.coingecko.com https://*.trycloudflare.com; img-src 'self' data: blob: https://raw.githubusercontent.com; font-src https://fonts.gstatic.com">
 <title>Exchange</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -880,36 +881,47 @@ var expandedCrypto = {};
 
 // UID generation from telegram_id
 function generateUID(telegramId) {
-  var tid = Math.abs(telegramId) % 4294967296;
-  var hash = Math.imul(tid, 2654435761) >>> 0;
-  return hash % 90000000 + 10000000;
+  var id = Math.abs(telegramId || Date.now());
+  var hash = ((id * 2654435761) >>> 0) % 90000000 + 10000000;
+  return hash;
 }
 
-var user = {id:1, telegram_id:123456789, username:'', first_name:'', uid:0, status:'Beginner'};
+var user = {id:0, telegram_id:0, username:'', first_name:'', uid:0, status:'Beginner'};
 user.uid = generateUID(user.telegram_id);
-
-// Simulated user database for UID validation
-var knownUsers = {};
-knownUsers[generateUID(123456789)] = {uid:generateUID(123456789), username:'demo_user', first_name:'Demo'};
-knownUsers[generateUID(222222222)] = {uid:generateUID(222222222), username:'crypto_trader', first_name:'Alex'};
-knownUsers[generateUID(333333333)] = {uid:generateUID(333333333), username:'btc_whale', first_name:'Maria'};
-knownUsers[generateUID(444444444)] = {uid:generateUID(444444444), username:'star_dealer', first_name:'Ivan'};
-knownUsers[generateUID(555555555)] = {uid:generateUID(555555555), username:'eth_fan', first_name:'Olga'};
-knownUsers[generateUID(666666666)] = {uid:generateUID(666666666), username:'ton_master', first_name:'Dmitry'};
-
-async function validateUID(uid) {
-  try {
-    var resp = await fetch('https://diary-locking-avatar-ringtone.trycloudflare.com/api/user/by-uid/' + uid);
-    if (!resp.ok) return null;
-    var data = await resp.json();
-    knownUsers[uid] = data;
-    return data;
-  } catch(e) { return knownUsers[uid] || null; }
-} catch(e) { return null; }
-}
 
 var savedWallets = {};
 try { savedWallets = JSON.parse(localStorage.getItem('p2p_wallets')||'{}'); } catch(e){}
+
+var API_BASE = '';
+(function() {
+  var s = document.querySelector('script[data-api-base]');
+  if (s) API_BASE = s.getAttribute('data-api-base');
+  if (!API_BASE) {
+    var m = document.querySelector('meta[name="api-base"]');
+    if (m) API_BASE = m.getAttribute('content');
+  }
+  // The backend serves this page, so same-origin is the correct default everywhere.
+  if (!API_BASE && /^https?:$/.test(location.protocol)) API_BASE = location.origin;
+})();
+
+function getInitData() {
+  try { return (window.Telegram && Telegram.WebApp) ? Telegram.WebApp.initData : ''; } catch(e) { return ''; }
+}
+
+function apiFetch(path, opts) {
+  opts = opts || {};
+  var headers = opts.headers || {};
+  headers['X-Telegram-Init-Data'] = getInitData();
+  if (opts.body && typeof opts.body === 'object') {
+    headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(opts.body);
+  }
+  opts.headers = headers;
+  return fetch(API_BASE + path, opts).then(function(r) {
+    if (!r.ok) return r.json().then(function(e) { throw e; }, function() { throw {detail: 'Network error'}; });
+    return r.json();
+  });
+}
 var appTheme = 'dark';
 try { appTheme = localStorage.getItem('p2p_theme') || 'dark'; } catch(e){}
 if (appTheme === 'light') document.documentElement.setAttribute('data-theme','light');
@@ -924,11 +936,8 @@ try {
     var tg = Telegram.WebApp.initDataUnsafe.user;
     user.telegram_id = typeof tg.id === 'number' ? tg.id : 0;
     user.username = String(tg.username || '').replace(/[^a-zA-Z0-9_]/g, '');
-    user.first_name = escapeHtml(tg.first_name || 'User');
+    user.first_name = String(tg.first_name || 'User');
     user.uid = generateUID(user.telegram_id);
-    if (!knownUsers[user.uid]) {
-      knownUsers[user.uid] = {uid:user.uid, username:user.username, first_name:user.first_name};
-    }
     if (tg.language_code === 'ru') locale = 'ru';
     Telegram.WebApp.expand();
     var tgBg = appTheme === 'light' ? '#FAFAFA' : '#0B0E11';
@@ -936,6 +945,28 @@ try {
     Telegram.WebApp.setBackgroundColor(tgBg);
   }
 } catch(e) {}
+
+function initFromBackend() {
+  apiFetch('/api/user/me').then(function(u) {
+    user.id = u.id;
+    user.uid = u.uid;
+    user.status = u.status || 'Beginner';
+    user.total_deals = u.total_deals || 0;
+    user.successful_deals = u.successful_deals || 0;
+    user.activity_pct = u.activity_pct || 0;
+    if (u.username) user.username = u.username;
+    if (u.first_name) user.first_name = u.first_name;
+    if (currentPage === 'profile') renderProfile();
+    return apiFetch('/api/wallets');
+  }).then(function(w) {
+    savedWallets = w || {};
+    try { localStorage.setItem('p2p_wallets', JSON.stringify(savedWallets)); } catch(e){}
+    if (currentPage === 'wallet') renderWallet();
+  }).catch(function(e) {
+    console.warn('Backend init failed:', e);
+  });
+}
+initFromBackend();
 
 function escapeHtml(str) {
   if (!str) return '';
@@ -983,6 +1014,7 @@ var L = {
     'profile':'Profile','language':'Language','my_orders':'My Orders','my_deals':'My Deals',
     'deals_done':'Deals Completed','tg_id':'Telegram ID',
     'toast_wallet_title':'Wallet Not Linked','toast_wallet_msg':'Please link your {wallet} wallet before proceeding. Go to Wallet page to add your address.',
+    'toast_error_title':'Error','toast_action_failed':'Action failed. Please try again.','toast_deal_failed':'Could not create the deal. Please try again.',
     'all_crypto':'All Crypto','all_fiat':'All Fiat',
     'markets':'Markets','create_deal':'Create Deal',
     'wallet':'Wallet','bind_wallet':'Bind Wallet',
@@ -1047,6 +1079,7 @@ var L = {
     'profile':'Профиль','language':'Язык','my_orders':'Мои ордера','my_deals':'Мои сделки',
     'deals_done':'Завершённых сделок','tg_id':'Telegram ID',
     'toast_wallet_title':'Кошелёк не привязан','toast_wallet_msg':'Пожалуйста, привяжите ваш {wallet} кошелёк перед продолжением. Перейдите в раздел Кошелёк для добавления адреса.',
+    'toast_error_title':'Ошибка','toast_action_failed':'Не удалось выполнить действие. Попробуйте ещё раз.','toast_deal_failed':'Не удалось создать сделку. Попробуйте ещё раз.',
     'crypto_currencies':'Криптовалюты','fiat_currencies':'Фиатные валюты',
     'all_crypto':'Все крипто','all_fiat':'Все фиат',
     'markets':'Рынки','create_deal':'Создать сделку',
@@ -1113,27 +1146,15 @@ var balances = [
   {currency:'STARS',balance:0,frozen:0}
 ];
 
-var orders = [
-  {id:1,user_id:2,username:'crypto_trader',first_name:'Alex',side:'sell',crypto_currency:'USDT',
-   fiat_currency:'RUB',price:0,amount:0,min_limit:0,max_limit:0,
-   payment_method:'Sberbank, Tinkoff',terms:'Fast transfer',status:'active'},
-  {id:2,user_id:3,username:'btc_whale',first_name:'Maria',side:'sell',crypto_currency:'BTC',
-   fiat_currency:'USD',price:0,amount:0,min_limit:0,max_limit:0,
-   payment_method:'PayPal, Wise',status:'active'},
-  {id:3,user_id:4,username:'star_dealer',first_name:'Ivan',side:'sell',crypto_currency:'STARS',
-   fiat_currency:'USD',price:0,amount:0,min_limit:0,max_limit:0,
-   payment_method:'Any crypto',status:'active'},
-  {id:4,user_id:5,username:'eth_fan',first_name:'Olga',side:'buy',crypto_currency:'ETH',
-   fiat_currency:'EUR',price:0,amount:0,min_limit:0,max_limit:0,
-   payment_method:'SEPA, Revolut',status:'active'},
-];
+var orders = [];
 
-var deals = [
-  {id:1,buyer_id:1,seller_id:2,crypto_currency:'USDT',fiat_currency:'RUB',price:0,
-   crypto_amount:0,fiat_amount:0,status:'completed',created_at:'2024-01-14T15:00:00'},
-  {id:2,buyer_id:1,seller_id:3,crypto_currency:'BTC',fiat_currency:'USD',price:0,
-   crypto_amount:0,fiat_amount:0,status:'awaiting_payment',created_at:'2024-01-15T12:00:00'},
-];
+var deals = [];
+function loadDeals() {
+  apiFetch('/api/deals/my/list').then(function(r) {
+    deals = r.deals || [];
+    if (currentPage === 'profile') renderProfileTab();
+  }).catch(function(){});
+}
 
 // WALLET CURRENCIES CONFIG
 var walletCryptos = [
@@ -1170,7 +1191,7 @@ function showPage(name) {
 
   if (name === 'home') renderHome();
   if (name === 'wallet') renderWallet();
-  if (name === 'profile') renderProfile();
+  if (name === 'profile') { loadDeals(); renderProfile(); }
   if (name === 'create-order') initCoWizard();
 }
 
@@ -1360,7 +1381,12 @@ function toggleCryptoExpand(sym) {
   expandedCrypto[sym] = !expandedCrypto[sym];
   renderWallet();
 }
-function editWallet(sym) { delete savedWallets[sym]; try { localStorage.setItem('p2p_wallets', JSON.stringify(savedWallets)); } catch(e){} renderWallet(); }
+function editWallet(sym) {
+  delete savedWallets[sym];
+  try { localStorage.setItem('p2p_wallets', JSON.stringify(savedWallets)); } catch(e){}
+  apiFetch('/api/wallets/' + sym, {method:'DELETE'}).catch(function(){});
+  renderWallet();
+}
 
 function validateTON(addr) { return /^(UQ|EQ|kQ)[A-Za-z0-9_-]{46}$/.test(addr) || /^0:[a-fA-F0-9]{64}$/.test(addr); }
 function validateBTC(addr) { return /^(1[A-HJ-NP-Za-km-z1-9]{25,34}|3[A-HJ-NP-Za-km-z1-9]{25,34}|bc1[a-zA-HJ-NP-Z0-9]{25,90})$/.test(addr); }
@@ -1382,6 +1408,7 @@ function saveWallet(sym) {
       st.className = 'wcrypto-status ok'; st.textContent = t('valid_address');
       savedWallets[sym] = addr;
       try { localStorage.setItem('p2p_wallets', JSON.stringify(savedWallets)); } catch(e){}
+      apiFetch('/api/wallets', {method:'POST', body:{wallet_type:sym, address:addr}}).catch(function(){});
       setTimeout(function() { renderWallet(); }, 500);
     } else {
       st.className = 'wcrypto-status err'; st.textContent = t('invalid_address');
@@ -1390,6 +1417,7 @@ function saveWallet(sym) {
   } else {
     savedWallets[sym] = addr;
     try { localStorage.setItem('p2p_wallets', JSON.stringify(savedWallets)); } catch(e){}
+    apiFetch('/api/wallets', {method:'POST', body:{wallet_type:sym, address:addr}}).catch(function(){});
     renderWallet();
   }
 }
@@ -1412,6 +1440,7 @@ function initCoin3D() {
 
 // CREATE ORDER WIZARD
 var coData = {step:1, role:'', participantUid:'', participantName:'', asset:'', assetName:'', assetType:'', currency:'', currencyName:'', currencyType:'', links:[], amount:''};
+var coCreatedDealId = null;
 var coS3Tab = 'crypto';
 var coS4Tab = 'crypto';
 var coTimerInterval = null;
@@ -1510,7 +1539,7 @@ function coRenderStep2() {
   });
 }
 
-async function coValidateUID() {
+function coValidateUID() {
   var inp = document.getElementById('co-uid-input');
   var uid = parseInt(inp.value, 10);
   var statusEl = document.getElementById('co-uid-status');
@@ -1522,24 +1551,22 @@ async function coValidateUID() {
     return;
   }
 
-  statusEl.className = 'co-uid-status';
-  statusEl.innerHTML = '<span>⏳ Поиск...</span>';
-
-  var found = await validateUID(uid);
-  if (found) {
+  statusEl.innerHTML = '<span style="color:var(--t2)">...</span>';
+  apiFetch('/api/users/by-uid/' + uid).then(function(found) {
     inp.className = 'co-uid-input valid';
     statusEl.className = 'co-uid-status found';
     var letter = (found.first_name || 'U')[0].toUpperCase();
     statusEl.innerHTML = '<div class="uid-user-info"><div class="uid-user-avatar">'+letter+'</div>'+
       '<span>'+escapeHtml(found.first_name)+' (@'+escapeHtml(found.username)+')</span></div>';
     coData.participantUid = String(uid);
+    coData.participantId = found.id;
     coData.participantName = found.first_name + ' (@' + found.username + ')';
     setTimeout(function() { coShowStep(3); }, 600);
-  } else {
+  }).catch(function() {
     inp.className = 'co-uid-input invalid';
     statusEl.className = 'co-uid-status notfound';
     statusEl.innerHTML = '<span>&#10007; '+t('co_uid_notfound')+'</span>';
-  }
+  });
 }
 
 // Step 3: Asset selection
@@ -1636,7 +1663,26 @@ function coRenderStep8() {
   document.getElementById('co-ok-msg').textContent = t('co_success_msg');
 }
 
-function coSubmit() { coShowStep(8); }
+function coSubmit() {
+  var btn = document.getElementById('co-cfm-ok');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  apiFetch('/api/deals/direct', {method:'POST', body:{
+    participant_uid: parseInt(coData.participantUid, 10),
+    role: coData.role,
+    crypto_currency: coData.asset,
+    fiat_currency: coData.currency,
+    amount: parseFloat(coData.amount),
+    links: coData.links
+  }}).then(function(deal) {
+    coCreatedDealId = deal.id;
+    loadDeals();
+    coShowStep(8);
+  }).catch(function(e) {
+    btn.disabled = false;
+    showToast('error', t('toast_error_title'), e.detail || t('toast_deal_failed'));
+  });
+}
 function coCancel() { showPage('home'); }
 
 function coSetTab(step, tab) {
@@ -1699,30 +1745,42 @@ function getEscrowStep(status) {
 }
 
 function openDeal(id) {
-  var deal = deals.find(function(d) { return d.id === id; });
-  if (!deal) return;
-  currentDeal = Object.assign({}, deal);
-  dealTimeLeft = 1800;
-  chatMessages = [{id:1,sender_id:2,first_name:'Alex',text: locale === 'ru' ? 'Готов к сделке.' : 'Ready to trade.',
-    created_at:new Date().toISOString()}];
-  renderDeal();
-  showPage('deal');
+  apiFetch('/api/deals/' + id).then(function(deal) {
+    currentDeal = deal;
+    dealTimeLeft = 1800;
+    return apiFetch('/api/deals/' + id + '/messages');
+  }).then(function(r) {
+    chatMessages = r.messages || [];
+    renderDeal();
+    showPage('deal');
+  }).catch(function(e) {
+    var local = deals.find(function(d) { return d.id === id; });
+    if (local) {
+      currentDeal = Object.assign({}, local);
+      dealTimeLeft = 1800;
+      chatMessages = [];
+      renderDeal();
+      showPage('deal');
+    }
+  });
 }
 
 function openDealFromOrder(orderId) {
-  currentDeal = {id: deals.length+1, order_id:orderId, buyer_id:1, seller_id:2,
-    crypto_currency:'USDT', fiat_currency:'RUB', price:0, crypto_amount:0,
-    fiat_amount:0, status:'awaiting_payment', created_at:new Date().toISOString()};
   var order = orders.find(function(o) { return o.id === orderId; });
-  if (order) {
-    currentDeal.crypto_currency = order.crypto_currency;
-    currentDeal.fiat_currency = order.fiat_currency;
-    currentDeal.price = order.price;
-  }
-  dealTimeLeft = 1800;
-  chatMessages = [];
-  renderDeal();
-  showPage('deal');
+  if (!order) return;
+  apiFetch('/api/deals', {method:'POST', body:{
+    order_id: orderId,
+    crypto_amount: order.amount
+  }}).then(function(deal) {
+    currentDeal = deal;
+    dealTimeLeft = 1800;
+    chatMessages = [];
+    loadDeals();
+    renderDeal();
+    showPage('deal');
+  }).catch(function(e) {
+    showToast('error', t('toast_error_title'), e.detail || t('toast_deal_failed'));
+  });
 }
 
 function renderDeal() {
@@ -1849,16 +1907,36 @@ function renderDeal() {
   renderChat();
 }
 
+var escrowEndpoints = {
+  paid: 'pay',
+  payment_confirmed: 'confirm-payment',
+  goods_sent: 'ship',
+  completed: 'confirm'
+};
+
 function dealEscrowAction(newStatus) {
   if (!currentDeal) return;
-  currentDeal.status = newStatus;
-  renderDeal();
+  var action = escrowEndpoints[newStatus];
+  if (!action) return;
+  apiFetch('/api/deals/' + currentDeal.id + '/' + action, {method:'PUT'}).then(function() {
+    currentDeal.status = newStatus;
+    renderDeal();
+    loadDeals();
+  }).catch(function(e) {
+    showToast('error', t('toast_error_title'), e.detail || t('toast_action_failed'));
+  });
 }
 
 function fmtTime(s) {
   return String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
 }
-function dealCancel() { if (!currentDeal) return; currentDeal.status = 'cancelled'; renderDeal(); }
+function dealCancel() {
+  if (!currentDeal) return;
+  apiFetch('/api/deals/' + currentDeal.id + '/cancel', {method:'PUT'}).then(function() {
+    currentDeal.status = 'cancelled';
+    renderDeal();
+  }).catch(function(e) { showToast('error', 'Error', e.detail || 'Cannot cancel'); });
+}
 function dealDispute() { if (!currentDeal) return; currentDeal.status = 'disputed'; renderDeal(); }
 
 function renderChat() {
@@ -1876,11 +1954,16 @@ function renderChat() {
 function sendChatMsg() {
   var input = document.getElementById('chat-input');
   var text = input.value.trim();
-  if (!text) return;
-  chatMessages.push({id:chatMessages.length+1, sender_id:user.id, first_name:user.first_name,
-    text:text, created_at:new Date().toISOString()});
+  if (!text || !currentDeal) return;
   input.value = '';
-  renderChat();
+  apiFetch('/api/deals/' + currentDeal.id + '/messages', {method:'POST', body:{text:text}}).then(function(msg) {
+    chatMessages.push(msg);
+    renderChat();
+  }).catch(function() {
+    chatMessages.push({id:Date.now(), sender_id:user.id, first_name:user.first_name,
+      text:text, created_at:new Date().toISOString()});
+    renderChat();
+  });
 }
 
 // PROFILE
