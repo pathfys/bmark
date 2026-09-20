@@ -1162,10 +1162,10 @@ var L = {
     'step_your_turn':'your turn','step_wait_buyer':'waiting for buyer','step_wait_seller':'waiting for seller',
     'step_by_buyer':'by buyer','step_by_seller':'by seller',
     'escrow_cancelled_msg':'This deal was called off. Nothing was transferred.',
-    'escrow_disputed_msg':'A dispute was opened. Support will review the deal and get in touch.',
+    'escrow_unknown_msg':'This deal is in a state the app does not handle. Contact support with the deal number.',
     'btn_payment_sent':'Payment Sent','btn_payment_received':'Payment Received',
     'btn_goods_sent':'Goods Sent','btn_confirm_receipt':'Confirm Receipt',
-    'btn_cancel':'Cancel Deal','btn_dispute':'Open Dispute',
+    'btn_cancel':'Cancel Deal',
     'waiting_payment':'Waiting for buyer to send payment...','waiting_verify':'Waiting for seller to verify payment...',
     'waiting_shipment':'Waiting for seller to send goods...','waiting_receipt':'Waiting for buyer to confirm receipt...',
     'awaiting_payment':'Awaiting Payment','payment_confirmed':'Payment Confirmed','goods_sent':'Goods Sent'
@@ -1245,10 +1245,10 @@ var L = {
     'step_your_turn':'ваш ход','step_wait_buyer':'ждём покупателя','step_wait_seller':'ждём продавца',
     'step_by_buyer':'покупатель','step_by_seller':'продавец',
     'escrow_cancelled_msg':'Сделка отменена. Ничего не переведено.',
-    'escrow_disputed_msg':'Открыт спор. Поддержка рассмотрит сделку и свяжется с вами.',
+    'escrow_unknown_msg':'Сделка в состоянии, которое приложение не обрабатывает. Обратитесь в поддержку с номером сделки.',
     'btn_payment_sent':'Оплата отправлена','btn_payment_received':'Оплата получена',
     'btn_goods_sent':'Товар отправлен','btn_confirm_receipt':'Подтвердить получение',
-    'btn_cancel':'Отменить сделку','btn_dispute':'Открыть спор',
+    'btn_cancel':'Отменить сделку',
     'waiting_payment':'Ожидание оплаты от покупателя...','waiting_verify':'Ожидание подтверждения оплаты продавцом...',
     'waiting_shipment':'Ожидание отправки товара продавцом...','waiting_receipt':'Ожидание подтверждения получения покупателем...',
     'awaiting_payment':'Ожидание оплаты','payment_confirmed':'Оплата подтверждена','goods_sent':'Товар отправлен'
@@ -2091,11 +2091,13 @@ function renderDeal() {
   if (d.status === 'awaiting_acceptance') {
     detailWrap.innerHTML = renderAcceptanceCard(d, isBuyer);
     document.getElementById('deal-actions').innerHTML = '';
-  } else if (d.status === 'disputed') {
+  } else if (escrowSteps.indexOf(d.status) === -1 && d.status !== 'cancelled') {
+    // Anything outside the known escrow sequence: say so plainly rather than
+    // fall through and draw a payment step the deal is not on.
     detailWrap.innerHTML = '<div class="escrow-detail"><div class="escrow-terminal warn">'+
       '<div class="escrow-terminal-icon">⚠️</div>'+
-      '<div class="escrow-terminal-title">'+t('disputed')+'</div>'+
-      '<div class="escrow-terminal-msg">'+t('escrow_disputed_msg')+'</div></div></div>';
+      '<div class="escrow-terminal-title">'+escapeHtml(t(d.status))+'</div>'+
+      '<div class="escrow-terminal-msg">'+t('escrow_unknown_msg')+'</div></div></div>';
     document.getElementById('deal-actions').innerHTML = '';
   } else if (d.status === 'completed') {
     detailWrap.innerHTML = '<div class="escrow-detail"><div class="escrow-done-card">'+
@@ -2141,8 +2143,7 @@ function renderDeal() {
       }
     } else if (d.status === 'paid') {
       if (!isBuyer) {
-        actHtml = '<button class="escrow-action-btn primary" onclick="dealEscrowAction(\'payment_confirmed\')">'+t('btn_payment_received')+'</button>'+
-          '<button class="escrow-action-btn danger" onclick="dealDispute()">'+t('btn_dispute')+'</button>';
+        actHtml = '<button class="escrow-action-btn primary" onclick="dealEscrowAction(\'payment_confirmed\')">'+t('btn_payment_received')+'</button>';
       } else {
         actHtml = '<div class="escrow-waiting"><div class="escrow-waiting-dot"></div><div class="escrow-waiting-text">'+t('waiting_verify')+'</div></div>';
       }
@@ -2154,8 +2155,7 @@ function renderDeal() {
       }
     } else if (d.status === 'goods_sent') {
       if (isBuyer) {
-        actHtml = '<button class="escrow-action-btn primary" onclick="dealEscrowAction(\'completed\')">'+t('btn_confirm_receipt')+'</button>'+
-          '<button class="escrow-action-btn danger" onclick="dealDispute()">'+t('btn_dispute')+'</button>';
+        actHtml = '<button class="escrow-action-btn primary" onclick="dealEscrowAction(\'completed\')">'+t('btn_confirm_receipt')+'</button>';
       } else {
         actHtml = '<div class="escrow-waiting"><div class="escrow-waiting-dot"></div><div class="escrow-waiting-text">'+t('waiting_receipt')+'</div></div>';
       }
@@ -2198,7 +2198,6 @@ function dealCancel() {
     renderDeal();
   }).catch(function(e) { showToast('error', 'Error', e.detail || 'Cannot cancel'); });
 }
-function dealDispute() { if (!currentDeal) return; currentDeal.status = 'disputed'; renderDeal(); }
 
 function renderChat() {
   var el = document.getElementById('chat-messages');
