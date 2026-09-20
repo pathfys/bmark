@@ -111,6 +111,7 @@ button:active{transform:scale(0.96)}
 
 .badge{display:inline-block;padding:2px 12px;border-radius:20px;font-size:11px;font-weight:500}
 .badge-pending{background:rgba(240,185,11,.2);color:var(--yellow)}
+.badge-awaiting_acceptance{background:rgba(132,142,156,.2);color:#848E9C}
 .badge-awaiting_payment{background:rgba(240,185,11,.2);color:var(--yellow)}
 .badge-paid{background:rgba(59,130,246,.2);color:#60a5fa}
 .badge-payment_confirmed{background:rgba(14,203,129,.2);color:var(--green)}
@@ -236,6 +237,7 @@ button:active{transform:scale(0.96)}
 .uid-badge{display:inline-flex;align-items:center;gap:6px;background:var(--bg2);
   border:1px solid var(--border);border-radius:8px;padding:6px 14px;margin-top:8px;cursor:pointer;transition:all .2s}
 .uid-badge:active{transform:scale(0.96)}
+.uid-badge.loading{opacity:.5;cursor:default;pointer-events:none}
 .uid-badge .uid-label{font-size:11px;color:var(--t2);font-weight:500}
 .uid-badge .uid-value{font-size:13px;color:var(--yellow);font-weight:700;font-family:'Inter',monospace;letter-spacing:0.5px}
 .uid-badge .uid-copy{width:14px;height:14px;stroke:var(--t2);flex-shrink:0}
@@ -464,6 +466,10 @@ button:active{transform:scale(0.96)}
 .wfiat-bal{font-size:14px;font-weight:600;color:var(--t1)}
 
 /* ═══ TOAST NOTIFICATION ═══ */
+.conn-banner{position:fixed;top:0;left:0;right:0;z-index:10000;
+  background:var(--red);color:#fff;font-size:13px;font-weight:600;text-align:center;
+  padding:10px 16px;transform:translateY(-100%);transition:transform .25s ease}
+.conn-banner.visible{transform:translateY(0)}
 .toast-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;
   align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s}
 .toast-overlay.visible{opacity:1;pointer-events:auto}
@@ -503,6 +509,7 @@ button:active{transform:scale(0.96)}
 </style>
 </head>
 <body>
+<div class="conn-banner" id="conn-banner"></div>
 
 <!-- SPLASH -->
 <div id="splash">
@@ -733,7 +740,7 @@ button:active{transform:scale(0.96)}
     <p style="color:var(--t2);font-size:14px" id="prof-username"></p>
     <div class="uid-badge" onclick="copyUID()" id="prof-uid-badge">
       <span class="uid-label">UID</span>
-      <span class="uid-value" id="prof-uid">00000000</span>
+      <span class="uid-value" id="prof-uid">···</span>
       <svg class="uid-copy" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
       </svg>
@@ -879,19 +886,24 @@ var currentDeal = null;
 var chatMessages = [];
 var expandedCrypto = {};
 
-// UID generation from telegram_id
-function generateUID(telegramId) {
-  var id = Math.abs(telegramId || Date.now());
-  var hash = ((id * 2654435761) >>> 0) % 90000000 + 10000000;
-  return hash;
-}
-
+// The UID is assigned by the server. It is never computed here: the JS and
+// Python hashes disagree (the JS multiply loses precision in a double), so a
+// locally derived UID would be a number no lookup can find.
 var user = {id:0, telegram_id:0, username:'', first_name:'', uid:0, status:'Beginner'};
-user.uid = generateUID(user.telegram_id);
+var userLoaded = false;
 
 var savedWallets = {};
 try { savedWallets = JSON.parse(localStorage.getItem('p2p_wallets')||'{}'); } catch(e){}
 
+// Where the API lives. Resolution order:
+//   1. <meta name="api-base" content="https://..."> — tunnel.sh rewrites this
+//      on every restart, since a cloudflared quick tunnel gets a new hostname.
+//   2. location.origin — correct for the supported topology, where backend.py
+//      serves this page itself (GET / -> serve_frontend), so API and HTML share
+//      an origin.
+// Hosting the HTML somewhere else (GitHub Pages) without setting the meta tag
+// points every /api call at the wrong host. That no longer fails silently:
+// apiFetch marks unreachable-server failures and the app shows a banner.
 var API_BASE = '';
 (function() {
   var s = document.querySelector('script[data-api-base]');
@@ -900,7 +912,6 @@ var API_BASE = '';
     var m = document.querySelector('meta[name="api-base"]');
     if (m) API_BASE = m.getAttribute('content');
   }
-  // The backend serves this page, so same-origin is the correct default everywhere.
   if (!API_BASE && /^https?:$/.test(location.protocol)) API_BASE = location.origin;
 })();
 
@@ -918,9 +929,30 @@ function apiFetch(path, opts) {
   }
   opts.headers = headers;
   return fetch(API_BASE + path, opts).then(function(r) {
-    if (!r.ok) return r.json().then(function(e) { throw e; }, function() { throw {detail: 'Network error'}; });
+    if (!r.ok) {
+      return r.json().then(
+        function(e) { e = e || {}; e.status = r.status; throw e; },
+        function() { throw {detail: 'HTTP ' + r.status, status: r.status}; }
+      );
+    }
     return r.json();
+  }, function() {
+    // fetch itself rejected: DNS, TLS, CORS or the server is down. Distinct from
+    // an HTTP error, because it means the app is talking to the wrong place.
+    throw {detail: 'Cannot reach server', unreachable: true};
   });
+}
+
+function showConnectionBanner(msgKey) {
+  var el = document.getElementById('conn-banner');
+  if (!el) return;
+  el.textContent = t(msgKey || 'conn_lost');
+  el.classList.add('visible');
+}
+
+function hideConnectionBanner() {
+  var el = document.getElementById('conn-banner');
+  if (el) el.classList.remove('visible');
 }
 var appTheme = 'dark';
 try { appTheme = localStorage.getItem('p2p_theme') || 'dark'; } catch(e){}
@@ -937,7 +969,6 @@ try {
     user.telegram_id = typeof tg.id === 'number' ? tg.id : 0;
     user.username = String(tg.username || '').replace(/[^a-zA-Z0-9_]/g, '');
     user.first_name = String(tg.first_name || 'User');
-    user.uid = generateUID(user.telegram_id);
     if (tg.language_code === 'ru') locale = 'ru';
     Telegram.WebApp.expand();
     var tgBg = appTheme === 'light' ? '#FAFAFA' : '#0B0E11';
@@ -947,7 +978,7 @@ try {
 } catch(e) {}
 
 function initFromBackend() {
-  apiFetch('/api/user/me').then(function(u) {
+  return apiFetch('/api/user/me').then(function(u) {
     user.id = u.id;
     user.uid = u.uid;
     user.status = u.status || 'Beginner';
@@ -956,6 +987,8 @@ function initFromBackend() {
     user.activity_pct = u.activity_pct || 0;
     if (u.username) user.username = u.username;
     if (u.first_name) user.first_name = u.first_name;
+    userLoaded = true;
+    hideConnectionBanner();
     if (currentPage === 'profile') renderProfile();
     return apiFetch('/api/wallets');
   }).then(function(w) {
@@ -963,6 +996,13 @@ function initFromBackend() {
     try { localStorage.setItem('p2p_wallets', JSON.stringify(savedWallets)); } catch(e){}
     if (currentPage === 'wallet') renderWallet();
   }).catch(function(e) {
+    // A silent failure here leaves a usable-looking app with an empty profile
+    // and a UID of 0, so make it visible rather than logging it away. The two
+    // causes need different advice: a 401 means we reached the server and it
+    // rejected the Telegram signature, which retrying will not fix.
+    if (e && e.unreachable) showConnectionBanner('conn_lost');
+    else if (e && (e.status === 401 || e.status === 403)) showConnectionBanner('conn_auth');
+    if (currentPage === 'profile') renderProfile();
     console.warn('Backend init failed:', e);
   });
 }
@@ -979,6 +1019,7 @@ function isValidUrl(str) {
 }
 
 function copyUID() {
+  if (!userLoaded || !user.uid) return;
   try { navigator.clipboard.writeText(String(user.uid)); } catch(e) {}
 }
 
@@ -1015,6 +1056,8 @@ var L = {
     'deals_done':'Deals Completed','tg_id':'Telegram ID',
     'toast_wallet_title':'Wallet Not Linked','toast_wallet_msg':'Please link your {wallet} wallet before proceeding. Go to Wallet page to add your address.',
     'toast_error_title':'Error','toast_action_failed':'Action failed. Please try again.','toast_deal_failed':'Could not create the deal. Please try again.',
+    'conn_lost':'Cannot reach the server. Check your connection and reopen the app.',
+    'conn_auth':'Session could not be verified. Please reopen this app from the Telegram bot.',
     'all_crypto':'All Crypto','all_fiat':'All Fiat',
     'markets':'Markets','create_deal':'Create Deal',
     'wallet':'Wallet','bind_wallet':'Bind Wallet',
@@ -1057,6 +1100,10 @@ var L = {
     'escrow_s4_buyer':'The seller has sent the goods. <strong>Check that you received everything</strong>, then click "Confirm Receipt" to complete the deal.',
     'escrow_s4_seller':'Goods have been sent. Wait for the buyer to confirm receipt. Funds will be released upon confirmation.',
     'escrow_done':'Deal completed successfully!','escrow_done_msg':'Both parties confirmed. The deal is closed.',
+    'btn_accept_deal':'Accept Deal','btn_decline_deal':'Decline',
+    'waiting_acceptance':'Waiting for the other side to accept the terms...',
+    'awaiting_acceptance':'Awaiting Acceptance',
+    'escrow_s0_desc':'These terms were set by the other party. Check the amount and your role — nothing moves until you accept.',
     'btn_payment_sent':'Payment Sent','btn_payment_received':'Payment Received',
     'btn_goods_sent':'Goods Sent','btn_confirm_receipt':'Confirm Receipt',
     'btn_cancel':'Cancel Deal','btn_dispute':'Open Dispute',
@@ -1080,6 +1127,8 @@ var L = {
     'deals_done':'Завершённых сделок','tg_id':'Telegram ID',
     'toast_wallet_title':'Кошелёк не привязан','toast_wallet_msg':'Пожалуйста, привяжите ваш {wallet} кошелёк перед продолжением. Перейдите в раздел Кошелёк для добавления адреса.',
     'toast_error_title':'Ошибка','toast_action_failed':'Не удалось выполнить действие. Попробуйте ещё раз.','toast_deal_failed':'Не удалось создать сделку. Попробуйте ещё раз.',
+    'conn_lost':'Нет связи с сервером. Проверьте подключение и откройте приложение заново.',
+    'conn_auth':'Не удалось проверить сессию. Откройте приложение заново через бота в Telegram.',
     'crypto_currencies':'Криптовалюты','fiat_currencies':'Фиатные валюты',
     'all_crypto':'Все крипто','all_fiat':'Все фиат',
     'markets':'Рынки','create_deal':'Создать сделку',
@@ -1122,6 +1171,10 @@ var L = {
     'escrow_s4_buyer':'Продавец отправил товар. <strong>Проверьте, что вы всё получили</strong>, затем нажмите «Подтвердить получение».',
     'escrow_s4_seller':'Товар отправлен. Ожидайте подтверждения получения от покупателя. Средства будут переведены после подтверждения.',
     'escrow_done':'Сделка успешно завершена!','escrow_done_msg':'Обе стороны подтвердили. Сделка закрыта.',
+    'btn_accept_deal':'Принять сделку','btn_decline_deal':'Отклонить',
+    'waiting_acceptance':'Ожидание подтверждения условий второй стороной...',
+    'awaiting_acceptance':'Ожидает подтверждения',
+    'escrow_s0_desc':'Условия выставила вторая сторона. Проверьте сумму и свою роль — ничего не начнётся, пока вы не подтвердите.',
     'btn_payment_sent':'Оплата отправлена','btn_payment_received':'Оплата получена',
     'btn_goods_sent':'Товар отправлен','btn_confirm_receipt':'Подтвердить получение',
     'btn_cancel':'Отменить сделку','btn_dispute':'Открыть спор',
@@ -1856,6 +1909,14 @@ function renderDeal() {
     var desc = t(descKey);
     var subtitle = isBuyer ? t('buyer') : t('seller');
 
+    // The escrow has not started yet, so the payment-step copy would mislead.
+    if (d.status === 'awaiting_acceptance') {
+      icon = '🤝';
+      iconCls = 'step1';
+      title = t('awaiting_acceptance');
+      desc = t('escrow_s0_desc');
+    }
+
     detailWrap.innerHTML = '<div class="escrow-detail">'+
       '<div class="escrow-detail-header">'+
         '<div class="escrow-detail-icon '+iconCls+'">'+icon+'</div>'+
@@ -1869,7 +1930,15 @@ function renderDeal() {
     var actionsInner = document.getElementById('escrow-actions-inner');
     var actHtml = '';
 
-    if (d.status === 'awaiting_payment') {
+    if (d.status === 'awaiting_acceptance') {
+      // The initiator set the terms alone, so only the other side gets a choice.
+      if (d.initiator_id && d.initiator_id !== user.id) {
+        actHtml = '<button class="escrow-action-btn primary" onclick="dealEscrowAction(\'awaiting_payment\')">'+t('btn_accept_deal')+'</button>'+
+          '<button class="escrow-action-btn danger" onclick="dealCancel()">'+t('btn_decline_deal')+'</button>';
+      } else {
+        actHtml = '<div class="escrow-waiting"><div class="escrow-waiting-dot"></div><div class="escrow-waiting-text">'+t('waiting_acceptance')+'</div></div>';
+      }
+    } else if (d.status === 'awaiting_payment') {
       if (isBuyer) {
         actHtml = '<button class="escrow-action-btn primary" onclick="dealEscrowAction(\'paid\')">'+t('btn_payment_sent')+'</button>'+
           '<button class="escrow-action-btn danger" onclick="dealCancel()">'+t('btn_cancel')+'</button>';
@@ -1908,6 +1977,7 @@ function renderDeal() {
 }
 
 var escrowEndpoints = {
+  awaiting_payment: 'accept',
   paid: 'pay',
   payment_confirmed: 'confirm-payment',
   goods_sent: 'ship',
@@ -1972,7 +2042,9 @@ function renderProfile() {
   document.getElementById('prof-avatar').textContent = letter;
   document.getElementById('prof-name').textContent = user.first_name;
   document.getElementById('prof-username').textContent = user.username ? '@'+user.username : '';
-  document.getElementById('prof-uid').textContent = String(user.uid);
+  document.getElementById('prof-uid').textContent = userLoaded && user.uid ? String(user.uid) : '···';
+  var uidBadge = document.getElementById('prof-uid-badge');
+  if (uidBadge) uidBadge.classList.toggle('loading', !(userLoaded && user.uid));
   var statusBadge = document.getElementById('prof-status-badge');
   var isMerchant = user.status === 'Merchant';
   statusBadge.className = 'user-status-badge ' + (isMerchant ? 'merchant' : 'beginner');
