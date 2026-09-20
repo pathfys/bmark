@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="api-base" content="https://dom-updates-buyers-generous.trycloudflare.com">
+<meta name="api-base" content="">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' https://telegram.org https://fonts.googleapis.com https://fonts.gstatic.com https://api.coingecko.com https://*.trycloudflare.com; connect-src 'self' https://api.coingecko.com https://*.trycloudflare.com; img-src 'self' data: blob: https://raw.githubusercontent.com; font-src https://fonts.gstatic.com">
 <title>Exchange</title>
@@ -127,10 +127,6 @@ button:active{transform:scale(0.96)}
 .deal-info .row .label{color:var(--t2);font-size:13px}
 .deal-info .row .value{color:var(--t1);font-size:14px;font-weight:500}
 
-.timer-box{background:rgba(240,185,11,.1);border:1px solid rgba(240,185,11,.3);
-  border-radius:12px;padding:12px;text-align:center;margin-bottom:16px}
-.timer-box .label{color:var(--t2);font-size:12px}
-.timer-box .time{color:var(--yellow);font-size:28px;font-weight:700}
 
 .chat-box{background:var(--card);border-radius:12px;overflow:hidden;margin-bottom:16px}
 .chat-header{padding:8px 16px;border-bottom:1px solid var(--border);font-size:14px;font-weight:500}
@@ -327,6 +323,9 @@ button:active{transform:scale(0.96)}
 .co-link-input{width:100%;background:var(--card);color:var(--t1);border:1px solid var(--border);
   border-radius:10px;padding:12px 14px;margin-bottom:8px;font-size:14px}
 .co-link-input:focus{border-color:var(--yellow)}
+.co-field-err{display:none;color:var(--red);font-size:12px;line-height:1.4;
+  margin:-4px 0 10px;padding:0 2px}
+.co-step-hint{color:var(--t2);font-size:13px;line-height:1.45;margin:-8px 0 16px;text-align:center}
 .co-add-link{background:none;color:var(--yellow);font-size:14px;font-weight:600;padding:8px 0;margin-bottom:16px}
 .co-next-btn{width:100%;margin-top:8px}
 
@@ -383,6 +382,10 @@ button:active{transform:scale(0.96)}
 .escrow-circle.active{border-color:var(--yellow);color:var(--yellow);
   box-shadow:0 0 0 4px rgba(240,185,11,.15);animation:escrowPulse 2s ease-in-out infinite}
 .escrow-circle.done{border-color:var(--green);background:var(--green);color:#fff}
+.escrow-circle.pending{border-style:dashed;opacity:.65}
+.escrow-step-actor{font-size:8px;color:var(--t2);text-align:center;line-height:1.2;
+  max-width:64px;margin-top:2px;opacity:.75}
+.escrow-step-actor.active{color:var(--yellow);opacity:1;font-weight:600}
 .escrow-step-label{font-size:9px;color:var(--t2);text-align:center;line-height:1.2;max-width:64px;font-weight:500}
 .escrow-step-label.active{color:var(--yellow);font-weight:600}
 .escrow-step-label.done{color:var(--green)}
@@ -411,6 +414,49 @@ button:active{transform:scale(0.96)}
 .escrow-action-btn.primary{background:var(--green);color:#fff}
 .escrow-action-btn.primary:hover{background:#0bb874}
 .escrow-action-btn.danger{background:none;border:1px solid var(--red);color:var(--red)}
+.escrow-action-btn.secondary{background:none;border:1px solid var(--border);color:var(--t2)}
+.escrow-action-btn.secondary:hover{border-color:var(--red);color:var(--red)}
+
+.escrow-terminal{padding:32px 20px;text-align:center}
+.escrow-terminal-icon{font-size:40px;line-height:1;margin-bottom:12px}
+.escrow-terminal-title{font-size:17px;font-weight:700;margin-bottom:6px}
+.escrow-terminal-msg{font-size:13px;color:var(--t2);line-height:1.5}
+.escrow-terminal.warn .escrow-terminal-title{color:#fb923c}
+
+.accept-card{margin:0 16px 16px;background:var(--card);border-radius:16px;overflow:hidden;
+  border:1px solid rgba(240,185,11,.25)}
+.accept-head{padding:22px 20px 18px;text-align:center;
+  background:linear-gradient(180deg,rgba(240,185,11,.10),transparent)}
+.accept-eyebrow{font-size:11px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;
+  color:var(--yellow);margin-bottom:10px}
+.accept-amount{font-size:30px;font-weight:800;line-height:1.1;word-break:break-word}
+.accept-for{font-size:14px;color:var(--t2);margin-top:6px}
+.accept-for b{color:var(--t1);font-weight:700}
+.accept-body{padding:4px 16px 16px}
+.accept-block{padding:12px 0;border-top:1px solid var(--border)}
+.accept-block-lbl{font-size:11px;color:var(--t2);text-transform:uppercase;
+  letter-spacing:.5px;margin-bottom:8px}
+.accept-from{display:flex;align-items:center;gap:10px}
+.accept-from-avatar{width:36px;height:36px;border-radius:50%;background:var(--yellow);color:#000;
+  display:flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0}
+.accept-from-main{min-width:0}
+.accept-from-name{font-size:15px;font-weight:600;word-break:break-word}
+.accept-from-user{color:var(--t2);font-weight:400}
+.accept-from-meta{font-size:12px;color:var(--t2);margin-top:2px;display:flex;
+  align-items:center;gap:8px;flex-wrap:wrap}
+.accept-badge{padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600}
+.accept-badge.merchant{background:rgba(240,185,11,.12);color:var(--yellow)}
+.accept-badge.beginner{background:rgba(132,142,156,.15);color:#848E9C}
+.accept-role{display:inline-block;padding:6px 16px;border-radius:10px;
+  font-size:16px;font-weight:700}
+.accept-role.buy{background:rgba(14,203,129,.12);color:var(--green)}
+.accept-role.sell{background:rgba(246,70,93,.12);color:var(--red)}
+.accept-role-hint{font-size:12px;color:var(--t2);margin-top:6px;line-height:1.45}
+.accept-links{display:flex;flex-direction:column;gap:6px}
+.accept-link{font-size:13px;color:var(--yellow);word-break:break-all;text-decoration:none}
+.accept-link.bad{color:var(--t2);text-decoration:line-through}
+.accept-warn{margin:12px 0 14px;padding:10px 12px;border-radius:10px;font-size:12px;
+  line-height:1.5;color:var(--t2);background:var(--bg2);border-left:3px solid var(--yellow)}
 .escrow-action-btn.danger:hover{background:rgba(246,70,93,.1)}
 .escrow-waiting{display:flex;align-items:center;gap:10px;padding:14px;background:var(--bg2);
   border-radius:12px;margin-bottom:8px}
@@ -656,6 +702,7 @@ button:active{transform:scale(0.96)}
   <!-- Step 5: Product links -->
   <div class="co-step" id="co-step-5">
     <div class="co-step-q" id="co-q5"></div>
+    <div class="co-step-hint" id="co-q5-hint"></div>
     <div id="co-links-wrap">
       <input type="url" class="co-link-input" id="co-link-0" placeholder="https://...">
     </div>
@@ -712,7 +759,6 @@ button:active{transform:scale(0.96)}
   </div>
 
   <!-- Timer -->
-  <div style="padding:0 16px" id="deal-timer"></div>
 
   <!-- Escrow Step Detail -->
   <div id="escrow-detail-wrap"></div>
@@ -881,7 +927,6 @@ var currentPage = 'home';
 var profileTab = 'orders';
 var bannerIdx = 0;
 var bannerTimer = null;
-var dealTimerInterval = null;
 var currentDeal = null;
 var chatMessages = [];
 var expandedCrypto = {};
@@ -1006,7 +1051,9 @@ function initFromBackend() {
     console.warn('Backend init failed:', e);
   });
 }
-initFromBackend();
+// Kept so the deep-link path can wait for it: renderDeal needs user.id to work
+// out which side you are on, and would show the wrong role if it ran first.
+var userReady = initFromBackend();
 
 function escapeHtml(str) {
   if (!str) return '';
@@ -1051,13 +1098,14 @@ var L = {
     'deal_title':'Deal #{id}','status':'Status','pending':'Pending','paid':'Paid','completed':'Completed',
     'cancelled':'Cancelled','disputed':'Disputed','mark_paid':'Mark as Paid','confirm_receipt':'Confirm Receipt',
     'cancel_deal':'Cancel Deal','enter_amt':'Enter amount','total':'Total','confirm':'Confirm Deal',
-    'chat':'Chat','send':'Send','time_left':'Time left to pay','buyer':'Buyer','seller':'Seller',
+    'chat':'Chat','send':'Send','buyer':'Buyer','seller':'Seller',
     'profile':'Profile','language':'Language','my_orders':'My Orders','my_deals':'My Deals',
     'deals_done':'Deals Completed','tg_id':'Telegram ID',
     'toast_wallet_title':'Wallet Not Linked','toast_wallet_msg':'Please link your {wallet} wallet before proceeding. Go to Wallet page to add your address.',
     'toast_error_title':'Error','toast_action_failed':'Action failed. Please try again.','toast_deal_failed':'Could not create the deal. Please try again.',
     'conn_lost':'Cannot reach the server. Check your connection and reopen the app.',
     'conn_auth':'Session could not be verified. Please reopen this app from the Telegram bot.',
+    'deal_not_available':'This deal is no longer available, or you are not part of it.',
     'all_crypto':'All Crypto','all_fiat':'All Fiat',
     'markets':'Markets','create_deal':'Create Deal',
     'wallet':'Wallet','bind_wallet':'Bind Wallet',
@@ -1073,7 +1121,10 @@ var L = {
     'co_uid_verify':'Verify & Continue',
     'co_q3_buy':'Specify what you are buying in the order','co_q3_sell':'Specify what you are selling in the order',
     'co_q4':'Choose the order currency','co_crypto_tab':'Cryptocurrencies','co_fiat_tab':'Fiat Currencies',
-    'co_q5':'Specify the link(s) to the product you are offering in the order',
+    'co_q5':'Add links for this deal',
+    'co_q5_hint':'Optional. Use it for a listing, a gift or anything the other side should look at. A plain currency exchange needs none.',
+    'co_link_invalid':'Enter a full link starting with http:// or https://',
+    'co_amount_invalid':'Enter an amount greater than zero',
     'co_q6_buy':'Specify the purchase amount','co_q6_sell':'Specify the sale amount',
     'co_confirm_warn':'Make sure all order fields are filled correctly!',
     'co_confirm':'Confirm','co_cancel':'Cancel',
@@ -1104,6 +1155,14 @@ var L = {
     'waiting_acceptance':'Waiting for the other side to accept the terms...',
     'awaiting_acceptance':'Awaiting Acceptance',
     'escrow_s0_desc':'These terms were set by the other party. Check the amount and your role — nothing moves until you accept.',
+    'accept_from':'Proposed by','accept_your_role':'Your role','accept_for':'in exchange for',
+    'accept_role_buyer':'You pay and receive the asset.',
+    'accept_role_seller':'You receive payment and hand over the asset.',
+    'accept_warn':'Once accepted, the amount, the asset and the roles are fixed. Check them now — they cannot be changed afterwards.',
+    'step_your_turn':'your turn','step_wait_buyer':'waiting for buyer','step_wait_seller':'waiting for seller',
+    'step_by_buyer':'by buyer','step_by_seller':'by seller',
+    'escrow_cancelled_msg':'This deal was called off. Nothing was transferred.',
+    'escrow_disputed_msg':'A dispute was opened. Support will review the deal and get in touch.',
     'btn_payment_sent':'Payment Sent','btn_payment_received':'Payment Received',
     'btn_goods_sent':'Goods Sent','btn_confirm_receipt':'Confirm Receipt',
     'btn_cancel':'Cancel Deal','btn_dispute':'Open Dispute',
@@ -1122,13 +1181,14 @@ var L = {
     'deal_title':'Сделка #{id}','status':'Статус','pending':'Ожидание','paid':'Оплачено','completed':'Завершено',
     'cancelled':'Отменено','disputed':'Спор','mark_paid':'Отметить оплату','confirm_receipt':'Подтвердить получение',
     'cancel_deal':'Отменить сделку','enter_amt':'Введите сумму','total':'Итого','confirm':'Подтвердить',
-    'chat':'Чат','send':'Отправить','time_left':'Осталось на оплату','buyer':'Покупатель','seller':'Продавец',
+    'chat':'Чат','send':'Отправить','buyer':'Покупатель','seller':'Продавец',
     'profile':'Профиль','language':'Язык','my_orders':'Мои ордера','my_deals':'Мои сделки',
     'deals_done':'Завершённых сделок','tg_id':'Telegram ID',
     'toast_wallet_title':'Кошелёк не привязан','toast_wallet_msg':'Пожалуйста, привяжите ваш {wallet} кошелёк перед продолжением. Перейдите в раздел Кошелёк для добавления адреса.',
     'toast_error_title':'Ошибка','toast_action_failed':'Не удалось выполнить действие. Попробуйте ещё раз.','toast_deal_failed':'Не удалось создать сделку. Попробуйте ещё раз.',
     'conn_lost':'Нет связи с сервером. Проверьте подключение и откройте приложение заново.',
     'conn_auth':'Не удалось проверить сессию. Откройте приложение заново через бота в Telegram.',
+    'deal_not_available':'Эта сделка больше недоступна или вы не являетесь её участником.',
     'crypto_currencies':'Криптовалюты','fiat_currencies':'Фиатные валюты',
     'all_crypto':'Все крипто','all_fiat':'Все фиат',
     'markets':'Рынки','create_deal':'Создать сделку',
@@ -1144,7 +1204,10 @@ var L = {
     'co_uid_verify':'Проверить и продолжить',
     'co_q3_buy':'Укажите, что вы покупаете в ордере','co_q3_sell':'Укажите, что вы продаёте в ордере',
     'co_q4':'Выберите валюту ордера','co_crypto_tab':'Криптовалюты','co_fiat_tab':'Фиатные валюты',
-    'co_q5':'Укажите ссылку(ки) на товар который вы предлагаете в ордере',
+    'co_q5':'Добавьте ссылки к сделке',
+    'co_q5_hint':'Необязательно. Пригодится для объявления, подарка или всего, на что стоит посмотреть второй стороне. Для обмена валют не нужно.',
+    'co_link_invalid':'Введите полную ссылку, начинающуюся с http:// или https://',
+    'co_amount_invalid':'Введите сумму больше нуля',
     'co_q6_buy':'Укажите сумму покупки','co_q6_sell':'Укажите сумму продажи',
     'co_confirm_warn':'Убедитесь в правильности заполнения всех пунктов ордера!',
     'co_confirm':'Подтвердить','co_cancel':'Отказаться',
@@ -1175,6 +1238,14 @@ var L = {
     'waiting_acceptance':'Ожидание подтверждения условий второй стороной...',
     'awaiting_acceptance':'Ожидает подтверждения',
     'escrow_s0_desc':'Условия выставила вторая сторона. Проверьте сумму и свою роль — ничего не начнётся, пока вы не подтвердите.',
+    'accept_from':'Предлагает','accept_your_role':'Ваша роль','accept_for':'в обмен на',
+    'accept_role_buyer':'Вы платите и получаете актив.',
+    'accept_role_seller':'Вы получаете оплату и передаёте актив.',
+    'accept_warn':'После подтверждения сумма, актив и роли фиксируются. Проверьте их сейчас — изменить потом нельзя.',
+    'step_your_turn':'ваш ход','step_wait_buyer':'ждём покупателя','step_wait_seller':'ждём продавца',
+    'step_by_buyer':'покупатель','step_by_seller':'продавец',
+    'escrow_cancelled_msg':'Сделка отменена. Ничего не переведено.',
+    'escrow_disputed_msg':'Открыт спор. Поддержка рассмотрит сделку и свяжется с вами.',
     'btn_payment_sent':'Оплата отправлена','btn_payment_received':'Оплата получена',
     'btn_goods_sent':'Товар отправлен','btn_confirm_receipt':'Подтвердить получение',
     'btn_cancel':'Отменить сделку','btn_dispute':'Открыть спор',
@@ -1542,23 +1613,52 @@ function coBack() {
   coShowStep(coData.step - 1);
 }
 
+// Shows the reason under the field. A red border alone leaves people guessing
+// what is wrong with what they typed.
+function coSetFieldError(input, msgKey) {
+  if (!input) return;
+  var err = document.getElementById(input.id + '-err');
+  if (!err) {
+    err = document.createElement('div');
+    err.className = 'co-field-err';
+    err.id = input.id + '-err';
+    input.parentNode.insertBefore(err, input.nextSibling);
+  }
+  if (msgKey) {
+    input.style.borderColor = 'var(--red)';
+    err.textContent = t(msgKey);
+    err.style.display = 'block';
+  } else {
+    input.style.borderColor = '';
+    err.textContent = '';
+    err.style.display = 'none';
+  }
+}
+
+function coBindFieldClear(input) {
+  if (!input || input.getAttribute('data-clears') === '1') return;
+  input.setAttribute('data-clears', '1');
+  input.addEventListener('input', function() { coSetFieldError(input, null); });
+}
+
 function coGoStep(n) {
   if (n === 6) {
-    var hasLink = false;
+    // Links stay optional: every asset here is fungible (Stars and GRAM
+    // included — GRAM settles to a TON address), so there is no item to point
+    // at. Whatever is entered still has to be a real URL.
     for (var i = 0; i < coLinkCount; i++) {
       var inp = document.getElementById('co-link-'+i);
       if (inp && inp.value.trim()) {
-        if (!isValidUrl(inp.value.trim())) { inp.style.borderColor='var(--red)'; return; }
-        inp.style.borderColor='';
-        hasLink = true;
+        if (!isValidUrl(inp.value.trim())) { coSetFieldError(inp, 'co_link_invalid'); return; }
+        coSetFieldError(inp, null);
       }
     }
   }
   if (n === 7) {
     var amtEl = document.getElementById('co-amt-input');
     var amt = parseFloat(amtEl ? amtEl.value : '');
-    if (isNaN(amt) || amt <= 0) { if (amtEl) amtEl.style.borderColor='var(--red)'; return; }
-    if (amtEl) amtEl.style.borderColor='';
+    if (isNaN(amt) || amt <= 0) { coSetFieldError(amtEl, 'co_amount_invalid'); return; }
+    coSetFieldError(amtEl, null);
   }
   coShowStep(n);
 }
@@ -1648,11 +1748,13 @@ function coRenderStep4() {
 // Step 5: Links
 function coRenderStep5() {
   document.getElementById('co-q5').textContent = t('co_q5');
+  document.getElementById('co-q5-hint').textContent = t('co_q5_hint');
   document.getElementById('co-add-link-btn').textContent = t('co_add_link');
   document.getElementById('co-s5-next').textContent = t('co_next');
   var wrap = document.getElementById('co-links-wrap');
   wrap.innerHTML = '<input type="url" class="co-link-input" id="co-link-0" placeholder="https://...">';
   coLinkCount = 1;
+  coBindFieldClear(document.getElementById('co-link-0'));
 }
 
 // Step 6: Amount
@@ -1660,7 +1762,10 @@ function coRenderStep6() {
   var q = coData.role === 'buy' ? t('co_q6_buy') : t('co_q6_sell');
   document.getElementById('co-q6').textContent = q;
   document.getElementById('co-amt-cur').textContent = coData.currency;
-  document.getElementById('co-amt-input').value = '';
+  var amtEl = document.getElementById('co-amt-input');
+  amtEl.value = '';
+  coSetFieldError(amtEl, null);
+  coBindFieldClear(amtEl);
   document.getElementById('co-s6-next').textContent = t('co_next');
 }
 
@@ -1749,6 +1854,7 @@ function coAddLink() {
   inp.type = 'url'; inp.className = 'co-link-input';
   inp.id = 'co-link-' + coLinkCount; inp.placeholder = 'https://...';
   wrap.appendChild(inp);
+  coBindFieldClear(inp);
   coLinkCount++;
 }
 
@@ -1785,9 +1891,10 @@ function coRenderCurList(containerId, tab, handler, showBal) {
 }
 
 // ═══ DEAL (ESCROW FLOW) ═══
-var dealTimeLeft = 1800;
 var escrowSteps = ['awaiting_payment','paid','payment_confirmed','goods_sent','completed'];
 var escrowLabels = ['escrow_s1','escrow_s2','escrow_s3','escrow_s4'];
+// Parallel to escrowLabels: who has to act on each step.
+var escrowActors = ['buyer','seller','seller','buyer'];
 var escrowIcons = ['💳','🔍','📦','✅'];
 
 function getEscrowStep(status) {
@@ -1798,9 +1905,8 @@ function getEscrowStep(status) {
 }
 
 function openDeal(id) {
-  apiFetch('/api/deals/' + id).then(function(deal) {
+  return apiFetch('/api/deals/' + id).then(function(deal) {
     currentDeal = deal;
-    dealTimeLeft = 1800;
     return apiFetch('/api/deals/' + id + '/messages');
   }).then(function(r) {
     chatMessages = r.messages || [];
@@ -1808,13 +1914,36 @@ function openDeal(id) {
     showPage('deal');
   }).catch(function(e) {
     var local = deals.find(function(d) { return d.id === id; });
-    if (local) {
-      currentDeal = Object.assign({}, local);
-      dealTimeLeft = 1800;
-      chatMessages = [];
-      renderDeal();
-      showPage('deal');
-    }
+    if (!local) throw e;
+    currentDeal = Object.assign({}, local);
+    chatMessages = [];
+    renderDeal();
+    showPage('deal');
+  });
+}
+
+// Deal id passed by the bot's "open and confirm" button.
+function getStartDealId() {
+  var id = null;
+  try { id = new URLSearchParams(location.search).get('deal'); } catch(e) {}
+  if (!id) {
+    // Only populated for startapp deep links, not for web_app buttons.
+    try { id = Telegram.WebApp.initDataUnsafe.start_param; } catch(e) {}
+  }
+  id = parseInt(id, 10);
+  return (id && id > 0) ? id : null;
+}
+
+function openStartDeal(id) {
+  // Drop the parameter first, so a manual refresh does not reopen the deal.
+  try { history.replaceState(null, '', location.pathname); } catch(e) {}
+  userReady.then(function() {
+    return openDeal(id);
+  }).catch(function(e) {
+    showPage('home');
+    var msg = (e && (e.status === 403 || e.status === 404))
+      ? t('deal_not_available') : (e && e.detail) || t('toast_action_failed');
+    showToast('error', t('toast_error_title'), msg);
   });
 }
 
@@ -1826,7 +1955,6 @@ function openDealFromOrder(orderId) {
     crypto_amount: order.amount
   }}).then(function(deal) {
     currentDeal = deal;
-    dealTimeLeft = 1800;
     chatMessages = [];
     loadDeals();
     renderDeal();
@@ -1836,11 +1964,77 @@ function openDealFromOrder(orderId) {
   });
 }
 
+function dealLinksHtml(d) {
+  if (!d.links) return '';
+  var raw = String(d.links).split('\n');
+  var items = [];
+  for (var i = 0; i < raw.length; i++) {
+    var href = raw[i].trim();
+    if (!href) continue;
+    // Rows written before the URL check existed could hold anything, so the
+    // scheme is re-checked here rather than trusted into an href.
+    if (isValidUrl(href)) {
+      items.push('<a class="accept-link" href="'+escapeHtml(href)+'" target="_blank" rel="noopener noreferrer">'+escapeHtml(href)+'</a>');
+    } else {
+      items.push('<span class="accept-link bad">'+escapeHtml(href)+'</span>');
+    }
+  }
+  if (!items.length) return '';
+  return '<div class="accept-block"><div class="accept-block-lbl">'+t('co_links_lbl')+'</div>'+
+    '<div class="accept-links">'+items.join('')+'</div></div>';
+}
+
+function renderAcceptanceCard(d, isBuyer) {
+  var isInitiator = d.initiator_id && d.initiator_id === user.id;
+  var who = d.initiator || {};
+  var roleLabel = isBuyer ? t('buyer') : t('seller');
+  var roleCls = isBuyer ? 'buy' : 'sell';
+  var merchant = (who.status === 'Merchant');
+
+  var fromHtml = '';
+  if (who.first_name || who.username) {
+    fromHtml = '<div class="accept-from">'+
+      '<div class="accept-from-avatar">'+escapeHtml((who.first_name || 'U').charAt(0).toUpperCase())+'</div>'+
+      '<div class="accept-from-main">'+
+        '<div class="accept-from-name">'+escapeHtml(who.first_name || '')+
+          (who.username ? ' <span class="accept-from-user">@'+escapeHtml(who.username)+'</span>' : '')+'</div>'+
+        '<div class="accept-from-meta">UID '+escapeHtml(String(who.uid || 0))+
+          '<span class="accept-badge '+(merchant ? 'merchant' : 'beginner')+'">'+
+          escapeHtml(who.status || 'Beginner')+'</span></div>'+
+      '</div></div>';
+  }
+
+  var actions = isInitiator
+    ? '<div class="escrow-waiting"><div class="escrow-waiting-dot"></div>'+
+      '<div class="escrow-waiting-text">'+t('waiting_acceptance')+'</div></div>'
+    : '<button class="escrow-action-btn primary" onclick="dealEscrowAction(\'awaiting_payment\')">'+t('btn_accept_deal')+'</button>'+
+      '<button class="escrow-action-btn secondary" onclick="dealCancel()">'+t('btn_decline_deal')+'</button>';
+
+  return '<div class="accept-card">'+
+    '<div class="accept-head">'+
+      '<div class="accept-eyebrow">'+t('awaiting_acceptance')+'</div>'+
+      '<div class="accept-amount">'+escapeHtml(String(d.crypto_amount))+' '+escapeHtml(d.crypto_currency)+'</div>'+
+      '<div class="accept-for">'+t('accept_for')+' <b>'+escapeHtml(String(d.fiat_amount))+' '+escapeHtml(d.fiat_currency)+'</b></div>'+
+    '</div>'+
+    '<div class="accept-body">'+
+      (fromHtml ? '<div class="accept-block"><div class="accept-block-lbl">'+t('accept_from')+'</div>'+fromHtml+'</div>' : '')+
+      '<div class="accept-block"><div class="accept-block-lbl">'+t('accept_your_role')+'</div>'+
+        '<div class="accept-role '+roleCls+'">'+escapeHtml(roleLabel)+'</div>'+
+        '<div class="accept-role-hint">'+t(isBuyer ? 'accept_role_buyer' : 'accept_role_seller')+'</div></div>'+
+      dealLinksHtml(d)+
+      '<div class="accept-warn">'+t('accept_warn')+'</div>'+
+      actions+
+    '</div></div>';
+}
+
 function renderDeal() {
   if (!currentDeal) return;
   var d = currentDeal;
   var isBuyer = d.buyer_id === user.id;
-  var step = getEscrowStep(d.status);
+  // -1 while the deal is unaccepted: the escrow has not begun, so marking step
+  // one active would tell the buyer it is their turn to pay when it is their
+  // turn to agree to the terms.
+  var step = (d.status === 'awaiting_acceptance') ? -1 : getEscrowStep(d.status);
 
   document.getElementById('deal-title').textContent = t('deal_title',{id:String(d.id)});
   document.getElementById('deal-badge').innerHTML = '<span class="badge badge-'+escapeHtml(d.status)+'">'+t(d.status)+'</span>';
@@ -1853,11 +2047,28 @@ function renderDeal() {
   }
   stepperHtml += '</div>';
   for (var si = 0; si < 4; si++) {
-    var circleCls = si < step ? 'done' : (si === step && step < 4 ? 'active' : '');
-    var labelCls = si < step ? 'done' : (si === step && step < 4 ? 'active' : '');
-    var circleContent = si < step ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" fill="currentColor"/></svg>' : String(si+1);
+    var isDone = si < step;
+    var isActive = (si === step && step < 4);
+    var circleCls = isDone ? 'done' : (isActive ? 'active' : 'pending');
+    var labelCls = isDone ? 'done' : (isActive ? 'active' : '');
+    // Shape carries the state as well as colour: a filled tick for done, a
+    // filled disc for active, a hollow ring for pending.
+    var circleContent = isDone
+      ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" fill="currentColor"/></svg>'
+      : String(si + 1);
+    // Who has to act on this step, so nobody has to guess whether it is them.
+    var actorRole = escrowActors[si];
+    var actorTxt = '';
+    if (!isDone) {
+      var mine = (actorRole === 'buyer') === isBuyer;
+      actorTxt = isActive
+        ? (mine ? t('step_your_turn') : t(actorRole === 'buyer' ? 'step_wait_buyer' : 'step_wait_seller'))
+        : t(actorRole === 'buyer' ? 'step_by_buyer' : 'step_by_seller');
+    }
     stepperHtml += '<div class="escrow-step"><div class="escrow-circle '+circleCls+'">'+circleContent+'</div>'+
-      '<div class="escrow-step-label '+labelCls+'">'+t(escrowLabels[si])+'</div></div>';
+      '<div class="escrow-step-label '+labelCls+'">'+t(escrowLabels[si])+'</div>'+
+      (actorTxt ? '<div class="escrow-step-actor'+(isActive ? ' active' : '')+'">'+actorTxt+'</div>' : '')+
+      '</div>';
   }
   document.getElementById('escrow-stepper').innerHTML = stepperHtml;
 
@@ -1871,33 +2082,32 @@ function renderDeal() {
       '<span style="color:var(--t2);font-size:13px">'+t('total')+'</span>'+
       '<span style="font-size:18px;font-weight:700">'+d.fiat_amount.toLocaleString()+' '+escapeHtml(d.fiat_currency)+'</span></div>';
 
-  // Timer
-  if (d.status === 'awaiting_payment') {
-    document.getElementById('deal-timer').innerHTML = '<div class="timer-box">'+
-      '<div class="label">'+t('time_left')+'</div>'+
-      '<div class="time" id="timer-display">'+fmtTime(dealTimeLeft)+'</div></div>';
-    if (dealTimerInterval) clearInterval(dealTimerInterval);
-    dealTimerInterval = setInterval(function() {
-      dealTimeLeft = Math.max(0, dealTimeLeft - 1);
-      var el = document.getElementById('timer-display');
-      if (el) el.textContent = fmtTime(dealTimeLeft);
-    }, 1000);
-  } else {
-    document.getElementById('deal-timer').innerHTML = '';
-    if (dealTimerInterval) clearInterval(dealTimerInterval);
-  }
+  // No countdown here: nothing in the backend expires a deal, so any number
+  // shown would be a deadline the system does not enforce.
 
   // Escrow detail card
   var detailWrap = document.getElementById('escrow-detail-wrap');
 
-  if (d.status === 'completed') {
+  if (d.status === 'awaiting_acceptance') {
+    detailWrap.innerHTML = renderAcceptanceCard(d, isBuyer);
+    document.getElementById('deal-actions').innerHTML = '';
+  } else if (d.status === 'disputed') {
+    detailWrap.innerHTML = '<div class="escrow-detail"><div class="escrow-terminal warn">'+
+      '<div class="escrow-terminal-icon">⚠️</div>'+
+      '<div class="escrow-terminal-title">'+t('disputed')+'</div>'+
+      '<div class="escrow-terminal-msg">'+t('escrow_disputed_msg')+'</div></div></div>';
+    document.getElementById('deal-actions').innerHTML = '';
+  } else if (d.status === 'completed') {
     detailWrap.innerHTML = '<div class="escrow-detail"><div class="escrow-done-card">'+
       '<div class="escrow-done-check"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>'+
       '<div class="escrow-done-title">'+t('escrow_done')+'</div>'+
       '<div class="escrow-done-msg">'+t('escrow_done_msg')+'</div></div></div>';
     document.getElementById('deal-actions').innerHTML = '';
   } else if (d.status === 'cancelled') {
-    detailWrap.innerHTML = '';
+    detailWrap.innerHTML = '<div class="escrow-detail"><div class="escrow-terminal">'+
+      '<div class="escrow-terminal-icon">🚫</div>'+
+      '<div class="escrow-terminal-title">'+t('cancelled')+'</div>'+
+      '<div class="escrow-terminal-msg">'+t('escrow_cancelled_msg')+'</div></div></div>';
     document.getElementById('deal-actions').innerHTML = '';
   } else {
     var stepIdx = step;
@@ -1908,14 +2118,6 @@ function renderDeal() {
     var descKey = 'escrow_s' + stepNum + '_' + (isBuyer ? 'buyer' : 'seller');
     var desc = t(descKey);
     var subtitle = isBuyer ? t('buyer') : t('seller');
-
-    // The escrow has not started yet, so the payment-step copy would mislead.
-    if (d.status === 'awaiting_acceptance') {
-      icon = '🤝';
-      iconCls = 'step1';
-      title = t('awaiting_acceptance');
-      desc = t('escrow_s0_desc');
-    }
 
     detailWrap.innerHTML = '<div class="escrow-detail">'+
       '<div class="escrow-detail-header">'+
@@ -1930,15 +2132,7 @@ function renderDeal() {
     var actionsInner = document.getElementById('escrow-actions-inner');
     var actHtml = '';
 
-    if (d.status === 'awaiting_acceptance') {
-      // The initiator set the terms alone, so only the other side gets a choice.
-      if (d.initiator_id && d.initiator_id !== user.id) {
-        actHtml = '<button class="escrow-action-btn primary" onclick="dealEscrowAction(\'awaiting_payment\')">'+t('btn_accept_deal')+'</button>'+
-          '<button class="escrow-action-btn danger" onclick="dealCancel()">'+t('btn_decline_deal')+'</button>';
-      } else {
-        actHtml = '<div class="escrow-waiting"><div class="escrow-waiting-dot"></div><div class="escrow-waiting-text">'+t('waiting_acceptance')+'</div></div>';
-      }
-    } else if (d.status === 'awaiting_payment') {
+    if (d.status === 'awaiting_payment') {
       if (isBuyer) {
         actHtml = '<button class="escrow-action-btn primary" onclick="dealEscrowAction(\'paid\')">'+t('btn_payment_sent')+'</button>'+
           '<button class="escrow-action-btn danger" onclick="dealCancel()">'+t('btn_cancel')+'</button>';
@@ -1997,9 +2191,6 @@ function dealEscrowAction(newStatus) {
   });
 }
 
-function fmtTime(s) {
-  return String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
-}
 function dealCancel() {
   if (!currentDeal) return;
   apiFetch('/api/deals/' + currentDeal.id + '/cancel', {method:'PUT'}).then(function() {
@@ -2226,7 +2417,9 @@ window.addEventListener('DOMContentLoaded', function() {
       document.getElementById('splash').style.display = 'none';
       document.getElementById('bottom-nav').style.display = 'flex';
       updateNavLabels();
+      var startDealId = getStartDealId();
       showPage('home');
+      if (startDealId) openStartDeal(startDealId);
       fetchMarkets();
       setInterval(fetchMarkets, 60000);
       initCoin3D();
