@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="api-base" content="https://name-expressed-receipt-wings.trycloudflare.com">
+<meta name="api-base" content="">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' https://telegram.org https://fonts.googleapis.com https://fonts.gstatic.com https://api.coingecko.com https://*.trycloudflare.com; connect-src 'self' https://api.coingecko.com https://*.trycloudflare.com; img-src 'self' data: blob: https://raw.githubusercontent.com; font-src https://fonts.gstatic.com">
 <title>Exchange</title>
@@ -338,6 +338,18 @@ button:active{transform:scale(0.96)}
 
 .co-confirm-warn{font-size:16px;font-weight:600;color:var(--yellow);text-align:center;
   padding:24px 0 20px;line-height:1.4}
+.co-flow-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;
+  padding:14px 16px;margin-bottom:16px}
+.co-flow-title{font-size:12px;font-weight:600;color:var(--t2);text-transform:uppercase;
+  letter-spacing:.5px;margin-bottom:10px}
+.co-flow-list{list-style:none;counter-reset:step;margin:0;padding:0}
+.co-flow-list li{counter-increment:step;position:relative;padding:6px 0 6px 30px;
+  font-size:13px;line-height:1.4;color:var(--t1)}
+.co-flow-list li::before{content:counter(step);position:absolute;left:0;top:6px;
+  width:22px;height:22px;border-radius:50%;background:var(--card);color:var(--yellow);
+  font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--border)}
+.co-flow-list li .actor{color:var(--t2);font-size:11px;margin-left:6px}
 .co-confirm-data{background:var(--card);border-radius:12px;padding:16px;margin-bottom:20px}
 .co-confirm-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)}
 .co-confirm-row:last-child{border-bottom:none}
@@ -398,12 +410,7 @@ button:active{transform:scale(0.96)}
 
 .escrow-detail{margin:0 16px 16px;background:var(--card);border-radius:16px;overflow:hidden}
 .escrow-detail-header{padding:16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)}
-.escrow-detail-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;
-  justify-content:center;font-size:22px;flex-shrink:0}
-.escrow-detail-icon.step1{background:rgba(240,185,11,.15)}
-.escrow-detail-icon.step2{background:rgba(59,130,246,.15)}
-.escrow-detail-icon.step3{background:rgba(249,115,22,.15)}
-.escrow-detail-icon.step4{background:rgba(14,203,129,.15)}
+.escrow-detail-header.no-icon{padding:14px 16px}
 .escrow-detail-title{font-size:16px;font-weight:700;color:var(--t1)}
 .escrow-detail-sub{font-size:12px;color:var(--t2);margin-top:2px}
 .escrow-detail-body{padding:16px}
@@ -418,7 +425,6 @@ button:active{transform:scale(0.96)}
 .escrow-action-btn.secondary:hover{border-color:var(--red);color:var(--red)}
 
 .escrow-terminal{padding:32px 20px;text-align:center}
-.escrow-terminal-icon{font-size:40px;line-height:1;margin-bottom:12px}
 .escrow-terminal-title{font-size:17px;font-weight:700;margin-bottom:6px}
 .escrow-terminal-msg{font-size:13px;color:var(--t2);line-height:1.5}
 .escrow-terminal.warn .escrow-terminal-title{color:#fb923c}
@@ -465,10 +471,6 @@ button:active{transform:scale(0.96)}
 @keyframes waitingBlink{0%,100%{opacity:.3}50%{opacity:1}}
 .escrow-waiting-text{font-size:13px;color:var(--t2);line-height:1.4}
 .escrow-done-card{text-align:center;padding:24px 16px}
-.escrow-done-check{width:56px;height:56px;border-radius:50%;background:var(--green);
-  display:flex;align-items:center;justify-content:center;margin:0 auto 16px;
-  box-shadow:0 8px 24px rgba(14,203,129,.3)}
-.escrow-done-check svg{width:28px;height:28px;fill:#fff}
 .escrow-done-title{font-size:18px;font-weight:700;color:var(--green);margin-bottom:4px}
 .escrow-done-msg{font-size:13px;color:var(--t2)}
 
@@ -723,6 +725,10 @@ button:active{transform:scale(0.96)}
   <!-- Step 7: Confirm -->
   <div class="co-step" id="co-step-7">
     <div class="co-confirm-warn" id="co-confirm-warn"></div>
+    <div class="co-flow-card" id="co-flow-card">
+      <div class="co-flow-title" id="co-flow-title"></div>
+      <ol class="co-flow-list" id="co-flow-list"></ol>
+    </div>
     <div class="co-confirm-data" id="co-confirm-data"></div>
     <div class="co-confirm-btns">
       <button class="co-cfm-btn ok disabled" id="co-cfm-ok" onclick="coSubmit()" disabled></button>
@@ -1121,9 +1127,10 @@ var L = {
     'co_uid_verify':'Verify & Continue',
     'co_q3_buy':'Specify what you are buying in the order','co_q3_sell':'Specify what you are selling in the order',
     'co_q4':'Choose the order currency','co_crypto_tab':'Cryptocurrencies','co_fiat_tab':'Fiat Currencies',
-    'co_q5':'Add links for this deal',
-    'co_q5_hint':'Optional. Use it for a listing, a gift or anything the other side should look at. A plain currency exchange needs none.',
+    'co_q5':'Add a link for this deal',
+    'co_q5_hint':'At least one is required — a listing, a gift page, a receipt, anything the other side should be able to look at.',
     'co_link_invalid':'Enter a full link starting with http:// or https://',
+    'co_link_required':'At least one link is required to continue',
     'co_amount_invalid':'Enter an amount greater than zero',
     'co_q6_buy':'Specify the purchase amount','co_q6_sell':'Specify the sale amount',
     'co_confirm_warn':'Make sure all order fields are filled correctly!',
@@ -1159,6 +1166,10 @@ var L = {
     'accept_role_buyer':'You pay and receive the asset.',
     'accept_role_seller':'You receive payment and hand over the asset.',
     'accept_warn':'Once accepted, the amount, the asset and the roles are fixed. Check them now — they cannot be changed afterwards.',
+    'co_flow_title':'How the deal will run',
+    'flow_pay':'Buyer sends payment.','flow_verify':'Seller confirms payment received.',
+    'flow_ship':'Seller hands over the asset.','flow_recv':'Buyer confirms receipt — deal closes.',
+    'flow_you':'· you','flow_other':'· other side',
     'step_your_turn':'your turn','step_wait_buyer':'waiting for buyer','step_wait_seller':'waiting for seller',
     'step_by_buyer':'by buyer','step_by_seller':'by seller',
     'escrow_cancelled_msg':'This deal was called off. Nothing was transferred.',
@@ -1204,9 +1215,10 @@ var L = {
     'co_uid_verify':'Проверить и продолжить',
     'co_q3_buy':'Укажите, что вы покупаете в ордере','co_q3_sell':'Укажите, что вы продаёте в ордере',
     'co_q4':'Выберите валюту ордера','co_crypto_tab':'Криптовалюты','co_fiat_tab':'Фиатные валюты',
-    'co_q5':'Добавьте ссылки к сделке',
-    'co_q5_hint':'Необязательно. Пригодится для объявления, подарка или всего, на что стоит посмотреть второй стороне. Для обмена валют не нужно.',
+    'co_q5':'Добавьте ссылку к сделке',
+    'co_q5_hint':'Хотя бы одна обязательна — объявление, страница подарка, квитанция, любое, на что вторая сторона может посмотреть.',
     'co_link_invalid':'Введите полную ссылку, начинающуюся с http:// или https://',
+    'co_link_required':'Нужна хотя бы одна ссылка, чтобы продолжить',
     'co_amount_invalid':'Введите сумму больше нуля',
     'co_q6_buy':'Укажите сумму покупки','co_q6_sell':'Укажите сумму продажи',
     'co_confirm_warn':'Убедитесь в правильности заполнения всех пунктов ордера!',
@@ -1242,6 +1254,10 @@ var L = {
     'accept_role_buyer':'Вы платите и получаете актив.',
     'accept_role_seller':'Вы получаете оплату и передаёте актив.',
     'accept_warn':'После подтверждения сумма, актив и роли фиксируются. Проверьте их сейчас — изменить потом нельзя.',
+    'co_flow_title':'Как пройдёт сделка',
+    'flow_pay':'Покупатель отправляет оплату.','flow_verify':'Продавец подтверждает получение оплаты.',
+    'flow_ship':'Продавец передаёт актив.','flow_recv':'Покупатель подтверждает получение — сделка закрывается.',
+    'flow_you':'· вы','flow_other':'· вторая сторона',
     'step_your_turn':'ваш ход','step_wait_buyer':'ждём покупателя','step_wait_seller':'ждём продавца',
     'step_by_buyer':'покупатель','step_by_seller':'продавец',
     'escrow_cancelled_msg':'Сделка отменена. Ничего не переведено.',
@@ -1274,9 +1290,12 @@ var orders = [];
 
 var deals = [];
 function loadDeals() {
-  apiFetch('/api/deals/my/list').then(function(r) {
+  // Returns the promise so the profile flow can wait for it: the tile stats
+  // read `deals`, so rendering them before the fetch lands showed zeros or
+  // stale numbers until the next event knocked things loose.
+  return apiFetch('/api/deals/my/list').then(function(r) {
     deals = r.deals || [];
-    if (currentPage === 'profile') renderProfileTab();
+    if (currentPage === 'profile') renderProfile();
   }).catch(function(){});
 }
 
@@ -1643,15 +1662,23 @@ function coBindFieldClear(input) {
 
 function coGoStep(n) {
   if (n === 6) {
-    // Links stay optional: every asset here is fungible (Stars and GRAM
-    // included — GRAM settles to a TON address), so there is no item to point
-    // at. Whatever is entered still has to be a real URL.
+    // At least one valid link is required — you decided every deal needs
+    // something to point at, and the server enforces it too so the client
+    // check here is only a convenience.
+    var hasLink = false;
+    var firstEmpty = null;
     for (var i = 0; i < coLinkCount; i++) {
       var inp = document.getElementById('co-link-'+i);
-      if (inp && inp.value.trim()) {
-        if (!isValidUrl(inp.value.trim())) { coSetFieldError(inp, 'co_link_invalid'); return; }
-        coSetFieldError(inp, null);
-      }
+      if (!inp) continue;
+      var val = inp.value.trim();
+      if (!val) { if (!firstEmpty) firstEmpty = inp; continue; }
+      if (!isValidUrl(val)) { coSetFieldError(inp, 'co_link_invalid'); return; }
+      coSetFieldError(inp, null);
+      hasLink = true;
+    }
+    if (!hasLink) {
+      coSetFieldError(firstEmpty || document.getElementById('co-link-0'), 'co_link_required');
+      return;
     }
   }
   if (n === 7) {
@@ -1775,6 +1802,22 @@ function coRenderStep7() {
   document.getElementById('co-cfm-ok').textContent = t('co_confirm');
   document.getElementById('co-cfm-no').textContent = t('co_cancel');
 
+  // What the deal will actually put the person through, right before they
+  // commit — the escrow was described nowhere in the wizard until now.
+  var isBuyer = coData.role === 'buy';
+  var flowSteps = [
+    { key: 'flow_pay',    mine: isBuyer },
+    { key: 'flow_verify', mine: !isBuyer },
+    { key: 'flow_ship',   mine: !isBuyer },
+    { key: 'flow_recv',   mine: isBuyer },
+  ];
+  document.getElementById('co-flow-title').textContent = t('co_flow_title');
+  var listHtml = flowSteps.map(function(s) {
+    return '<li>'+escapeHtml(t(s.key))+
+      '<span class="actor">'+escapeHtml(s.mine ? t('flow_you') : t('flow_other'))+'</span></li>';
+  }).join('');
+  document.getElementById('co-flow-list').innerHTML = listHtml;
+
   var amtVal = document.getElementById('co-amt-input');
   coData.amount = amtVal ? amtVal.value : '';
   coData.links = [];
@@ -1895,7 +1938,10 @@ var escrowSteps = ['awaiting_payment','paid','payment_confirmed','goods_sent','c
 var escrowLabels = ['escrow_s1','escrow_s2','escrow_s3','escrow_s4'];
 // Parallel to escrowLabels: who has to act on each step.
 var escrowActors = ['buyer','seller','seller','buyer'];
-var escrowIcons = ['💳','🔍','📦','✅'];
+// The icons are gone (magnifier and friends): the step number, the title and
+// the "your turn / waiting for X" caption already say what step it is, so an
+// emoji added nothing and one of them was a search glass on a step nobody
+// searches on.
 
 function getEscrowStep(status) {
   var idx = escrowSteps.indexOf(status);
@@ -2095,35 +2141,29 @@ function renderDeal() {
     // Anything outside the known escrow sequence: say so plainly rather than
     // fall through and draw a payment step the deal is not on.
     detailWrap.innerHTML = '<div class="escrow-detail"><div class="escrow-terminal warn">'+
-      '<div class="escrow-terminal-icon">⚠️</div>'+
       '<div class="escrow-terminal-title">'+escapeHtml(t(d.status))+'</div>'+
       '<div class="escrow-terminal-msg">'+t('escrow_unknown_msg')+'</div></div></div>';
     document.getElementById('deal-actions').innerHTML = '';
   } else if (d.status === 'completed') {
     detailWrap.innerHTML = '<div class="escrow-detail"><div class="escrow-done-card">'+
-      '<div class="escrow-done-check"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>'+
       '<div class="escrow-done-title">'+t('escrow_done')+'</div>'+
       '<div class="escrow-done-msg">'+t('escrow_done_msg')+'</div></div></div>';
     document.getElementById('deal-actions').innerHTML = '';
   } else if (d.status === 'cancelled') {
     detailWrap.innerHTML = '<div class="escrow-detail"><div class="escrow-terminal">'+
-      '<div class="escrow-terminal-icon">🚫</div>'+
       '<div class="escrow-terminal-title">'+t('cancelled')+'</div>'+
       '<div class="escrow-terminal-msg">'+t('escrow_cancelled_msg')+'</div></div></div>';
     document.getElementById('deal-actions').innerHTML = '';
   } else {
     var stepIdx = step;
     var stepNum = stepIdx + 1;
-    var iconCls = 'step' + stepNum;
-    var icon = escrowIcons[stepIdx];
     var title = t(escrowLabels[stepIdx]);
     var descKey = 'escrow_s' + stepNum + '_' + (isBuyer ? 'buyer' : 'seller');
     var desc = t(descKey);
     var subtitle = isBuyer ? t('buyer') : t('seller');
 
     detailWrap.innerHTML = '<div class="escrow-detail">'+
-      '<div class="escrow-detail-header">'+
-        '<div class="escrow-detail-icon '+iconCls+'">'+icon+'</div>'+
+      '<div class="escrow-detail-header no-icon">'+
         '<div><div class="escrow-detail-title">'+escapeHtml(title)+'</div>'+
         '<div class="escrow-detail-sub">'+escapeHtml(subtitle)+'</div></div></div>'+
       '<div class="escrow-detail-body">'+
@@ -2273,8 +2313,13 @@ function renderProfile() {
 }
 
 function renderStats() {
-  var totalDeals = deals.length;
-  var completedDeals = deals.filter(function(d) { return d.status === 'completed'; }).length;
+  // Admin can override the counters through /setdeals and /setsuccessful; the
+  // shown value is the larger of what admin set and what the deals table
+  // actually holds, so a genuine run past the admin-set value keeps counting.
+  var realTotal = deals.length;
+  var realCompleted = deals.filter(function(d) { return d.status === 'completed'; }).length;
+  var totalDeals = Math.max(user.total_deals || 0, realTotal);
+  var completedDeals = Math.max(user.successful_deals || 0, realCompleted);
   var activeDeals = deals.filter(function(d) { return d.status !== 'completed' && d.status !== 'cancelled'; }).length;
   var turnover = deals.reduce(function(sum, d) { return sum + (d.fiat_amount || 0); }, 0);
 
@@ -2290,8 +2335,11 @@ function renderStats() {
 }
 
 function renderSuccessRate() {
-  var total = deals.length;
-  var completed = deals.filter(function(d) { return d.status === 'completed'; }).length;
+  // Uses the same overridden counters as the tiles above.
+  var realTotal = deals.length;
+  var realCompleted = deals.filter(function(d) { return d.status === 'completed'; }).length;
+  var total = Math.max(user.total_deals || 0, realTotal);
+  var completed = Math.max(user.successful_deals || 0, realCompleted);
   var cancelled = deals.filter(function(d) { return d.status === 'cancelled'; }).length;
   var disputed = deals.filter(function(d) { return d.status === 'disputed'; }).length;
   var pct = total > 0 ? Math.round((completed / total) * 100) : 0;
@@ -2395,7 +2443,12 @@ function setLang(l) {
   updateNavLabels();
   if (currentPage === 'home') renderHome();
   if (currentPage === 'wallet') renderWallet();
-  if (currentPage === 'profile') renderProfile();
+  if (currentPage === 'profile') {
+    // Refresh both sources on locale switch: /setdeals may have moved
+    // user.total_deals since the page was first opened, and the tiles read
+    // the deals list, so both have to have landed before the redraw.
+    Promise.all([initFromBackend(), loadDeals()]).then(function() { renderProfile(); });
+  }
 }
 
 function updateNavLabels() {
