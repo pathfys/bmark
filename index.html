@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="api-base" content="https://kyle-providing-sealed-pocket.trycloudflare.com">
+<meta name="api-base" content="">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' https://telegram.org https://fonts.googleapis.com https://fonts.gstatic.com https://api.coingecko.com https://*.trycloudflare.com; connect-src 'self' https://api.coingecko.com https://*.trycloudflare.com; img-src 'self' data: blob: https://raw.githubusercontent.com; font-src https://fonts.gstatic.com">
 <title>Exchange</title>
@@ -474,10 +474,12 @@ button:active{transform:scale(0.96)}
 .escrow-done-title{font-size:18px;font-weight:700;color:var(--green);margin-bottom:4px}
 .escrow-done-msg{font-size:13px;color:var(--t2)}
 
-.wcrypto-card{background:var(--card);border-radius:12px;margin:0 16px 8px;overflow:hidden;
-  transition:transform .1s}
-.wcrypto-card:active{transform:scale(0.98)}
-.wcrypto-header{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer}
+.wcrypto-card{background:var(--card);border-radius:12px;margin:0 16px 8px;overflow:hidden}
+/* The header alone reacts to the tap; scaling the whole card also moved the
+ * input under a long-press, which on iOS made the paste menu drop away. */
+.wcrypto-header{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;
+  transition:transform .1s;-webkit-tap-highlight-color:transparent}
+.wcrypto-header:active{transform:scale(0.98)}
 .wcrypto-icon{width:36px;height:36px;border-radius:50%;object-fit:cover;
   background:rgba(255,255,255,0.08);flex-shrink:0}
 .wcrypto-info{flex:1;min-width:0}
@@ -492,7 +494,9 @@ button:active{transform:scale(0.96)}
 .wcrypto-expand.open{display:block}
 .wcrypto-input-row{display:flex;gap:8px}
 .wcrypto-input-row input{flex:1;background:var(--bg2);color:var(--t1);border:1px solid var(--border);
-  border-radius:8px;padding:9px 12px;font-size:12px;font-family:'Inter',monospace;transition:border-color .2s}
+  -webkit-user-select:text;user-select:text;-webkit-touch-callout:default;
+  border-radius:8px;padding:9px 12px;font-size:16px;font-family:'Inter',monospace;
+  transition:border-color .2s}
 .wcrypto-input-row input.valid{border-color:var(--green)}
 .wcrypto-input-row input.invalid{border-color:var(--red)}
 .wcrypto-input-row button{background:var(--yellow);color:var(--bg);border-radius:8px;
@@ -1043,9 +1047,13 @@ function initFromBackend() {
     if (currentPage === 'profile') renderProfile();
     return apiFetch('/api/wallets');
   }).then(function(w) {
+    var before = JSON.stringify(savedWallets);
     savedWallets = w || {};
     try { localStorage.setItem('p2p_wallets', JSON.stringify(savedWallets)); } catch(e){}
-    if (currentPage === 'wallet') renderWallet();
+    // Skip the redraw when nothing changed: on iOS a background /api/wallets
+    // response landing while the person was in the middle of a long-press
+    // paste used to wipe the input DOM and drop the paste menu with it.
+    if (currentPage === 'wallet' && JSON.stringify(savedWallets) !== before) renderWallet();
   }).catch(function(e) {
     // A silent failure here leaves a usable-looking app with an empty profile
     // and a UID of 0, so make it visible rather than logging it away. The two
@@ -1480,6 +1488,50 @@ function renderMarkets() {
 }
 
 // WALLET
+function buildCryptoCard(c) {
+  var saved = savedWallets[c.sym];
+  var fb = cryptoFallback[c.sym] || c.sym[0];
+  var expandOpen = expandedCrypto[c.sym] ? ' open' : '';
+  var bodyHtml = '';
+  if (saved) {
+    bodyHtml = '<div class="wcrypto-saved"><span class="addr">'+escapeHtml(saved)+'</span>'+
+      '<button type="button" onclick="editWallet(\''+c.sym+'\')">'+t('edit')+'</button></div>';
+  } else {
+    // Long-press paste on iOS was destroyed by the previous re-render every
+    // time the card was toggled, so the input stays in place across toggles
+    // now. inputmode/autocomplete/autocorrect are set to stop the OS from
+    // "helping" (capitalisation, autocomplete suggestions) on a wallet
+    // address, and touch-action:manipulation kills the 300ms double-tap zoom.
+    bodyHtml = '<div class="wcrypto-input-row">'+
+      '<input type="text" id="winp-'+c.sym+'" placeholder="'+t('enter_address')+'"'+
+        ' inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"'+
+        ' style="touch-action:manipulation">'+
+      '<button type="button" onclick="saveWallet(\''+c.sym+'\')">'+t('save')+'</button></div>'+
+      '<div class="wcrypto-status" id="wstatus-'+c.sym+'"></div>';
+  }
+  // A click that lands on the expanded body (including the paste menu area
+  // near the input) must not bubble to the header and toggle the card shut.
+  return '<div class="wcrypto-card" id="wcard-'+c.sym+'"><div class="wcrypto-header" onclick="toggleCryptoExpand(\''+c.sym+'\')">'+
+    '<img class="wcrypto-icon" src="'+c.icon+'" alt="'+c.sym+'" onerror="this.outerHTML=\'<div class=wcrypto-icon style=display:flex;align-items:center;justify-content:center;font-size:14px>'+fb+'</div>\'">'+
+    '<div class="wcrypto-info"><div class="wcrypto-name">'+c.name+'</div><div class="wcrypto-sym">'+c.sym+'</div></div>'+
+    '<div class="wcrypto-bal"><div class="amt">0.00 '+c.sym+'</div><div class="usd">$0.00</div></div>'+
+    '<svg class="wcrypto-chevron'+expandOpen+'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"/></svg>'+
+    '</div><div class="wcrypto-expand'+expandOpen+'" onclick="event.stopPropagation()">'+bodyHtml+'</div></div>';
+}
+
+function refreshCryptoCard(sym) {
+  var card = document.getElementById('wcard-'+sym);
+  if (!card) return;
+  for (var i = 0; i < walletCryptos.length; i++) {
+    if (walletCryptos[i].sym === sym) {
+      var tmp = document.createElement('div');
+      tmp.innerHTML = buildCryptoCard(walletCryptos[i]);
+      card.parentNode.replaceChild(tmp.firstChild, card);
+      return;
+    }
+  }
+}
+
 function renderWallet() {
   document.getElementById('lbl-wallet-title').textContent = t('wallet');
   document.getElementById('wallet-total-lbl').textContent = t('co_total_bal');
@@ -1487,27 +1539,7 @@ function renderWallet() {
   document.getElementById('lbl-crypto-cur').textContent = t('crypto_currencies');
   document.getElementById('lbl-fiat-cur').textContent = t('fiat_currencies');
 
-  document.getElementById('wallet-crypto-list').innerHTML = walletCryptos.map(function(c) {
-    var saved = savedWallets[c.sym];
-    var fb = cryptoFallback[c.sym] || c.sym[0];
-    var expandOpen = expandedCrypto[c.sym] ? ' open' : '';
-    var bodyHtml = '';
-    if (saved) {
-      bodyHtml = '<div class="wcrypto-saved"><span class="addr">'+escapeHtml(saved)+'</span>'+
-        '<button onclick="editWallet(\''+c.sym+'\')">'+t('edit')+'</button></div>';
-    } else {
-      bodyHtml = '<div class="wcrypto-input-row">'+
-        '<input type="text" id="winp-'+c.sym+'" placeholder="'+t('enter_address')+'">'+
-        '<button onclick="saveWallet(\''+c.sym+'\')">'+t('save')+'</button></div>'+
-        '<div class="wcrypto-status" id="wstatus-'+c.sym+'"></div>';
-    }
-    return '<div class="wcrypto-card"><div class="wcrypto-header" onclick="toggleCryptoExpand(\''+c.sym+'\')">'+
-      '<img class="wcrypto-icon" src="'+c.icon+'" alt="'+c.sym+'" onerror="this.outerHTML=\'<div class=wcrypto-icon style=display:flex;align-items:center;justify-content:center;font-size:14px>'+fb+'</div>\'">'+
-      '<div class="wcrypto-info"><div class="wcrypto-name">'+c.name+'</div><div class="wcrypto-sym">'+c.sym+'</div></div>'+
-      '<div class="wcrypto-bal"><div class="amt">0.00 '+c.sym+'</div><div class="usd">$0.00</div></div>'+
-      '<svg class="wcrypto-chevron'+expandOpen+'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"/></svg>'+
-      '</div><div class="wcrypto-expand'+expandOpen+'">'+bodyHtml+'</div></div>';
-  }).join('');
+  document.getElementById('wallet-crypto-list').innerHTML = walletCryptos.map(buildCryptoCard).join('');
 
   document.getElementById('wallet-fiat-list').innerHTML = walletFiats.map(function(f) {
     return '<div class="wfiat-card"><div class="wfiat-flag">'+f.flag+'</div>'+
@@ -1521,14 +1553,21 @@ function toggleWalletSections() {
   el.classList.toggle('visible');
 }
 function toggleCryptoExpand(sym) {
+  // Toggle the class only. The previous re-render blew the input away and,
+  // on iOS, killed the paste menu that came up on a long-press.
   expandedCrypto[sym] = !expandedCrypto[sym];
-  renderWallet();
+  var card = document.getElementById('wcard-'+sym);
+  if (!card) return;
+  var expand = card.querySelector('.wcrypto-expand');
+  var chev = card.querySelector('.wcrypto-chevron');
+  if (expandedCrypto[sym]) { expand.classList.add('open'); chev.classList.add('open'); }
+  else { expand.classList.remove('open'); chev.classList.remove('open'); }
 }
 function editWallet(sym) {
   delete savedWallets[sym];
   try { localStorage.setItem('p2p_wallets', JSON.stringify(savedWallets)); } catch(e){}
   apiFetch('/api/wallets/' + sym, {method:'DELETE'}).catch(function(){});
-  renderWallet();
+  refreshCryptoCard(sym);
 }
 
 function validateTON(addr) { return /^(UQ|EQ|kQ)[A-Za-z0-9_-]{46}$/.test(addr) || /^0:[a-fA-F0-9]{64}$/.test(addr); }
@@ -1546,23 +1585,24 @@ function saveWallet(sym) {
   var addr = inp.value.trim();
   if (!addr) return;
   var validator = walletValidators[sym];
-  if (validator) {
-    if (validator(addr)) {
-      st.className = 'wcrypto-status ok'; st.textContent = t('valid_address');
-      savedWallets[sym] = addr;
-      try { localStorage.setItem('p2p_wallets', JSON.stringify(savedWallets)); } catch(e){}
-      apiFetch('/api/wallets', {method:'POST', body:{wallet_type:sym, address:addr}}).catch(function(){});
-      setTimeout(function() { renderWallet(); }, 500);
-    } else {
-      st.className = 'wcrypto-status err'; st.textContent = t('invalid_address');
-      inp.classList.add('invalid'); inp.classList.remove('valid');
-    }
-  } else {
-    savedWallets[sym] = addr;
-    try { localStorage.setItem('p2p_wallets', JSON.stringify(savedWallets)); } catch(e){}
-    apiFetch('/api/wallets', {method:'POST', body:{wallet_type:sym, address:addr}}).catch(function(){});
-    renderWallet();
+  if (validator && !validator(addr)) {
+    st.className = 'wcrypto-status err'; st.textContent = t('invalid_address');
+    inp.classList.add('invalid'); inp.classList.remove('valid');
+    return;
   }
+  st.className = 'wcrypto-status ok'; st.textContent = t('valid_address');
+  // Optimistic: show the saved state right away, roll back if the server
+  // refuses. Without this the address survives only in localStorage and gets
+  // wiped the next time /api/wallets returns whatever the server has.
+  savedWallets[sym] = addr;
+  try { localStorage.setItem('p2p_wallets', JSON.stringify(savedWallets)); } catch(e){}
+  refreshCryptoCard(sym);
+  apiFetch('/api/wallets', {method:'POST', body:{wallet_type:sym, address:addr}}).catch(function(e) {
+    delete savedWallets[sym];
+    try { localStorage.setItem('p2p_wallets', JSON.stringify(savedWallets)); } catch(_){}
+    refreshCryptoCard(sym);
+    showToast('error', t('toast_error_title'), (e && e.detail) || t('toast_action_failed'));
+  });
 }
 
 function initCoin3D() {
