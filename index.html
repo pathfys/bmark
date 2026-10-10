@@ -964,6 +964,24 @@ function getInitData() {
   try { return (window.Telegram && Telegram.WebApp) ? Telegram.WebApp.initData : ''; } catch(e) { return ''; }
 }
 
+// Normalize FastAPI/HTTP error payloads into a readable string.
+// FastAPI validation errors come as detail=[{msg, loc, type, ...}, ...].
+function fmtErr(e, fallback){
+  if (!e) return fallback || '';
+  if (typeof e === 'string') return e;
+  var d = e.detail;
+  if (d == null) return e.message || fallback || '';
+  if (typeof d === 'string') return d;
+  if (Array.isArray(d)) {
+    return d.map(function(x){
+      if (!x) return '';
+      if (typeof x === 'string') return x;
+      return x.msg || JSON.stringify(x);
+    }).filter(Boolean).join('; ') || (fallback || '');
+  }
+  if (typeof d === 'object') return JSON.stringify(d);
+  return String(d);
+}
 function apiFetch(path, opts) {
   opts = opts || {};
   var headers = opts.headers || {};
@@ -1591,7 +1609,7 @@ function saveWallet(sym) {
     delete savedWallets[sym];
     try { localStorage.setItem('p2p_wallets', JSON.stringify(savedWallets)); } catch(_){}
     refreshCryptoCard(sym);
-    showToast('error', t('toast_error_title'), (e && e.detail) || t('toast_action_failed'));
+    showToast('error', t('toast_error_title'), fmtErr(e, t('toast_action_failed')));
   });
 }
 
@@ -1896,7 +1914,7 @@ function coSubmit() {
     coShowStep(7);
   }).catch(function(e) {
     btn.disabled = false;
-    showToast('error', t('toast_error_title'), e.detail || t('toast_deal_failed'));
+    showToast('error', t('toast_error_title'), fmtErr(e, t('toast_deal_failed')));
   });
 }
 function coCancel() { showPage('home'); }
@@ -1997,7 +2015,7 @@ function openStartDeal(id) {
   }).catch(function(e) {
     showPage('home');
     var msg = (e && (e.status === 403 || e.status === 404))
-      ? t('deal_not_available') : (e && e.detail) || t('toast_action_failed');
+      ? t('deal_not_available') : fmtErr(e, t('toast_action_failed'));
     showToast('error', t('toast_error_title'), msg);
   });
 }
@@ -2015,7 +2033,7 @@ function openDealFromOrder(orderId) {
     renderDeal();
     showPage('deal');
   }).catch(function(e) {
-    showToast('error', t('toast_error_title'), e.detail || t('toast_deal_failed'));
+    showToast('error', t('toast_error_title'), fmtErr(e, t('toast_deal_failed')));
   });
 }
 
@@ -2233,7 +2251,7 @@ function dealEscrowAction(newStatus) {
     renderDeal();
     loadDeals();
   }).catch(function(e) {
-    showToast('error', t('toast_error_title'), e.detail || t('toast_action_failed'));
+    showToast('error', t('toast_error_title'), fmtErr(e, t('toast_action_failed')));
   });
 }
 
