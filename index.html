@@ -1887,7 +1887,7 @@ function coSubmit() {
   apiFetch('/api/deals/direct', {method:'POST', body:{
     participant_uid: parseInt(coData.participantUid, 10),
     role: coData.role,
-    fiat_currency: coData.currency,
+    currency: coData.currency,
     amount: parseFloat(coData.amount),
     links: coData.links
   }}).then(function(deal) {
@@ -2129,10 +2129,7 @@ function renderDeal() {
 
   // Deal info card
   document.getElementById('deal-info').innerHTML =
-    '<div class="row"><span class="label">'+t('crypto')+'</span><span class="value">'+escapeHtml(d.crypto_currency)+'</span></div>'+
-    '<div class="row"><span class="label">'+t('fiat')+'</span><span class="value">'+escapeHtml(d.fiat_currency)+'</span></div>'+
-    '<div class="row"><span class="label">'+t('price')+'</span><span class="value">'+d.price.toLocaleString()+' '+escapeHtml(d.fiat_currency)+'</span></div>'+
-    '<div class="row"><span class="label">'+t('amount')+'</span><span class="value">'+d.crypto_amount+' '+escapeHtml(d.crypto_currency)+'</span></div>'+
+    '<div class="row"><span class="label">'+t('amount')+'</span><span class="value">'+d.fiat_amount.toLocaleString()+' '+escapeHtml(d.fiat_currency)+'</span></div>'+
     '<div style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px;display:flex;justify-content:space-between;align-items:center">'+
       '<span style="color:var(--t2);font-size:13px">'+t('total')+'</span>'+
       '<span style="font-size:18px;font-weight:700">'+d.fiat_amount.toLocaleString()+' '+escapeHtml(d.fiat_currency)+'</span></div>';
@@ -2436,11 +2433,10 @@ function renderProfileTab() {
     el.innerHTML = deals.map(function(d) {
       return '<div class="order-card" onclick="openDeal('+parseInt(d.id)+')" style="cursor:pointer">'+
         '<div style="display:flex;justify-content:space-between;align-items:center">'+
-          '<div><span style="font-size:14px;font-weight:500">'+escapeHtml(d.crypto_currency)+'/'+escapeHtml(d.fiat_currency)+'</span>'+
+          '<div><span style="font-size:14px;font-weight:500">'+escapeHtml(d.fiat_currency)+'</span>'+
             '<span style="color:var(--t2);font-size:12px;margin-left:8px">#'+parseInt(d.id)+'</span></div>'+
           '<span class="badge badge-'+escapeHtml(d.status)+'">'+t(d.status)+'</span></div>'+
         '<div style="display:flex;justify-content:space-between;margin-top:8px;color:var(--t2);font-size:12px">'+
-          '<span>'+d.crypto_amount+' '+escapeHtml(d.crypto_currency)+'</span>'+
           '<span>'+d.fiat_amount.toLocaleString()+' '+escapeHtml(d.fiat_currency)+'</span></div></div>';
     }).join('');
   }
