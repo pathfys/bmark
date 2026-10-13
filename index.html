@@ -720,6 +720,108 @@ button:active{transform:scale(0.96)}
 .escrow-done-title{font-size:18px;font-weight:700;color:var(--green);margin-bottom:4px}
 .escrow-done-msg{font-size:13px;color:var(--t2)}
 
+/* ===== DEAL STAGE ANIMATIONS (3D) ===== */
+/* shared 3D glossy check badge — a clean round sphere, same material as the coin */
+.check3d{position:relative;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(circle at 34% 28%,#8DF4C6 0%,#17D98C 42%,#08a063 100%);
+  box-shadow:0 16px 28px -8px rgba(10,170,105,.55),
+    inset 0 3px 5px rgba(255,255,255,.75),inset 0 -8px 14px rgba(0,70,42,.5)}
+.check3d svg{position:relative;z-index:2;fill:#fff;filter:drop-shadow(0 2px 3px rgba(0,55,32,.45))}
+.check3d.gold{background:radial-gradient(circle at 34% 28%,#FFEFB2 0%,#F6C320 42%,#C88A05 100%);
+  box-shadow:0 16px 28px -8px rgba(224,149,5,.55),
+    inset 0 3px 5px rgba(255,255,255,.8),inset 0 -8px 14px rgba(120,80,0,.4)}
+.check3d.gold svg{fill:#2a1d00}
+@keyframes check3dPop{from{transform:scale(.3)}to{transform:scale(1)}}
+@keyframes checkFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+
+/* acceptance: bouncing 3D gold check */
+.accept-pending-check{width:74px;height:74px;margin:0 auto 16px;animation:check3dBounce 1.5s ease-in-out infinite}
+.accept-pending-check svg{width:36px;height:36px}
+@keyframes check3dBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-16px)}}
+
+/* transfer row */
+.xfer{display:flex;align-items:center;justify-content:space-between;gap:8px;position:relative;
+  padding:28px 6px 26px;margin-bottom:4px}
+.xfer-node{width:88px;flex-shrink:0;display:flex;align-items:center;justify-content:center;position:relative;
+  perspective:640px;transition:opacity .4s ease,transform .4s ease}
+
+/* 3D cards */
+.xfer-card{width:76px;height:50px;border-radius:11px;position:relative;transform-style:preserve-3d;
+  background:linear-gradient(135deg,#FFDB55 0%,#F0B90B 48%,#CE8A04 100%);
+  box-shadow:0 18px 28px -10px rgba(224,149,5,.65),0 5px 9px rgba(0,0,0,.18),
+    inset 0 2px 0 rgba(255,255,255,.6),inset 0 -7px 11px rgba(130,88,0,.28);
+  transform:rotateY(-20deg) rotateX(9deg);animation:cardFloatL 3.6s ease-in-out infinite}
+.xfer-card::before{content:"";position:absolute;top:11px;left:11px;width:17px;height:13px;border-radius:3px;
+  background:linear-gradient(135deg,#FCEFC2,#B5790A);box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
+.xfer-card::after{content:"";position:absolute;inset:0;border-radius:11px;
+  background:linear-gradient(118deg,transparent 42%,rgba(255,255,255,.5) 50%,transparent 58%)}
+.xfer-card.in{background:linear-gradient(135deg,#474e59 0%,#272c34 50%,#13161b 100%);
+  box-shadow:0 18px 28px -10px rgba(0,0,0,.6),0 5px 9px rgba(0,0,0,.25),
+    inset 0 2px 0 rgba(255,255,255,.17),inset 0 -7px 11px rgba(0,0,0,.3);
+  transform:rotateY(20deg) rotateX(9deg);animation:cardFloatR 3.6s ease-in-out infinite}
+.xfer-card.in::before{background:linear-gradient(135deg,#b7bec9,#555b64)}
+@keyframes cardFloatL{0%,100%{transform:rotateY(-20deg) rotateX(9deg) translateY(0)}50%{transform:rotateY(-13deg) rotateX(6deg) translateY(-8px)}}
+@keyframes cardFloatR{0%,100%{transform:rotateY(20deg) rotateX(9deg) translateY(0)}50%{transform:rotateY(13deg) rotateX(6deg) translateY(-8px)}}
+
+/* 3D people */
+.xfer-person{position:relative;width:58px;height:58px;display:flex;align-items:flex-end;justify-content:center;
+  animation:personBob 3s ease-in-out infinite}
+.xfer-person svg{width:52px;height:52px;filter:drop-shadow(0 7px 6px rgba(0,0,0,.38))}
+.xfer-person::after{content:"";position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);
+  width:42px;height:9px;border-radius:50%;background:radial-gradient(circle,rgba(0,0,0,.4),transparent 70%)}
+@keyframes personBob{0%,100%{transform:perspective(460px) translateY(0) rotateY(-7deg)}
+  50%{transform:perspective(460px) translateY(-7px) rotateY(7deg)}}
+
+/* track + token */
+.xfer-track{position:relative;flex:1;height:50px}
+.xfer-line{position:absolute;top:50%;left:2px;right:2px;transform:translateY(-50%);
+  border-top:2px dashed var(--t2);opacity:.5}
+.xfer-token{position:absolute;top:50%;left:0;transform:translate(-50%,-50%);
+  animation:xferMove 2.1s cubic-bezier(.45,.05,.55,.95) infinite}
+@keyframes xferMove{0%{left:0;opacity:0}14%{opacity:1}86%{opacity:1}100%{left:100%;opacity:0}}
+
+/* 3D coin */
+.xfer-coin{width:34px;height:34px;border-radius:50%;position:relative;
+  background:radial-gradient(circle at 34% 28%,#FFF2BE 0%,#F6C838 40%,#D89406 100%);
+  box-shadow:0 9px 15px -4px rgba(224,149,5,.6),inset 0 2px 3px rgba(255,255,255,.75),
+    inset 0 -5px 9px rgba(120,80,0,.5);
+  display:flex;align-items:center;justify-content:center;
+  font-size:16px;font-weight:800;color:#8a5e00;text-shadow:0 1px 0 rgba(255,255,255,.45);
+  animation:coinWobble 2.4s ease-in-out infinite}
+@keyframes coinWobble{0%,100%{transform:perspective(320px) rotateY(-36deg)}50%{transform:perspective(320px) rotateY(36deg)}}
+
+/* 3D box */
+.xfer-box{width:36px;height:36px;animation:boxTumble 2.8s ease-in-out infinite}
+.xfer-box svg{width:36px;height:36px;display:block;filter:drop-shadow(0 6px 7px rgba(0,0,0,.42))}
+@keyframes boxTumble{0%,100%{transform:perspective(340px) rotateY(-20deg) rotateX(8deg)}
+  50%{transform:perspective(340px) rotateY(20deg) rotateX(-6deg)}}
+
+/* mid-transfer success check */
+.xfer-success{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;opacity:0;pointer-events:none}
+.xfer-success-circle{width:66px;height:66px;transform:scale(.3)}
+.xfer-success-circle svg{width:35px;height:35px}
+.xfer-success-label{font-size:15px;font-weight:700;color:var(--green);opacity:0}
+.xfer.done .xfer-node,.xfer.done .xfer-track{opacity:0;transform:scale(.7)}
+.xfer.done .xfer-token{display:none}
+.xfer.done .xfer-success{opacity:1;transition:opacity .35s .2s}
+.xfer.done .xfer-success-circle{animation:check3dPop .55s .2s cubic-bezier(.3,1.5,.5,1) forwards,checkFloat 3s 1s ease-in-out infinite}
+.xfer.done .xfer-success-label{opacity:1;transition:opacity .3s .5s}
+
+/* completion overlay with count-up */
+.deal-complete-overlay{position:fixed;inset:0;z-index:10001;background:rgba(5,6,8,.92);
+  -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;
+  opacity:0;visibility:hidden;transition:opacity .35s ease}
+.deal-complete-overlay.visible{opacity:1;visibility:visible}
+.dc-check{width:86px;height:86px;margin-bottom:24px;transform:scale(.3);opacity:0}
+.deal-complete-overlay.visible .dc-check{animation:check3dPop .55s .05s cubic-bezier(.3,1.5,.5,1) forwards,dcFade .35s .05s forwards,checkFloat 3.2s .7s ease-in-out infinite}
+.dc-check svg{width:46px;height:46px}
+@keyframes dcFade{to{opacity:1}}
+.dc-amount{font-size:56px;font-weight:800;color:#fff;line-height:1;letter-spacing:-1.5px;
+  text-shadow:0 6px 24px rgba(0,0,0,.5)}
+.dc-currency{font-size:22px;font-weight:700;color:var(--yellow);margin-top:10px;letter-spacing:.5px}
+.dc-congrats{font-size:15px;color:rgba(255,255,255,.78);text-align:center;margin-top:22px;max-width:300px;line-height:1.5}
+
 .wcrypto-card{background:var(--card);border-radius:12px;margin:0 16px 8px;overflow:hidden}
 /* The header alone reacts to the tap; scaling the whole card also moved the
  * input under a long-press, which on iOS made the paste menu drop away. */
@@ -1535,6 +1637,7 @@ var L = {
     'escrow_unknown_msg':'This deal is in a state the app does not handle. Contact support with the deal number.',
     'btn_payment_sent':'Payment Sent','btn_payment_received':'Payment Received',
     'btn_goods_sent':'Goods Sent','btn_confirm_receipt':'Confirm Receipt',
+    'deal_congrats':'Congratulations on successfully completing the order!',
     'btn_cancel':'Cancel Deal',
     'waiting_payment':'Waiting for buyer to send payment...','waiting_verify':'Waiting for seller to verify payment...',
     'waiting_shipment':'Waiting for seller to send goods...','waiting_receipt':'Waiting for buyer to confirm receipt...',
@@ -1623,6 +1726,7 @@ var L = {
     'escrow_unknown_msg':'Сделка в состоянии, которое приложение не обрабатывает. Обратитесь в поддержку с номером сделки.',
     'btn_payment_sent':'Оплата отправлена','btn_payment_received':'Оплата получена',
     'btn_goods_sent':'Товар отправлен','btn_confirm_receipt':'Подтвердить получение',
+    'deal_congrats':'Поздравляем с успешным завершением ордера!',
     'btn_cancel':'Отменить сделку',
     'waiting_payment':'Ожидание оплаты от покупателя...','waiting_verify':'Ожидание подтверждения оплаты продавцом...',
     'waiting_shipment':'Ожидание отправки товара продавцом...','waiting_receipt':'Ожидание подтверждения получения покупателем...',
@@ -2561,6 +2665,7 @@ function renderAcceptanceCard(d, isBuyer) {
 
   return '<div class="accept-card">'+
     '<div class="accept-head">'+
+      '<div class="accept-pending-check check3d gold"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>'+
       '<div class="accept-eyebrow">'+t('awaiting_acceptance')+'</div>'+
       '<div class="accept-amount">'+escapeHtml(String(d.crypto_amount))+' '+escapeHtml(d.crypto_currency)+'</div>'+
       '<div class="accept-for">'+t('accept_for')+' <b>'+escapeHtml(String(d.fiat_amount))+' '+escapeHtml(d.fiat_currency)+'</b></div>'+
@@ -2667,6 +2772,7 @@ function renderDeal() {
         '<div><div class="escrow-detail-title">'+escapeHtml(title)+'</div>'+
         '<div class="escrow-detail-sub">'+escapeHtml(subtitle)+'</div></div></div>'+
       '<div class="escrow-detail-body">'+
+        escrowAnimHtml(d.status)+
         '<div class="escrow-detail-desc">'+desc+'</div>'+
         '<div id="escrow-actions-inner"></div>'+
       '</div></div>';
@@ -2683,7 +2789,7 @@ function renderDeal() {
       }
     } else if (d.status === 'paid') {
       if (!isBuyer) {
-        actHtml = '<button class="escrow-action-btn primary" onclick="dealEscrowAction(\'payment_confirmed\')">'+t('btn_payment_received')+'</button>';
+        actHtml = '<button class="escrow-action-btn primary" onclick="escrowConfirmReceived()">'+t('btn_payment_received')+'</button>';
       } else {
         actHtml = '<div class="escrow-waiting"><div class="escrow-waiting-dot"></div><div class="escrow-waiting-text">'+t('waiting_verify')+'</div></div>';
       }
@@ -2695,7 +2801,7 @@ function renderDeal() {
       }
     } else if (d.status === 'goods_sent') {
       if (isBuyer) {
-        actHtml = '<button class="escrow-action-btn primary" onclick="dealEscrowAction(\'completed\')">'+t('btn_confirm_receipt')+'</button>';
+        actHtml = '<button class="escrow-action-btn primary" onclick="escrowCompleteCelebrate()">'+t('btn_confirm_receipt')+'</button>';
       } else {
         actHtml = '<div class="escrow-waiting"><div class="escrow-waiting-dot"></div><div class="escrow-waiting-text">'+t('waiting_receipt')+'</div></div>';
       }
@@ -2737,6 +2843,92 @@ function dealCancel() {
     currentDeal.status = 'cancelled';
     renderDeal();
   }).catch(function(e) { showToast('error', 'Error', e.detail || 'Cannot cancel'); });
+}
+
+// ===== DEAL STAGE ANIMATIONS =====
+var xferCheckSvg = '<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+var xferPersonSvg = '<svg viewBox="0 0 24 24"><defs><linearGradient id="pgrad3d" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3c434e"/><stop offset="1" stop-color="#101318"/></linearGradient></defs><path fill="url(#pgrad3d)" d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-5 0-9 2.7-9 6v2h18v-2c0-3.3-4-6-9-6z"/><path fill="rgba(255,255,255,.12)" d="M10.2 3.2a5 5 0 0 0-1.4 6.3 5 5 0 0 1 1.4-6.3z"/></svg>';
+var xferBoxSvg = '<svg viewBox="0 0 24 24">'+
+  '<path d="M3 6.6 12 11 12 22 3 17.4z" fill="#E6A008"/>'+
+  '<path d="M12 11 21 6.6 21 17.4 12 22z" fill="#B06E04"/>'+
+  '<path d="M12 2 21 6.6 12 11 3 6.6z" fill="#FDE08A"/>'+
+  '<path d="M3 6.6 12 11 21 6.6M12 11v11" stroke="rgba(80,52,0,.35)" stroke-width=".5" fill="none"/>'+
+  '<path d="M12 2 3 6.6" stroke="rgba(255,255,255,.4)" stroke-width=".5" fill="none"/></svg>';
+
+// Two-node transfer: money between cards, or goods between people
+function escrowAnimHtml(status) {
+  var success = '<div class="xfer-success"><div class="xfer-success-circle check3d">'+xferCheckSvg+'</div><div class="xfer-success-label" id="xfer-success-label"></div></div>';
+  if (status === 'awaiting_payment' || status === 'paid') {
+    return '<div class="xfer" id="xfer-anim">'+
+      '<div class="xfer-node"><div class="xfer-card"></div></div>'+
+      '<div class="xfer-track"><div class="xfer-line"></div><div class="xfer-token"><div class="xfer-coin">$</div></div></div>'+
+      '<div class="xfer-node"><div class="xfer-card in"></div></div>'+
+      success+'</div>';
+  }
+  if (status === 'payment_confirmed') {
+    return '<div class="xfer" id="xfer-anim">'+
+      '<div class="xfer-node"><div class="xfer-person">'+xferPersonSvg+'</div></div>'+
+      '<div class="xfer-track"><div class="xfer-line"></div><div class="xfer-token"><div class="xfer-box">'+xferBoxSvg+'</div></div></div>'+
+      '<div class="xfer-node"><div class="xfer-person">'+xferPersonSvg+'</div></div>'+
+      success+'</div>';
+  }
+  return '';
+}
+
+// "Оплата получена": cards fade out, a checkmark pops, then advance the status
+function escrowConfirmReceived() {
+  var x = document.getElementById('xfer-anim');
+  if (x) x.classList.add('done');
+  var lbl = document.getElementById('xfer-success-label');
+  if (lbl) lbl.textContent = t('btn_payment_received');
+  // Fade the text + button so only the success check + caption remain during the beat
+  ['escrow-actions-inner'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) { el.style.transition = 'opacity .3s ease'; el.style.opacity = '0'; }
+  });
+  var desc = x && x.parentNode ? x.parentNode.querySelector('.escrow-detail-desc') : null;
+  if (desc) { desc.style.transition = 'opacity .3s ease'; desc.style.opacity = '0'; }
+  setTimeout(function() { dealEscrowAction('payment_confirmed'); }, 1500);
+}
+
+// "Подтвердить получение": darken the screen and count up to the deal amount
+function escrowCompleteCelebrate() {
+  if (!currentDeal) return;
+  showDealComplete(currentDeal.fiat_amount, currentDeal.fiat_currency);
+  dealEscrowAction('completed');
+}
+
+function showDealComplete(amount, currency) {
+  var ov = document.getElementById('deal-complete-overlay');
+  if (!ov) return;
+  document.getElementById('dc-currency').textContent = currency || '';
+  document.getElementById('dc-congrats').textContent = t('deal_congrats');
+  document.getElementById('dc-amount').textContent = '0';
+  ov.classList.add('visible');
+  countUpTo(document.getElementById('dc-amount'), amount || 0, 1500);
+  clearTimeout(window.__dcTimer);
+  window.__dcTimer = setTimeout(closeDealComplete, 4500);
+}
+
+function closeDealComplete() {
+  var ov = document.getElementById('deal-complete-overlay');
+  if (ov) ov.classList.remove('visible');
+}
+
+function countUpTo(el, target, dur) {
+  if (!el) return;
+  target = Number(target) || 0;
+  var decimals = (target % 1 !== 0) ? 2 : 0;
+  var start = (window.performance && performance.now) ? performance.now() : Date.now();
+  function fmt(v) { return v.toLocaleString('en-US', {minimumFractionDigits:decimals, maximumFractionDigits:decimals}); }
+  function frame(now) {
+    var p = Math.min(1, (now - start) / dur);
+    var eased = 1 - Math.pow(1 - p, 3);
+    el.textContent = fmt(target * eased);
+    if (p < 1) requestAnimationFrame(frame);
+    else el.textContent = fmt(target);
+  }
+  requestAnimationFrame(frame);
 }
 
 function renderChat() {
@@ -3010,6 +3202,14 @@ window.addEventListener('DOMContentLoaded', function() {
 </div>
 
 <!-- CARD COLOR SHEET -->
+<!-- DEAL COMPLETE CELEBRATION -->
+<div class="deal-complete-overlay" id="deal-complete-overlay" onclick="closeDealComplete()">
+  <div class="dc-check check3d"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
+  <div class="dc-amount" id="dc-amount">0</div>
+  <div class="dc-currency" id="dc-currency"></div>
+  <div class="dc-congrats" id="dc-congrats"></div>
+</div>
+
 <div class="skin-sheet-overlay" id="skin-sheet-overlay" onclick="closeSkinSheet()">
   <div class="skin-sheet" onclick="event.stopPropagation()">
     <div class="skin-sheet-handle"></div>
