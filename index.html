@@ -514,14 +514,46 @@ button:active{transform:scale(0.96)}
   75%{transform:translateY(-10px) rotateY(-15deg) rotateX(0deg)}
 }
 
+/* ===== WALLET 3D COIN CAROUSEL (coverflow) ===== */
+.wcoin-stage{width:100%;overflow:hidden;margin-bottom:2px}
+.wcoin-track{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;padding:24px calc(50% - 58px) 12px}
+.wcoin-track::-webkit-scrollbar{display:none}
+.wcoin{flex:0 0 116px;height:128px;scroll-snap-align:center;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;will-change:transform,opacity}
+.wcoin-disc{width:116px;height:116px;border-radius:50%;position:relative;overflow:hidden;
+  background:#1b1f26;box-shadow:0 20px 38px -12px rgba(0,0,0,.45),inset 0 0 0 3px rgba(255,255,255,.18);
+  animation:wcoinFloat 4s ease-in-out infinite}
+.wcoin-fb{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:42px;font-weight:800;color:#F0B90B}
+.wcoin-disc img{position:relative;z-index:1;width:100%;height:100%;border-radius:50%;object-fit:cover}
+.wcoin-disc::after{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;z-index:2;
+  background:radial-gradient(circle at 32% 24%,rgba(255,255,255,.55),rgba(255,255,255,0) 42%),linear-gradient(125deg,transparent 44%,rgba(255,255,255,.33) 50%,transparent 56%)}
+@keyframes wcoinFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.wcoin-dots{display:flex;justify-content:center;gap:6px;margin-top:4px}
+.wcoin-dot{width:6px;height:6px;border-radius:50%;background:var(--border);transition:all .25s}
+.wcoin-dot.active{width:16px;border-radius:3px;background:var(--yellow)}
+.wcoin-meta{text-align:center;margin-top:12px;min-height:46px}
+.wcoin-name{font-size:20px;font-weight:800;color:var(--t1);letter-spacing:.3px}
+.wcoin-bal{font-size:14px;color:var(--t2);font-weight:600;margin-top:3px}
+
 .bind-wallet-btn{display:flex;align-items:center;justify-content:center;gap:10px;
   margin:0 auto 20px;padding:14px 24px;background:var(--yellow);color:var(--bg);border-radius:12px;
   font-size:15px;font-weight:700;box-shadow:0 4px 16px rgba(240,185,11,.25);
   width:auto;min-width:0}
 .bind-wallet-btn:hover{background:var(--yellow-h)}
 .bind-wallet-btn img{width:22px;height:22px;border-radius:50%}
-.wallet-sections{display:none}
+.wallet-sections{display:block}
 .wallet-sections.visible{display:block}
+/* wallet quick actions */
+.wq-actions{display:flex;gap:10px;margin:2px 16px 18px}
+.wq-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 4px 12px;
+  background:var(--card);border:1px solid var(--border);border-radius:14px;color:var(--t1);
+  font-size:12px;font-weight:600;transition:transform .1s ease}
+.wq-btn:active{transform:scale(.95)}
+.wq-ic{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,#FCD535,#E0A008);color:#1a1300;
+  box-shadow:0 7px 16px -5px rgba(224,149,5,.55),inset 0 1px 0 rgba(255,255,255,.5)}
+.wq-ic svg{width:21px;height:21px}
 
 /* ═══ CREATE ORDER WIZARD ═══ */
 .co-steps-ind{display:flex;gap:6px;margin-left:auto}
@@ -1067,19 +1099,19 @@ button:active{transform:scale(0.96)}
   <div class="page-header"><h1 id="lbl-wallet-title">Wallet</h1></div>
 
   <div class="wallet-hero">
-    <div class="coin-3d-wrap" id="coin3d-wrap">
-      <div class="coin-3d" id="coin3d">
-        <img src="https://raw.githubusercontent.com/pathfys/bmark/main/assets/bnb-bnb-logo.png" alt="BNB">
-      </div>
+    <div class="wcoin-stage">
+      <div class="wcoin-track" id="wcoin-track"></div>
     </div>
-    <div style="font-size:22px;font-weight:700;color:var(--t1)" id="wallet-total">$0.00</div>
-    <div style="color:var(--t2);font-size:13px;margin-top:4px" id="wallet-total-lbl">Total Balance</div>
+    <div class="wcoin-dots" id="wcoin-dots"></div>
+    <div class="wcoin-meta">
+      <div class="wcoin-name" id="wcoin-name"></div>
+      <div class="wcoin-bal" id="wcoin-bal"></div>
+    </div>
+    <div style="font-size:27px;font-weight:800;color:var(--t1);margin-top:12px" id="wallet-total">$0.00</div>
+    <div style="color:var(--t2);font-size:13px;margin-top:2px" id="wallet-total-lbl">Total Balance</div>
   </div>
 
-  <button class="bind-wallet-btn" id="bind-wallet-btn" onclick="toggleWalletSections()">
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-    <span id="bind-wallet-lbl">Bind Wallet</span>
-  </button>
+  <div class="wq-actions" id="wq-actions"></div>
 
   <div class="wallet-sections" id="wallet-sections">
     <div class="section-title" id="lbl-crypto-cur">Cryptocurrencies</div>
@@ -1575,7 +1607,7 @@ var L = {
     'deal_not_available':'This deal is no longer available, or you are not part of it.',
     'all_crypto':'All Crypto','all_fiat':'All Fiat',
     'markets':'Markets','create_deal':'Create Deal',
-    'wallet':'Wallet','bind_wallet':'Bind Wallet',
+    'wallet':'Wallet','bind_wallet':'Bind Wallet','wq_swap':'Swap','wq_receive':'Receive','wq_soon':'Coming soon',
     'crypto_currencies':'Cryptocurrencies','fiat_currencies':'Fiat Currencies',
     'save':'Save','edit':'Edit',
     'valid_address':'Valid address','invalid_address':'Invalid address',
@@ -1665,7 +1697,7 @@ var L = {
     'crypto_currencies':'Криптовалюты','fiat_currencies':'Фиатные валюты',
     'all_crypto':'Все крипто','all_fiat':'Все фиат',
     'markets':'Рынки','create_deal':'Создать сделку',
-    'wallet':'Кошелёк','bind_wallet':'Привязать кошелёк',
+    'wallet':'Кошелёк','bind_wallet':'Привязать кошелёк','wq_swap':'Обмен','wq_receive':'Получить','wq_soon':'Скоро будет доступно',
     'save':'Сохранить','edit':'Изменить',
     'valid_address':'Адрес верный','invalid_address':'Неверный адрес',
     'enter_address':'Введите адрес кошелька',
@@ -2123,9 +2155,11 @@ function refreshCryptoCard(sym) {
 function renderWallet() {
   document.getElementById('lbl-wallet-title').textContent = t('wallet');
   document.getElementById('wallet-total-lbl').textContent = t('co_total_bal');
-  document.getElementById('bind-wallet-lbl').textContent = t('bind_wallet');
+  renderWalletActions();
   document.getElementById('lbl-crypto-cur').textContent = t('crypto_currencies');
   document.getElementById('lbl-fiat-cur').textContent = t('fiat_currencies');
+
+  renderWalletHero();
 
   document.getElementById('wallet-crypto-list').innerHTML = walletCryptos.map(buildCryptoCard).join('');
 
@@ -2193,20 +2227,112 @@ function saveWallet(sym) {
   });
 }
 
+// Wallet hero: swipeable 3D coin coverflow carousel
+var wcoinActiveIdx = -1;
+
 function initCoin3D() {
-  var wrap = document.getElementById('coin3d-wrap');
-  var coin = document.getElementById('coin3d');
-  if (!wrap || !coin) return;
-  var isDragging = false;
-  wrap.addEventListener('pointerdown', function(e) { isDragging = true; coin.classList.add('interacting'); });
-  window.addEventListener('pointerup', function() { isDragging = false; coin.classList.remove('interacting'); coin.style.transform = ''; });
-  wrap.addEventListener('pointermove', function(e) {
-    if (!isDragging) return;
-    var rect = wrap.getBoundingClientRect();
-    var x = ((e.clientX - rect.left) / rect.width - 0.5) * 40;
-    var y = ((e.clientY - rect.top) / rect.height - 0.5) * -40;
-    coin.style.transform = 'rotateY('+x+'deg) rotateX('+y+'deg)';
+  var track = document.getElementById('wcoin-track');
+  if (!track) return;
+  var ticking = false;
+  track.addEventListener('scroll', function() {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function() { updateWcoinFlow(); ticking = false; });
   });
+}
+
+function renderWalletHero() {
+  var track = document.getElementById('wcoin-track');
+  if (!track) return;
+  track.innerHTML = walletCryptos.map(function(c, i) {
+    var fb = cryptoFallback[c.sym] || c.sym[0];
+    return '<div class="wcoin" data-idx="'+i+'"><div class="wcoin-disc" style="animation-delay:'+(i*0.3).toFixed(1)+'s">'+
+      '<span class="wcoin-fb">'+fb+'</span>'+
+      '<img src="'+c.icon+'" alt="'+c.sym+'" onerror="this.style.display=\'none\'">'+
+      '</div></div>';
+  }).join('');
+  var dotsEl = document.getElementById('wcoin-dots');
+  if (dotsEl) dotsEl.innerHTML = walletCryptos.map(function(_, i) {
+    return '<span class="wcoin-dot'+(i===0?' active':'')+'"></span>';
+  }).join('');
+  track.querySelectorAll('.wcoin').forEach(function(el) {
+    el.addEventListener('click', function() { scrollWcoinTo(parseInt(el.getAttribute('data-idx'), 10)); });
+  });
+  wcoinActiveIdx = -1;
+  requestAnimationFrame(function() { track.scrollLeft = 0; updateWcoinFlow(); });
+}
+
+// Coverflow: scale/rotate each coin by its distance from the viewport centre
+function updateWcoinFlow() {
+  var track = document.getElementById('wcoin-track');
+  if (!track) return;
+  var coins = track.querySelectorAll('.wcoin');
+  if (!coins.length) return;
+  var center = track.scrollLeft + track.clientWidth / 2;
+  var nearest = 0, nd = Infinity;
+  for (var i = 0; i < coins.length; i++) {
+    var c = coins[i];
+    var cc = c.offsetLeft + c.offsetWidth / 2;
+    var d = cc - center;
+    var ad = Math.abs(d);
+    var t = Math.max(-1.8, Math.min(1.8, d / c.offsetWidth));
+    var scale = Math.max(0.56, 1 - Math.abs(t) * 0.26);
+    var rotY = -t * 32;
+    var tz = -Math.abs(t) * 72;
+    var op = Math.max(0.32, 1 - Math.abs(t) * 0.46);
+    c.style.transform = 'perspective(760px) translateZ('+tz.toFixed(1)+'px) rotateY('+rotY.toFixed(1)+'deg) scale('+scale.toFixed(3)+')';
+    c.style.opacity = op.toFixed(2);
+    c.style.zIndex = String(500 - Math.round(ad));
+    if (ad < nd) { nd = ad; nearest = i; }
+  }
+  if (nearest !== wcoinActiveIdx) setActiveWcoin(nearest);
+}
+
+function setActiveWcoin(idx) {
+  wcoinActiveIdx = idx;
+  var c = walletCryptos[idx];
+  if (!c) return;
+  var nameEl = document.getElementById('wcoin-name');
+  if (nameEl) nameEl.textContent = c.name;
+  var balEl = document.getElementById('wcoin-bal');
+  if (balEl) {
+    var amt = 0;
+    for (var i = 0; i < balances.length; i++) { if (balances[i].currency === c.sym) { amt = balances[i].balance; break; } }
+    balEl.textContent = amt.toLocaleString('en-US', {maximumFractionDigits: 8}) + ' ' + c.sym;
+  }
+  var dots = document.querySelectorAll('.wcoin-dot');
+  for (var k = 0; k < dots.length; k++) dots[k].className = 'wcoin-dot' + (k === idx ? ' active' : '');
+}
+
+function scrollWcoinTo(idx) {
+  var track = document.getElementById('wcoin-track');
+  var coins = track && track.querySelectorAll('.wcoin');
+  if (!coins || !coins[idx]) return;
+  var c = coins[idx];
+  track.scrollTo({ left: c.offsetLeft + c.offsetWidth / 2 - track.clientWidth / 2, behavior: 'smooth' });
+}
+
+// Wallet quick actions row
+function renderWalletActions() {
+  var el = document.getElementById('wq-actions');
+  if (!el) return;
+  var acts = [
+    { fn: "openDWModal('deposit')",  lbl: t('deposit'),
+      ic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="6,13 12,19 18,13"/></svg>' },
+    { fn: "openDWModal('withdraw')", lbl: t('withdraw'),
+      ic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="6,11 12,5 18,11"/></svg>' },
+    { fn: "walletSwapSoon()",        lbl: t('wq_swap'),
+      ic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="17,2 21,6 17,10"/><path d="M21 6H7a4 4 0 0 0-4 4"/><polyline points="7,22 3,18 7,14"/><path d="M3 18h14a4 4 0 0 0 4-4"/></svg>' },
+    { fn: "openDWModal('deposit')",  lbl: t('wq_receive'),
+      ic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="18" y1="14" x2="18" y2="18"/><line x1="21" y1="17" x2="21" y2="21"/></svg>' }
+  ];
+  el.innerHTML = acts.map(function(a) {
+    return '<button class="wq-btn" onclick="'+a.fn+'"><span class="wq-ic">'+a.ic+'</span><span>'+a.lbl+'</span></button>';
+  }).join('');
+}
+
+function walletSwapSoon() {
+  showToast('success', t('wq_swap'), t('wq_soon'));
 }
 
 // CREATE ORDER WIZARD
