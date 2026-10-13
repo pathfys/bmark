@@ -889,13 +889,23 @@ button:active{transform:scale(0.96)}
 .wcrypto-saved .addr{flex:1;overflow:hidden;text-overflow:ellipsis}
 .wcrypto-saved button{background:none;color:var(--yellow);font-size:11px;font-weight:600;padding:2px 6px}
 
-.wfiat-card{background:var(--card);border-radius:12px;padding:14px 16px;margin:0 16px 8px;
-  display:flex;align-items:center;gap:12px}
+.wfiat-card{background:var(--card);border-radius:12px;margin:0 16px 8px;overflow:hidden}
+.wfiat-header{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;
+  transition:transform .1s;-webkit-tap-highlight-color:transparent}
+.wfiat-header:active{transform:scale(0.98)}
 .wfiat-flag{font-size:24px;width:36px;text-align:center;flex-shrink:0}
-.wfiat-info{flex:1}
+.wfiat-info{flex:1;min-width:0}
 .wfiat-name{font-size:14px;font-weight:600;color:var(--t1)}
 .wfiat-sym{font-size:12px;color:var(--t2)}
 .wfiat-bal{font-size:14px;font-weight:600;color:var(--t1)}
+.wfiat-right{display:flex;align-items:center;gap:7px}
+.wfiat-mask{font-size:12px;color:var(--t2);font-family:'Inter',monospace}
+.brand-badge{display:inline-block;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:800;
+  color:#fff;letter-spacing:.3px;white-space:nowrap;vertical-align:middle;line-height:1.3}
+.fcard-note{font-size:11px;color:var(--t2);margin-bottom:8px;line-height:1.45}
+.fcard-detect{min-height:20px;margin-top:8px;display:flex;align-items:center;gap:8px}
+.fcard-ok{color:var(--green);font-weight:800}
+.fcard-warn{font-size:11px;color:#fb923c}
 
 /* ═══ TOAST NOTIFICATION ═══ */
 .conn-banner{position:fixed;top:0;left:0;right:0;z-index:10000;
@@ -1413,6 +1423,9 @@ var userLoaded = false;
 
 var savedWallets = {};
 try { savedWallets = JSON.parse(localStorage.getItem('p2p_wallets')||'{}'); } catch(e){}
+var expandedFiat = {};
+var fiatCards = {};
+try { fiatCards = JSON.parse(localStorage.getItem('p2p_fiat_cards')||'{}'); } catch(e){}
 
 // Where the API lives. Resolution order:
 //   1. <meta name="api-base" content="https://..."> — tunnel.sh rewrites this
@@ -1608,6 +1621,7 @@ var L = {
     'all_crypto':'All Crypto','all_fiat':'All Fiat',
     'markets':'Markets','create_deal':'Create Deal',
     'wallet':'Wallet','bind_wallet':'Bind Wallet','wq_swap':'Swap','wq_receive':'Receive','wq_soon':'Coming soon',
+    'fcard_for':'For','fcard_invalid':'Invalid card number','fcard_unknown':'Could not detect card type','fcard_not_supported':'{brand} is not supported for {country}.','fcard_available':'Available','fcard_not_country':'not typical for this country',
     'crypto_currencies':'Cryptocurrencies','fiat_currencies':'Fiat Currencies',
     'save':'Save','edit':'Edit',
     'valid_address':'Valid address','invalid_address':'Invalid address',
@@ -1698,6 +1712,7 @@ var L = {
     'all_crypto':'Все крипто','all_fiat':'Все фиат',
     'markets':'Рынки','create_deal':'Создать сделку',
     'wallet':'Кошелёк','bind_wallet':'Привязать кошелёк','wq_swap':'Обмен','wq_receive':'Получить','wq_soon':'Скоро будет доступно',
+    'fcard_for':'Для','fcard_invalid':'Неверный номер карты','fcard_unknown':'Не удалось определить карту','fcard_not_supported':'{brand} не поддерживается для {country}.','fcard_available':'Доступно','fcard_not_country':'не для этой страны',
     'save':'Сохранить','edit':'Изменить',
     'valid_address':'Адрес верный','invalid_address':'Неверный адрес',
     'enter_address':'Введите адрес кошелька',
@@ -1806,15 +1821,157 @@ var walletCryptos = [
 ];
 
 var walletFiats = [
-  {sym:'USD',name:'US Dollar',flag:'🇺🇸'},
-  {sym:'EUR',name:'Euro',flag:'🇪🇺'},
-  {sym:'RUB',name:'Russian Ruble',flag:'🇷🇺'},
-  {sym:'UAH',name:'Ukrainian Hryvnia',flag:'🇺🇦'},
-  {sym:'TRY',name:'Turkish Lira',flag:'🇹🇷'},
-  {sym:'CNY',name:'Chinese Yuan',flag:'🇨🇳'},
-  {sym:'GBP',name:'British Pound',flag:'🇬🇧'},
-  {sym:'MDL',name:'Moldovan Leu',flag:'🇲🇩'},
+  {sym:'USD',name:'US Dollar',flag:'🇺🇸',country:{ru:'США',en:'the US'},brands:['visa','mastercard','amex','discover']},
+  {sym:'EUR',name:'Euro',flag:'🇪🇺',country:{ru:'Еврозоны',en:'the Eurozone'},brands:['visa','mastercard','maestro']},
+  {sym:'RUB',name:'Russian Ruble',flag:'🇷🇺',country:{ru:'России',en:'Russia'},brands:['mir','visa','mastercard']},
+  {sym:'UAH',name:'Ukrainian Hryvnia',flag:'🇺🇦',country:{ru:'Украины',en:'Ukraine'},brands:['visa','mastercard']},
+  {sym:'TRY',name:'Turkish Lira',flag:'🇹🇷',country:{ru:'Турции',en:'Turkey'},brands:['troy','visa','mastercard']},
+  {sym:'CNY',name:'Chinese Yuan',flag:'🇨🇳',country:{ru:'Китая',en:'China'},brands:['unionpay']},
+  {sym:'GBP',name:'British Pound',flag:'🇬🇧',country:{ru:'Великобритании',en:'the UK'},brands:['visa','mastercard','amex']},
+  {sym:'MDL',name:'Moldovan Leu',flag:'🇲🇩',country:{ru:'Молдовы',en:'Moldova'},brands:['visa','mastercard']},
 ];
+
+// ===== FIAT CARD BINDING (country-aware) =====
+var cardBrands = {
+  visa:      { name: 'Visa',             color: '#1A1F71' },
+  mastercard:{ name: 'Mastercard',       color: '#C02A2A' },
+  amex:      { name: 'American Express',  color: '#2E77BC' },
+  mir:       { name: 'МИР',              color: '#0F754E' },
+  unionpay:  { name: 'UnionPay',         color: '#C8102E' },
+  jcb:       { name: 'JCB',              color: '#0E4C96' },
+  troy:      { name: 'Troy',             color: '#00A4E0' },
+  discover:  { name: 'Discover',         color: '#E06A16' },
+  maestro:   { name: 'Maestro',          color: '#0078A9' }
+};
+
+function detectCardBrand(num) {
+  num = String(num).replace(/\D/g, '');
+  if (/^4/.test(num)) return 'visa';
+  if (/^(5[1-5]|222[1-9]|22[3-9]\d|2[3-6]\d\d|27[01]\d|2720)/.test(num)) return 'mastercard';
+  if (/^3[47]/.test(num)) return 'amex';
+  if (/^220[0-4]/.test(num)) return 'mir';
+  if (/^9792/.test(num)) return 'troy';
+  if (/^(62|81)/.test(num)) return 'unionpay';
+  if (/^35(2[89]|[3-8]\d)/.test(num)) return 'jcb';
+  if (/^(6011|64[4-9]|65)/.test(num)) return 'discover';
+  if (/^(50|5[6-9]|6)/.test(num)) return 'maestro';
+  return null;
+}
+
+function luhnValid(num) {
+  num = String(num).replace(/\D/g, '');
+  if (num.length < 13 || num.length > 19) return false;
+  var sum = 0, dbl = false;
+  for (var i = num.length - 1; i >= 0; i--) {
+    var d = parseInt(num.charAt(i), 10);
+    if (dbl) { d *= 2; if (d > 9) d -= 9; }
+    sum += d; dbl = !dbl;
+  }
+  return sum % 10 === 0;
+}
+
+function brandBadge(brand) {
+  var b = cardBrands[brand];
+  return b ? '<span class="brand-badge" style="background:'+b.color+'">'+escapeHtml(b.name)+'</span>' : '';
+}
+function brandName(brand) { return cardBrands[brand] ? cardBrands[brand].name : ''; }
+function acceptedBrandsText(f) {
+  return f.brands.map(function(id){ return cardBrands[id] ? cardBrands[id].name : id; }).join(', ');
+}
+function fiatCountry(f) { return (f.country && (f.country[locale] || f.country.en)) || ''; }
+function findFiat(sym) { for (var i=0;i<walletFiats.length;i++) if (walletFiats[i].sym===sym) return walletFiats[i]; return null; }
+
+function buildFiatCard(f) {
+  var saved = fiatCards[f.sym];
+  var open = expandedFiat[f.sym] ? ' open' : '';
+  var right = saved
+    ? '<div class="wfiat-right">'+brandBadge(saved.brand)+'<span class="wfiat-mask">'+escapeHtml(saved.mask)+'</span></div>'
+    : '<div class="wfiat-bal">0.00 '+f.sym+'</div>';
+  var body;
+  if (saved) {
+    body = '<div class="wcrypto-saved"><span class="addr">'+brandBadge(saved.brand)+'&nbsp;&nbsp;'+escapeHtml(saved.mask)+'</span>'+
+      '<button type="button" onclick="editFiatCard(\''+f.sym+'\')">'+t('edit')+'</button></div>';
+  } else {
+    body = '<div class="fcard-note">'+t('fcard_for')+' '+escapeHtml(fiatCountry(f))+' · '+escapeHtml(acceptedBrandsText(f))+'</div>'+
+      '<div class="wcrypto-input-row">'+
+        '<input type="text" id="fcinp-'+f.sym+'" placeholder="0000 0000 0000 0000" inputmode="numeric" '+
+          'autocomplete="off" autocorrect="off" spellcheck="false" maxlength="23" '+
+          'oninput="onFiatCardInput(\''+f.sym+'\')" style="touch-action:manipulation">'+
+        '<button type="button" onclick="saveFiatCard(\''+f.sym+'\')">'+t('save')+'</button></div>'+
+      '<div class="fcard-detect" id="fcdetect-'+f.sym+'"></div>'+
+      '<div class="wcrypto-status" id="fcstatus-'+f.sym+'"></div>';
+  }
+  return '<div class="wfiat-card" id="fcard-'+f.sym+'"><div class="wfiat-header" onclick="toggleFiatExpand(\''+f.sym+'\')">'+
+    '<div class="wfiat-flag">'+f.flag+'</div>'+
+    '<div class="wfiat-info"><div class="wfiat-name">'+f.name+'</div><div class="wfiat-sym">'+f.sym+'</div></div>'+
+    right+
+    '<svg class="wcrypto-chevron'+open+'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"/></svg>'+
+    '</div><div class="wcrypto-expand'+open+'" onclick="event.stopPropagation()">'+body+'</div></div>';
+}
+
+function refreshFiatCard(sym) {
+  var card = document.getElementById('fcard-'+sym);
+  var f = findFiat(sym);
+  if (!card || !f) return;
+  var tmp = document.createElement('div');
+  tmp.innerHTML = buildFiatCard(f);
+  card.parentNode.replaceChild(tmp.firstChild, card);
+}
+
+function toggleFiatExpand(sym) {
+  expandedFiat[sym] = !expandedFiat[sym];
+  var card = document.getElementById('fcard-'+sym);
+  if (!card) return;
+  card.querySelector('.wcrypto-expand').classList.toggle('open', expandedFiat[sym]);
+  card.querySelector('.wcrypto-chevron').classList.toggle('open', expandedFiat[sym]);
+}
+
+function onFiatCardInput(sym) {
+  var inp = document.getElementById('fcinp-'+sym);
+  if (!inp) return;
+  var raw = inp.value.replace(/\D/g, '').slice(0, 19);
+  inp.value = raw.replace(/(.{4})/g, '$1 ').trim();
+  inp.className = '';
+  var st = document.getElementById('fcstatus-'+sym);
+  if (st) { st.className = 'wcrypto-status'; st.textContent = ''; }
+  var det = document.getElementById('fcdetect-'+sym);
+  if (!det) return;
+  var brand = detectCardBrand(raw), f = findFiat(sym);
+  if (raw.length >= 4 && brand) {
+    var ok = f.brands.indexOf(brand) !== -1;
+    det.innerHTML = brandBadge(brand) + (ok ? '<span class="fcard-ok">✓</span>' : '<span class="fcard-warn">'+t('fcard_not_country')+'</span>');
+  } else {
+    det.innerHTML = '';
+  }
+}
+
+function saveFiatCard(sym) {
+  var inp = document.getElementById('fcinp-'+sym);
+  var st = document.getElementById('fcstatus-'+sym);
+  if (!inp) return;
+  var raw = inp.value.replace(/\D/g, '');
+  var f = findFiat(sym);
+  if (!raw) return;
+  if (!luhnValid(raw)) { st.className = 'wcrypto-status err'; st.textContent = t('fcard_invalid'); inp.className = 'invalid'; return; }
+  var brand = detectCardBrand(raw);
+  if (!brand) { st.className = 'wcrypto-status err'; st.textContent = t('fcard_unknown'); inp.className = 'invalid'; return; }
+  if (f.brands.indexOf(brand) === -1) {
+    st.className = 'wcrypto-status err';
+    st.textContent = t('fcard_not_supported', {brand: brandName(brand), country: fiatCountry(f)}) + ' ' + t('fcard_available') + ': ' + acceptedBrandsText(f);
+    inp.className = 'invalid';
+    return;
+  }
+  fiatCards[sym] = { brand: brand, mask: '•••• ' + raw.slice(-4) };
+  try { localStorage.setItem('p2p_fiat_cards', JSON.stringify(fiatCards)); } catch(e){}
+  refreshFiatCard(sym);
+}
+
+function editFiatCard(sym) {
+  delete fiatCards[sym];
+  try { localStorage.setItem('p2p_fiat_cards', JSON.stringify(fiatCards)); } catch(e){}
+  expandedFiat[sym] = true;
+  refreshFiatCard(sym);
+}
 
 // NAVIGATION
 function showPage(name) {
@@ -2163,11 +2320,7 @@ function renderWallet() {
 
   document.getElementById('wallet-crypto-list').innerHTML = walletCryptos.map(buildCryptoCard).join('');
 
-  document.getElementById('wallet-fiat-list').innerHTML = walletFiats.map(function(f) {
-    return '<div class="wfiat-card"><div class="wfiat-flag">'+f.flag+'</div>'+
-      '<div class="wfiat-info"><div class="wfiat-name">'+f.name+'</div><div class="wfiat-sym">'+f.sym+'</div></div>'+
-      '<div class="wfiat-bal">0.00 '+f.sym+'</div></div>';
-  }).join('');
+  document.getElementById('wallet-fiat-list').innerHTML = walletFiats.map(buildFiatCard).join('');
 }
 
 function toggleWalletSections() {
