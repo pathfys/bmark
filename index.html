@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' https://telegram.org https://fonts.googleapis.com https://fonts.gstatic.com https://api.coingecko.com https://*.trycloudflare.com; connect-src 'self' https://api.coingecko.com https://*.trycloudflare.com; img-src 'self' data: blob: https://raw.githubusercontent.com; font-src https://fonts.gstatic.com">
 <title>Exchange</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -53,8 +53,163 @@ button:active{transform:scale(0.96)}
 .nav-btn:not(.active) svg{stroke:var(--t2)}
 .nav-btn:not(.active) span{color:var(--t2)}
 
-.wallet-card{margin:0 16px;border-radius:16px;padding:20px;
-  background:linear-gradient(to bottom,var(--card),var(--bg2))}
+/* ===== FLIP WALLET CARD ===== */
+.wallet-card{margin:0 16px;border-radius:18px;background:none;padding:0;
+  perspective:1600px;-webkit-perspective:1600px;
+  /* default skin: Gold */
+  --cf-hi:radial-gradient(135% 150% at 82% 6%, rgba(255,255,255,.62) 0%, rgba(255,255,255,0) 44%);
+  --cf:linear-gradient(135deg,#FFE888 0%,#FBC82A 30%,#F0B90B 56%,#E09405 100%);
+  --cf-text:#141518;--cf-lbl:rgba(26,29,32,.72);--cf-sub:rgba(26,29,32,.62);
+  --cf-eye:#4A3C05;--cf-up:#0A6B40;--cf-down:#B01228;
+  --cf-btn:#17181C;--cf-btn-text:#F6C638;
+  --cf-ghost-bg:rgba(23,24,28,.07);--cf-ghost-text:#17181C;--cf-ghost-border:rgba(23,24,28,.45);
+  --cf-pill-bg:rgba(23,24,28,.16);--cf-pill-text:#17181C;--cf-pill-border:rgba(23,24,28,.22);
+  --cf-shadow:rgba(224,149,5,.5);
+  --cb:radial-gradient(120% 90% at 12% -5%,rgba(120,205,255,.50) 0%,rgba(120,205,255,0) 46%),radial-gradient(120% 120% at 105% 110%,rgba(255,110,210,.46) 0%,rgba(255,110,210,0) 52%),linear-gradient(140deg,#43127a 0%,#2a2b96 46%,#0f3d94 100%);
+  --cb-shadow:rgba(42,43,150,.55)}
+.wcard-tilt{position:relative;width:100%;transform-style:preserve-3d;-webkit-transform-style:preserve-3d;
+  transition:transform .3s ease;transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg))}
+.wcard-inner{position:relative;width:100%;transition:transform .75s cubic-bezier(.2,.75,.2,1);
+  transform-style:preserve-3d;-webkit-transform-style:preserve-3d}
+.wallet-card.flipped .wcard-inner{transform:rotateY(180deg)}
+.wcard-face{border-radius:18px;padding:20px;overflow:hidden;
+  -webkit-backface-visibility:hidden;backface-visibility:hidden}
+.wcard-front{position:relative}
+.wcard-back{position:absolute;inset:0;transform:rotateY(180deg);pointer-events:none}
+.wallet-card.flipped .wcard-front{pointer-events:none}
+.wallet-card.flipped .wcard-back{pointer-events:auto}
+
+/* shine animations: moving sheen + pointer glare */
+.wcard-sheen{position:absolute;top:-25%;bottom:-25%;left:0;width:44%;z-index:6;pointer-events:none;
+  background:linear-gradient(100deg,transparent 28%,rgba(255,255,255,.65) 50%,transparent 72%);
+  mix-blend-mode:soft-light;transform:translateX(-190%) skewX(-14deg);
+  animation:wcardSheen 6.5s ease-in-out 2s infinite}
+@keyframes wcardSheen{0%{transform:translateX(-190%) skewX(-14deg)}
+  24%,100%{transform:translateX(330%) skewX(-14deg)}}
+.wcard-glare{position:absolute;inset:0;z-index:5;pointer-events:none;opacity:0;transition:opacity .25s ease;
+  mix-blend-mode:soft-light;
+  background:radial-gradient(circle at var(--gx,50%) var(--gy,50%),rgba(255,255,255,.6) 0%,rgba(255,255,255,.12) 26%,rgba(255,255,255,0) 56%)}
+.wallet-card.tilting .wcard-glare{opacity:1}
+@media (prefers-reduced-motion:reduce){.wcard-sheen{animation:none;opacity:0}.wcard-tilt{transition:none}}
+
+/* --- FRONT --- */
+.wcard-front{
+  background:var(--cf-hi),var(--cf);
+  color:var(--cf-text);
+  box-shadow:0 14px 34px -10px var(--cf-shadow),0 2px 4px rgba(0,0,0,.08),
+    inset 0 1px 0 rgba(255,255,255,.4)}
+.wcard-toprow{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.wcard-lbl{color:var(--cf-lbl);font-size:13px;font-weight:600}
+.wcard-balrow{display:flex;align-items:center;gap:8px}
+.wcard-balance{font-size:31px;font-weight:800;color:var(--cf-text);cursor:pointer;
+  transition:filter .3s ease;user-select:none;letter-spacing:-.5px}
+.wcard-balance.blurred{filter:blur(8px)}
+.wcard-eye{background:none;padding:2px;display:flex;align-items:center}
+.wcard-eye svg{stroke:var(--cf-eye)}
+.wcard-front .pnl-label{color:var(--cf-sub)}
+.wcard-front .pnl-value.up{color:var(--cf-up)}
+.wcard-front .pnl-value.down{color:var(--cf-down)}
+.wcard-front .crypto-icon .sym{color:var(--cf-text)}
+.wcard-front .crypto-icon .name{color:var(--cf-sub);font-weight:600}
+.wcard-btn{padding:11px 18px;border-radius:11px;font-size:14px;font-weight:700;
+  background:var(--cf-btn);color:var(--cf-btn-text);transition:transform .1s,filter .15s}
+.wcard-btn:hover{filter:brightness(1.12)}
+.wcard-btn.ghost{background:var(--cf-ghost-bg);color:var(--cf-ghost-text);border:1.5px solid var(--cf-ghost-border)}
+.wcard-flip-btn{position:absolute;top:13px;right:13px;z-index:7;display:flex;align-items:center;gap:5px;
+  padding:6px 12px;border-radius:999px;background:var(--cf-pill-bg);color:var(--cf-pill-text);
+  font-size:12px;font-weight:700;border:1px solid var(--cf-pill-border);
+  -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+.wcard-flip-btn svg{width:13px;height:13px}
+
+/* --- BACK --- */
+.wcard-back{
+  background:var(--cb);
+  color:#fff;
+  box-shadow:0 14px 34px -10px var(--cb-shadow),inset 0 1px 0 rgba(255,255,255,.25)}
+
+/* ===== CARD SKINS ===== */
+.wallet-card[data-skin="emerald"]{
+  --cf:linear-gradient(135deg,#B8FBD9 0%,#45E39B 36%,#14B877 68%,#0A8B59 100%);
+  --cf-text:#07231a;--cf-lbl:rgba(7,35,26,.72);--cf-sub:rgba(7,35,26,.6);--cf-eye:#0a5e40;
+  --cf-btn:#0b2c21;--cf-btn-text:#7BF4BE;--cf-ghost-bg:rgba(11,44,33,.08);--cf-ghost-text:#0b2c21;--cf-ghost-border:rgba(11,44,33,.4);
+  --cf-pill-bg:rgba(11,44,33,.16);--cf-pill-text:#0b2c21;--cf-pill-border:rgba(11,44,33,.24);--cf-shadow:rgba(10,139,89,.5);
+  --cb:radial-gradient(120% 90% at 12% -5%,rgba(120,255,210,.4),transparent 46%),radial-gradient(120% 120% at 105% 110%,rgba(60,220,255,.35),transparent 52%),linear-gradient(140deg,#053d2d 0%,#0a6e4c 50%,#0c8f5e 100%);
+  --cb-shadow:rgba(10,110,76,.55)}
+.wallet-card[data-skin="azure"]{
+  --cf:linear-gradient(135deg,#CDEBFF 0%,#6FC5F7 38%,#2E97E6 70%,#1670C9 100%);
+  --cf-text:#07223a;--cf-lbl:rgba(7,34,58,.72);--cf-sub:rgba(7,34,58,.6);--cf-eye:#0a4a7a;
+  --cf-btn:#0a2740;--cf-btn-text:#8ED3FF;--cf-ghost-bg:rgba(10,39,64,.08);--cf-ghost-text:#0a2740;--cf-ghost-border:rgba(10,39,64,.4);
+  --cf-pill-bg:rgba(10,39,64,.16);--cf-pill-text:#0a2740;--cf-pill-border:rgba(10,39,64,.24);--cf-shadow:rgba(22,112,201,.5);
+  --cb:radial-gradient(120% 90% at 12% -5%,rgba(130,210,255,.45),transparent 46%),radial-gradient(120% 120% at 105% 110%,rgba(110,140,255,.4),transparent 52%),linear-gradient(140deg,#07264f 0%,#0f4a92 50%,#1366bf 100%);
+  --cb-shadow:rgba(15,74,146,.55)}
+.wallet-card[data-skin="rose"]{
+  --cf:linear-gradient(135deg,#FFDCEC 0%,#FF93BC 38%,#F2588F 70%,#D5376F 100%);
+  --cf-text:#3a0f22;--cf-lbl:rgba(58,15,34,.72);--cf-sub:rgba(58,15,34,.6);--cf-eye:#8a2250;
+  --cf-btn:#3a0f22;--cf-btn-text:#FFADCD;--cf-ghost-bg:rgba(58,15,34,.08);--cf-ghost-text:#3a0f22;--cf-ghost-border:rgba(58,15,34,.4);
+  --cf-pill-bg:rgba(58,15,34,.16);--cf-pill-text:#3a0f22;--cf-pill-border:rgba(58,15,34,.24);--cf-shadow:rgba(213,55,111,.5);
+  --cb:radial-gradient(120% 90% at 12% -5%,rgba(255,150,210,.45),transparent 46%),radial-gradient(120% 120% at 105% 110%,rgba(150,90,255,.4),transparent 52%),linear-gradient(140deg,#4f0f3a 0%,#8a1259 50%,#b31e6e 100%);
+  --cb-shadow:rgba(138,18,89,.55)}
+.wallet-card[data-skin="sunset"]{
+  --cf:linear-gradient(135deg,#FFE0A3 0%,#FF9F45 36%,#FB6A3C 68%,#E8432E 100%);
+  --cf-text:#3a1405;--cf-lbl:rgba(58,20,5,.72);--cf-sub:rgba(58,20,5,.6);--cf-eye:#7a2e10;
+  --cf-btn:#3a1405;--cf-btn-text:#FFC98A;--cf-ghost-bg:rgba(58,20,5,.08);--cf-ghost-text:#3a1405;--cf-ghost-border:rgba(58,20,5,.4);
+  --cf-pill-bg:rgba(58,20,5,.16);--cf-pill-text:#3a1405;--cf-pill-border:rgba(58,20,5,.24);--cf-shadow:rgba(232,67,46,.5);
+  --cb:radial-gradient(120% 90% at 12% -5%,rgba(255,190,120,.45),transparent 46%),radial-gradient(120% 120% at 105% 110%,rgba(255,90,80,.42),transparent 52%),linear-gradient(140deg,#5a1a0a 0%,#9e3a12 50%,#c24a1e 100%);
+  --cb-shadow:rgba(158,58,18,.55)}
+.wallet-card[data-skin="aurora"]{
+  --cf-hi:radial-gradient(135% 150% at 82% 6%,rgba(255,255,255,.4) 0%,rgba(255,255,255,0) 44%);
+  --cf:linear-gradient(135deg,#8a3df0 0%,#5f2fd6 45%,#331c9e 100%);
+  --cf-text:#ffffff;--cf-lbl:rgba(255,255,255,.78);--cf-sub:rgba(255,255,255,.62);--cf-eye:#e9dcff;--cf-up:#2ee6a0;--cf-down:#ff6b86;
+  --cf-btn:#ffffff;--cf-btn-text:#4a1d8f;--cf-ghost-bg:rgba(255,255,255,.1);--cf-ghost-text:#fff;--cf-ghost-border:rgba(255,255,255,.45);
+  --cf-pill-bg:rgba(255,255,255,.16);--cf-pill-text:#fff;--cf-pill-border:rgba(255,255,255,.26);--cf-shadow:rgba(95,47,214,.5);
+  --cb:radial-gradient(120% 90% at 12% -5%,rgba(180,130,255,.5),transparent 46%),radial-gradient(120% 120% at 105% 110%,rgba(255,110,210,.42),transparent 52%),linear-gradient(140deg,#2a0f5e 0%,#4a1d8f 50%,#6a2fb0 100%);
+  --cb-shadow:rgba(74,29,143,.55)}
+.wallet-card[data-skin="midnight"]{
+  --cf-hi:radial-gradient(135% 150% at 82% 6%,rgba(255,255,255,.14) 0%,rgba(255,255,255,0) 44%);
+  --cf:linear-gradient(135deg,#333845 0%,#1c2029 50%,#0c0e13 100%);
+  --cf-text:#EAECEF;--cf-lbl:rgba(255,255,255,.72);--cf-sub:rgba(255,255,255,.55);--cf-eye:#C9CDD6;--cf-up:#0ECB81;--cf-down:#F6465D;
+  --cf-btn:#F0B90B;--cf-btn-text:#17181C;--cf-ghost-bg:rgba(255,255,255,.07);--cf-ghost-text:#EAECEF;--cf-ghost-border:rgba(255,255,255,.35);
+  --cf-pill-bg:rgba(255,255,255,.12);--cf-pill-text:#EAECEF;--cf-pill-border:rgba(255,255,255,.2);--cf-shadow:rgba(0,0,0,.5);
+  --cb:radial-gradient(120% 90% at 12% -5%,rgba(120,160,255,.28),transparent 46%),radial-gradient(120% 120% at 105% 110%,rgba(240,185,11,.2),transparent 52%),linear-gradient(140deg,#111319 0%,#1b2130 50%,#0e1420 100%);
+  --cb-shadow:rgba(0,0,0,.55)}
+.wallet-card[data-skin="ocean"]{
+  --cf-hi:radial-gradient(135% 150% at 82% 6%,rgba(255,255,255,.35) 0%,rgba(255,255,255,0) 44%);
+  --cf:linear-gradient(135deg,#17b3c9 0%,#0e85a6 48%,#0a5a86 100%);
+  --cf-text:#ffffff;--cf-lbl:rgba(255,255,255,.78);--cf-sub:rgba(255,255,255,.62);--cf-eye:#d6f3fb;--cf-up:#2ee6a0;--cf-down:#ff6b86;
+  --cf-btn:#ffffff;--cf-btn-text:#0a5a86;--cf-ghost-bg:rgba(255,255,255,.1);--cf-ghost-text:#fff;--cf-ghost-border:rgba(255,255,255,.45);
+  --cf-pill-bg:rgba(255,255,255,.16);--cf-pill-text:#fff;--cf-pill-border:rgba(255,255,255,.26);--cf-shadow:rgba(14,133,166,.5);
+  --cb:radial-gradient(120% 90% at 12% -5%,rgba(130,245,255,.42),transparent 46%),radial-gradient(120% 120% at 105% 110%,rgba(90,200,255,.38),transparent 52%),linear-gradient(140deg,#063b4e 0%,#0a6a86 50%,#0d8aa6 100%);
+  --cb-shadow:rgba(10,106,134,.55)}
+
+/* skin picker */
+.wcard-skin-lbl{text-align:center;font-size:12px;color:var(--t2);margin:14px 0 0;font-weight:600;letter-spacing:.3px}
+.wcard-skins{display:flex;gap:9px;justify-content:center;flex-wrap:wrap;margin:9px 16px 2px}
+.wcard-skin{width:30px;height:30px;border-radius:50%;position:relative;border:none;
+  box-shadow:0 2px 6px rgba(0,0,0,.18),inset 0 0 0 1px rgba(255,255,255,.25);transition:transform .15s}
+.wcard-skin.active{transform:scale(1.14)}
+.wcard-skin.active::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:2px solid var(--t1)}
+.wcard-figure{position:absolute;top:50%;left:50%;width:250px;height:250px;
+  transform:translate(-38%,-50%);opacity:.22;color:#fff;pointer-events:none;z-index:1;overflow:visible}
+.wcard-chip{position:absolute;top:18px;left:20px;width:40px;height:30px;border-radius:6px;z-index:3;
+  background:linear-gradient(135deg,#FCE9A6 0%,#E6B23D 45%,#C68B1E 100%);
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.18),0 1px 3px rgba(0,0,0,.25);overflow:hidden}
+.wcard-chip svg{position:absolute;inset:0;width:100%;height:100%}
+.wcard-shield{position:absolute;top:15px;right:16px;width:34px;height:34px;z-index:3;
+  color:#fff;filter:drop-shadow(0 2px 7px rgba(0,0,0,.35))}
+.wcard-shield svg{width:100%;height:100%}
+.wcard-stripe{position:absolute;left:0;right:0;top:62px;height:42px;z-index:2;
+  background:linear-gradient(#ffffff,#eef0f3);
+  box-shadow:0 1px 8px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.9);
+  display:flex;align-items:center}
+.wcard-username{margin-left:20px;color:#13132b;font-family:'Great Vibes',cursive;
+  font-size:27px;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  max-width:86%;padding-bottom:3px}
+.wcard-brand{position:absolute;left:20px;bottom:17px;z-index:3;display:flex;align-items:center;gap:7px}
+.wcard-brand-logo{width:22px;height:22px;flex-shrink:0}
+.wcard-brand span{font-size:17px;font-weight:700;color:#fff;letter-spacing:.3px}
+.wcard-flip-hint{position:absolute;right:16px;bottom:18px;z-index:3;display:flex;align-items:center;gap:5px;
+  font-size:11px;font-weight:600;color:rgba(255,255,255,.72)}
+.wcard-flip-hint svg{width:12px;height:12px}
 .topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 16px}
 .avatar{border-radius:50%;display:flex;align-items:center;justify-content:center;
   font-weight:700;color:var(--bg);background:var(--yellow)}
@@ -584,26 +739,112 @@ button:active{transform:scale(0.96)}
     </button>
   </div>
 
-  <div class="wallet-card">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-      <span style="color:var(--t2);font-size:13px" id="lbl-balance">Estimated Balance</span>
-      <button onclick="toggleBalance()" style="background:none;padding:4px" id="eye-btn"></button>
+  <div class="wallet-card" id="wallet-flip">
+   <div class="wcard-tilt" id="wcard-tilt">
+    <div class="wcard-inner">
+
+    <!-- FRONT -->
+    <div class="wcard-face wcard-front">
+      <button class="wcard-flip-btn" onclick="flipWalletCard()" aria-label="Expand">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+          <path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+        </svg>
+        <span>Expand</span>
+      </button>
+
+      <div class="wcard-toprow">
+        <span class="wcard-lbl" id="lbl-balance">Estimated Balance</span>
+      </div>
+      <div class="wcard-balrow">
+        <span class="wcard-balance" id="balance-amount" onclick="toggleBalance()"></span>
+        <button onclick="toggleBalance()" class="wcard-eye" id="eye-btn"></button>
+      </div>
+      <div class="pnl-row" id="pnl-row">
+        <span class="pnl-label" id="pnl-label">PnL Today</span>
+        <span class="pnl-value up" id="pnl-value">+$0.00</span>
+        <span class="pnl-value up" id="pnl-pct">+0.00%</span>
+      </div>
+      <div style="margin-top:14px"></div>
+      <div class="crypto-icons" id="crypto-icons-row"></div>
+      <div style="display:flex;gap:12px">
+        <button class="wcard-btn" style="flex:1" id="btn-deposit">Deposit</button>
+        <button class="wcard-btn ghost" style="flex:1" id="btn-withdraw">Withdraw</button>
+      </div>
+
+      <div class="wcard-sheen"></div>
+      <div class="wcard-glare"></div>
     </div>
-    <div>
-      <span style="font-size:28px;font-weight:700" id="balance-amount" onclick="toggleBalance()"></span>
+
+    <!-- BACK -->
+    <div class="wcard-face wcard-back" onclick="flipWalletCard()">
+      <svg class="wcard-figure" viewBox="0 0 200 200" fill="none" aria-hidden="true">
+        <g stroke="currentColor" stroke-width="0.8">
+          <rect x="32" y="32" width="136" height="136" rx="18" transform="rotate(0 100 100)"/>
+          <rect x="32" y="32" width="136" height="136" rx="18" transform="rotate(9 100 100)"/>
+          <rect x="32" y="32" width="136" height="136" rx="18" transform="rotate(18 100 100)"/>
+          <rect x="32" y="32" width="136" height="136" rx="18" transform="rotate(27 100 100)"/>
+          <rect x="32" y="32" width="136" height="136" rx="18" transform="rotate(36 100 100)"/>
+          <rect x="32" y="32" width="136" height="136" rx="18" transform="rotate(45 100 100)"/>
+          <rect x="32" y="32" width="136" height="136" rx="18" transform="rotate(54 100 100)"/>
+          <rect x="32" y="32" width="136" height="136" rx="18" transform="rotate(63 100 100)"/>
+          <rect x="32" y="32" width="136" height="136" rx="18" transform="rotate(72 100 100)"/>
+          <rect x="32" y="32" width="136" height="136" rx="18" transform="rotate(81 100 100)"/>
+          <circle cx="100" cy="100" r="68"/>
+          <circle cx="100" cy="100" r="44"/>
+          <circle cx="100" cy="100" r="20"/>
+        </g>
+      </svg>
+
+      <div class="wcard-chip">
+        <svg viewBox="0 0 40 30" fill="none" stroke="rgba(90,60,10,.55)" stroke-width="1">
+          <rect x="1" y="1" width="38" height="28" rx="5"/>
+          <line x1="14" y1="1" x2="14" y2="29"/><line x1="26" y1="1" x2="26" y2="29"/>
+          <line x1="1" y1="10" x2="40" y2="10"/><line x1="1" y1="20" x2="40" y2="20"/>
+          <rect x="14" y="10" width="12" height="10"/>
+        </svg>
+      </div>
+
+      <div class="wcard-shield">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2.5l7 2.8v5.7c0 4.8-3.3 7.9-7 9.5-3.7-1.6-7-4.7-7-9.5V5.3l7-2.8z" fill="rgba(255,255,255,.14)"/>
+          <path d="M8.6 12.2l2.4 2.4 4.4-4.8" stroke="#ffffff" stroke-width="2.1"/>
+        </svg>
+      </div>
+
+      <div class="wcard-stripe">
+        <span class="wcard-username" id="card-username">@username</span>
+      </div>
+
+      <div class="wcard-brand">
+        <svg class="wcard-brand-logo" viewBox="0 0 126.61 126.61" fill="#F3BA2F" aria-hidden="true">
+          <path d="M38.73 53.2 63.3 28.63l24.59 24.59 14.3-14.3L63.3 0 24.43 38.9z"/>
+          <path d="M0 63.3l14.3-14.31L28.6 63.3l-14.3 14.3z"/>
+          <path d="M38.73 73.41 63.3 97.98l24.59-24.59 14.31 14.29-.01.01L63.3 126.61 24.43 87.72l-.02-.02z"/>
+          <path d="M98.01 63.31l14.3-14.31 14.3 14.3-14.3 14.31z"/>
+          <path d="M77.81 63.3 63.3 48.78 52.57 59.51l-1.23 1.24-2.54 2.54-.02.02.02.02 13.5 13.51 14.51-14.52z"/>
+        </svg>
+        <span>Binance</span>
+      </div>
+
+      <span class="wcard-flip-hint">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+          <path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+        </svg>
+        Tap to flip
+      </span>
+
+      <div class="wcard-sheen"></div>
+      <div class="wcard-glare"></div>
     </div>
-    <div class="pnl-row" id="pnl-row">
-      <span class="pnl-label" id="pnl-label">PnL Today</span>
-      <span class="pnl-value up" id="pnl-value">+$0.00</span>
-      <span class="pnl-value up" id="pnl-pct">+0.00%</span>
+
     </div>
-    <div style="margin-top:14px"></div>
-    <div class="crypto-icons" id="crypto-icons-row"></div>
-    <div style="display:flex;gap:12px">
-      <button class="btn-outline" style="flex:1" id="btn-deposit">Deposit</button>
-      <button class="btn-outline" style="flex:1" id="btn-withdraw">Withdraw</button>
-    </div>
+   </div>
   </div>
+
+  <div class="wcard-skin-lbl">Card Color</div>
+  <div class="wcard-skins" id="wcard-skins"></div>
 
   <button class="create-deal-btn" onclick="showPage('create-order')" id="btn-create-deal">
     <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
@@ -862,8 +1103,8 @@ button:active{transform:scale(0.96)}
     <div class="prof-setting-card">
       <span class="prof-setting-lbl" id="lbl-theme">Theme:</span>
       <div class="lang-switch">
-        <button class="lang-btn active" onclick="setTheme('dark')" id="theme-dark">Dark</button>
-        <button class="lang-btn" onclick="setTheme('light')" id="theme-light">Light</button>
+        <button class="lang-btn" onclick="setTheme('dark')" id="theme-dark">Dark</button>
+        <button class="lang-btn active" onclick="setTheme('light')" id="theme-light">Light</button>
       </div>
     </div>
 
@@ -1017,9 +1258,11 @@ function hideConnectionBanner() {
   var el = document.getElementById('conn-banner');
   if (el) el.classList.remove('visible');
 }
-var appTheme = 'dark';
-try { appTheme = localStorage.getItem('p2p_theme') || 'dark'; } catch(e){}
+var appTheme = 'light';
+try { appTheme = localStorage.getItem('p2p_theme') || 'light'; } catch(e){}
 if (appTheme === 'light') document.documentElement.setAttribute('data-theme','light');
+var cardSkin = 'gold';
+try { cardSkin = localStorage.getItem('p2p_card_skin') || 'gold'; } catch(e){}
 var notifSettings = {deal:true, pay:true, dispute:true, complete:true};
 try { var ns = JSON.parse(localStorage.getItem('p2p_notifs')||'{}'); if (ns && typeof ns === 'object') notifSettings = Object.assign(notifSettings, ns); } catch(e){}
 
@@ -1050,6 +1293,7 @@ function initFromBackend() {
     user.activity_pct = u.activity_pct || 0;
     if (u.username) user.username = u.username;
     if (u.first_name) user.first_name = u.first_name;
+    updateCardUsername();
     userLoaded = true;
     hideConnectionBanner();
     if (currentPage === 'profile') renderProfile();
@@ -1381,6 +1625,10 @@ function renderHome() {
     return '<div class="crypto-icon"><span class="sym">'+cryptoImg(b.currency)+'</span><span class="name">'+b.currency+'</span></div>';
   }).join('');
 
+  var fcard = document.getElementById('wallet-flip');
+  if (fcard) fcard.setAttribute('data-skin', cardSkin);
+  renderCardSkins();
+  updateCardUsername();
   renderBanners();
   renderMarkets();
 }
@@ -1401,6 +1649,77 @@ function toggleBalance() {
     balanceVisible = true;
     renderHome();
   }
+}
+
+// Flip the balance card to reveal its back (and flip it back on tap)
+function flipWalletCard() {
+  var c = document.getElementById('wallet-flip');
+  if (c) c.classList.toggle('flipped');
+}
+
+// Keep the username on the back of the card in sync with the signed-in user
+function updateCardUsername() {
+  var cu = document.getElementById('card-username');
+  if (!cu) return;
+  cu.textContent = user.username ? '@' + user.username : (user.first_name || 'Binance User');
+}
+
+// ===== CARD SKINS + 3D TILT / GLARE =====
+var cardSkins = [
+  {id:'gold',    grad:'linear-gradient(135deg,#FFE888,#F0B90B 55%,#E09405)'},
+  {id:'emerald', grad:'linear-gradient(135deg,#8CF4C4,#14B877 60%,#0A8B59)'},
+  {id:'azure',   grad:'linear-gradient(135deg,#9FDBFF,#2E97E6 60%,#1670C9)'},
+  {id:'rose',    grad:'linear-gradient(135deg,#FFBBD6,#F2588F 60%,#D5376F)'},
+  {id:'sunset',  grad:'linear-gradient(135deg,#FFC98A,#FB6A3C 60%,#E8432E)'},
+  {id:'aurora',  grad:'linear-gradient(135deg,#8A3DF0,#5F2FD6 55%,#331C9E)'},
+  {id:'midnight',grad:'linear-gradient(135deg,#333845,#1C2029 55%,#0C0E13)'},
+  {id:'ocean',   grad:'linear-gradient(135deg,#17B3C9,#0E85A6 55%,#0A5A86)'}
+];
+
+function renderCardSkins() {
+  var el = document.getElementById('wcard-skins');
+  if (!el) return;
+  el.innerHTML = cardSkins.map(function(s) {
+    return '<button class="wcard-skin' + (s.id === cardSkin ? ' active' : '') + '" style="background:' + s.grad + '"' +
+      ' onclick="setCardSkin(\'' + s.id + '\')" aria-label="' + s.id + '"></button>';
+  }).join('');
+}
+
+function setCardSkin(id) {
+  cardSkin = id;
+  var c = document.getElementById('wallet-flip');
+  if (c) c.setAttribute('data-skin', id);
+  try { localStorage.setItem('p2p_card_skin', id); } catch(e){}
+  renderCardSkins();
+}
+
+// Pointer-driven 3D tilt + glare so the card feels physical
+function initCardFX() {
+  var card = document.getElementById('wallet-flip');
+  var tilt = document.getElementById('wcard-tilt');
+  if (!card || !tilt) return;
+  var MAX = 10; // degrees of tilt
+  function onMove(e) {
+    var r = card.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    var px = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    var py = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+    tilt.style.setProperty('--ry', ((px - 0.5) * 2 * MAX).toFixed(2) + 'deg');
+    tilt.style.setProperty('--rx', (-(py - 0.5) * 2 * MAX).toFixed(2) + 'deg');
+    card.style.setProperty('--gx', (px * 100).toFixed(1) + '%');
+    card.style.setProperty('--gy', (py * 100).toFixed(1) + '%');
+    card.classList.add('tilting');
+  }
+  function reset() {
+    tilt.style.setProperty('--rx', '0deg');
+    tilt.style.setProperty('--ry', '0deg');
+    card.classList.remove('tilting');
+  }
+  card.addEventListener('pointermove', onMove);
+  card.addEventListener('pointerdown', onMove);
+  card.addEventListener('pointerleave', reset);
+  card.addEventListener('pointercancel', reset);
+  card.addEventListener('pointerup', reset);
 }
 
 // BANNERS
@@ -2612,6 +2931,7 @@ var walletNames = {
 // Attach deposit/withdraw buttons
 document.getElementById('btn-deposit').onclick = function() { openDWModal('deposit'); };
 document.getElementById('btn-withdraw').onclick = function() { openDWModal('withdraw'); };
+initCardFX();
 </script>
 </body>
 </html>
