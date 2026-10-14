@@ -1552,6 +1552,7 @@ function initFromBackend() {
     // response landing while the person was in the middle of a long-press
     // paste used to wipe the input DOM and drop the paste menu with it.
     if (currentPage === 'wallet' && JSON.stringify(savedWallets) !== before) renderWallet();
+    loadBalances();
   }).catch(function(e) {
     // A silent failure here leaves a usable-looking app with an empty profile
     // and a UID of 0, so make it visible rather than logging it away. The two
@@ -1806,6 +1807,22 @@ function loadDeals() {
   return apiFetch('/api/deals/my/list').then(function(r) {
     deals = r.deals || [];
     if (currentPage === 'profile') renderProfile();
+  }).catch(function(){});
+}
+
+// Pulls real wallet balances from the backend and merges them into the local
+// `balances` array by currency. Without this the wallet showed hardcoded zeros
+// and an admin top-up (/addbalance, POST /api/admin/balance/topup) never became
+// visible in the app.
+function loadBalances() {
+  return apiFetch('/api/wallet/balances').then(function(r) {
+    var list = (r && r.balances) || [];
+    list.forEach(function(b) {
+      var cur = balances.find(function(x) { return x.currency === b.currency; });
+      if (cur) { cur.balance = b.balance; cur.frozen = b.frozen; }
+    });
+    if (currentPage === 'home') renderHome();
+    if (currentPage === 'wallet') renderWallet();
   }).catch(function(){});
 }
 
