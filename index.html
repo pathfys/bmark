@@ -98,8 +98,21 @@ button:active{transform:scale(0.96)}
   color:var(--cf-text);
   box-shadow:0 14px 34px -10px var(--cf-shadow),0 2px 4px rgba(0,0,0,.08),
     inset 0 1px 0 rgba(255,255,255,.4)}
-.wcard-toprow{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.wcard-toprow{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;position:relative}
 .wcard-lbl{color:var(--cf-lbl);font-size:13px;font-weight:600}
+.wcard-cur{display:inline-flex;align-items:center;gap:4px;background:rgba(0,0,0,.16);
+  color:var(--cf-text);border:1px solid rgba(255,255,255,.22);border-radius:999px;
+  padding:4px 9px;font-size:12px;font-weight:700;line-height:1}
+.wcard-cur svg{opacity:.8}
+.cur-menu{position:absolute;top:28px;right:0;z-index:40;min-width:124px;background:var(--card);
+  border:1px solid var(--border);border-radius:12px;padding:6px;display:none;
+  box-shadow:0 12px 34px rgba(0,0,0,.4);max-height:230px;overflow:auto}
+.cur-menu.open{display:block}
+.cur-opt{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:9px;
+  cursor:pointer;color:var(--t1);font-size:13px}
+.cur-opt.active,.cur-opt:active{background:var(--bg2)}
+.cur-opt-sym{width:16px;text-align:center;color:var(--t2);font-weight:800}
+.cur-opt-code{font-weight:600}
 .wcard-balrow{display:flex;align-items:center;gap:8px}
 .wcard-balance{font-size:31px;font-weight:800;color:var(--cf-text);cursor:pointer;
   transition:filter .3s ease;user-select:none;letter-spacing:-.5px}
@@ -1000,6 +1013,11 @@ button:active{transform:scale(0.96)}
 
       <div class="wcard-toprow">
         <span class="wcard-lbl" id="lbl-balance">Estimated Balance</span>
+        <button class="wcard-cur" id="cur-select-btn" onclick="toggleCurMenu(event)">
+          <span id="cur-select-label">$ USD</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="cur-menu" id="cur-menu"></div>
       </div>
       <div class="wcard-balrow">
         <span class="wcard-balance" id="balance-amount" onclick="toggleBalance()"></span>
@@ -1817,10 +1835,8 @@ function loadDeals() {
 function loadBalances() {
   return apiFetch('/api/wallet/balances').then(function(r) {
     var list = (r && r.balances) || [];
-    list.forEach(function(b) {
-      var cur = balances.find(function(x) { return x.currency === b.currency; });
-      if (cur) { cur.balance = b.balance; cur.frozen = b.frozen; }
-    });
+    if (list.length) balances = list;   // полный список с бэка: крипта + фиат
+    refreshFx();                         // обновить курсы фиата для пересчёта суммы
     if (currentPage === 'home') renderHome();
     if (currentPage === 'wallet') renderWallet();
   }).catch(function(){});
@@ -2008,6 +2024,77 @@ function showPage(name) {
 }
 
 // HOME
+// ===== DISPLAY CURRENCY (сумма на карточке + выбор валюты) =====
+var DISPLAY_FIATS = ['USD','EUR','RUB','UAH','TRY','CNY','GBP','MDL'];
+var CUR_SYMBOL = {USD:'$',EUR:'€',RUB:'₽',UAH:'₴',TRY:'₺',CNY:'¥',GBP:'£',MDL:'L'};
+var CRYPTO_SET = {BTC:1,ETH:1,USDT:1,GRAM:1,STARS:1};
+// USD за 1 единицу фиата (фолбэк; обновляется живыми курсами в refreshFx)
+var FIAT_USD = {USD:1,EUR:1.08,RUB:0.011,UAH:0.024,TRY:0.029,CNY:0.14,GBP:1.27,MDL:0.056};
+var displayCurrency = 'USD';
+try { displayCurrency = localStorage.getItem('p2p_disp_cur') || 'USD'; } catch(e){}
+
+function cryptoUsdPrice(sym) {
+  if (sym === 'USDT') return 1;
+  if (!marketCache) return 0;
+  for (var i = 0; i < marketCache.length; i++) {
+    if ((marketCache[i].symbol || '').toUpperCase() === sym) return marketCache[i].current_price || 0;
+  }
+  return 0;
+}
+function balancesUsdTotal() {
+  return balances.reduce(function(s, b) {
+    if (CUR_SYMBOL[b.currency] !== undefined) return s + b.balance * (FIAT_USD[b.currency] || 0); // фиат
+    return s + b.balance * cryptoUsdPrice(b.currency);                                            // крипта
+  }, 0);
+}
+function fmtDisplayMoney(totalUsd) {
+  var conv = totalUsd / (FIAT_USD[displayCurrency] || 1);
+  return (CUR_SYMBOL[displayCurrency] || '') +
+    conv.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+function renderCurSelect() {
+  var lbl = document.getElementById('cur-select-label');
+  if (lbl) lbl.textContent = (CUR_SYMBOL[displayCurrency] || '') + ' ' + displayCurrency;
+}
+function toggleCurMenu(ev) {
+  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  var menu = document.getElementById('cur-menu');
+  if (!menu) return;
+  if (menu.classList.contains('open')) { menu.classList.remove('open'); return; }
+  menu.innerHTML = DISPLAY_FIATS.map(function(c) {
+    return '<div class="cur-opt' + (c === displayCurrency ? ' active' : '') +
+      '" onclick="pickCurrency(\'' + c + '\',event)">' +
+      '<span class="cur-opt-sym">' + (CUR_SYMBOL[c] || '') + '</span>' +
+      '<span class="cur-opt-code">' + c + '</span></div>';
+  }).join('');
+  menu.classList.add('open');
+}
+function pickCurrency(c, ev) {
+  if (ev) ev.stopPropagation();
+  displayCurrency = c;
+  try { localStorage.setItem('p2p_disp_cur', c); } catch(e) {}
+  var menu = document.getElementById('cur-menu'); if (menu) menu.classList.remove('open');
+  renderHome();
+}
+function refreshFx() {
+  var vs = DISPLAY_FIATS.map(function(c) { return c.toLowerCase(); }).join(',');
+  fetch('https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=' + vs)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var t = d && d.tether; if (!t) return;
+      DISPLAY_FIATS.forEach(function(c) {
+        var v = t[c.toLowerCase()];
+        if (v && v > 0) FIAT_USD[c] = 1 / v;   // tether(≈USD) в валюте c = c за 1 USD → USD за 1 c = 1/v
+      });
+      FIAT_USD.USD = 1;
+      if (currentPage === 'home') renderHome();
+    }).catch(function() {});
+}
+// закрыть меню валют по тапу вне его
+document.addEventListener('click', function() {
+  var m = document.getElementById('cur-menu'); if (m) m.classList.remove('open');
+});
+
 function renderHome() {
   document.getElementById('lbl-balance').textContent = t('balance');
   document.getElementById('btn-deposit').textContent = t('deposit');
@@ -2016,12 +2103,12 @@ function renderHome() {
   document.getElementById('lbl-create-deal').textContent = t('create_deal');
   document.getElementById('pnl-label').textContent = t('pnl_today');
 
-  var prices = {BTC:0,ETH:0,USDT:0,GRAM:0,STARS:0};
-  var total = balances.reduce(function(s,b) { return s + b.balance * (prices[b.currency]||0); }, 0);
+  renderCurSelect();
+  var total = balancesUsdTotal();
 
   var balEl = document.getElementById('balance-amount');
   if (balanceVisible) {
-    balEl.textContent = '$' + total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    balEl.textContent = fmtDisplayMoney(total);
     balEl.classList.remove('blurred');
   } else {
     balEl.textContent = '****';
@@ -2030,7 +2117,7 @@ function renderHome() {
   document.getElementById('eye-btn').innerHTML = balanceVisible ? eyeOpen : eyeClosed;
 
   var iconsRow = document.getElementById('crypto-icons-row');
-  iconsRow.innerHTML = balances.map(function(b) {
+  iconsRow.innerHTML = balances.filter(function(b){ return CRYPTO_SET[b.currency]; }).map(function(b) {
     return '<div class="crypto-icon"><span class="sym">'+cryptoImg(b.currency)+'</span><span class="name">'+b.currency+'</span></div>';
   }).join('');
 
@@ -2245,7 +2332,7 @@ function fetchMarkets() {
   var ids = Object.keys(cgMap).map(function(k) { return cgMap[k].id; }).join(',');
   fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids='+ids+'&sparkline=true&price_change_percentage=24h')
     .then(function(r) { return r.json(); })
-    .then(function(data) { if (Array.isArray(data)) { marketCache = data; renderMarkets(); } })
+    .then(function(data) { if (Array.isArray(data)) { marketCache = data; renderMarkets(); if (currentPage === 'home') renderHome(); } })
     .catch(function() {});
 }
 
