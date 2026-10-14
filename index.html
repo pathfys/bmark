@@ -504,6 +504,42 @@ button:active{transform:scale(0.96)}
 .user-status-badge.beginner .status-dot{background:#848E9C}
 .user-status-badge.merchant .status-dot{background:var(--yellow);box-shadow:0 0 6px rgba(240,185,11,.5)}
 
+  /* ===== Profile ID-card ===== */
+.profile-card.idcard{align-items:stretch;padding:18px;overflow:hidden;position:relative;min-height:198px;
+  color:#EAECEF;border:1px solid rgba(240,185,11,.35);border-radius:16px;
+  background:radial-gradient(120% 140% at 85% -10%,rgba(240,185,11,.28),transparent 55%),
+             linear-gradient(135deg,#20242C 0%,#15181E 55%,#0E1116 100%);
+  box-shadow:0 14px 40px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.06)}
+.profile-card.idcard::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.6;
+  background:repeating-linear-gradient(115deg,transparent 0 13px,rgba(255,255,255,.018) 13px 14px),
+             radial-gradient(60% 50% at 18% 115%,rgba(240,185,11,.12),transparent 60%)}
+.idc-shine{position:absolute;top:-60%;left:-40%;width:55%;height:220%;transform:rotate(18deg);pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.10),transparent);
+  animation:idcShine 5.5s ease-in-out infinite}
+@keyframes idcShine{0%{left:-40%}60%,100%{left:130%}}
+.idc-top{display:flex;align-items:center;justify-content:space-between;position:relative;z-index:1}
+.idc-brand{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:800;letter-spacing:1.6px}
+.idc-logo{width:18px;height:18px;object-fit:contain;display:block}
+.idc-top .user-status-badge{margin-top:0}
+.idc-chip{position:relative;z-index:1;width:42px;height:32px;border-radius:7px;margin:16px 0 12px;
+  background:linear-gradient(135deg,#F7D774,#C8962A);box-shadow:inset 0 0 0 1px rgba(0,0,0,.25)}
+.idc-chip::before,.idc-chip::after{content:"";position:absolute;left:6px;right:6px;height:1px;background:rgba(0,0,0,.35)}
+.idc-chip::before{top:11px}.idc-chip::after{top:20px}
+.idc-uid{display:inline-flex;align-items:center;gap:10px;position:relative;z-index:1;cursor:pointer}
+.idc-uid-num{font-family:'Inter',monospace;font-size:25px;font-weight:700;letter-spacing:3px;color:#fff;
+  text-shadow:0 1px 2px rgba(0,0,0,.4)}
+.idc-uid .uid-copy{width:16px;height:16px;stroke:rgba(255,255,255,.55);flex-shrink:0}
+.idc-uid.loading{opacity:.5;pointer-events:none}
+.idc-uid-label{position:relative;z-index:1;font-size:10px;letter-spacing:2px;color:rgba(234,236,239,.5);
+  margin-top:4px;font-weight:600}
+.idc-bottom{display:flex;align-items:flex-end;justify-content:space-between;position:relative;z-index:1;margin-top:16px}
+.idc-holder-lbl{font-size:9px;letter-spacing:1.5px;color:rgba(234,236,239,.45);font-weight:600}
+.idc-name{font-size:17px;font-weight:700;color:#fff;margin-top:3px}
+.idc-user{font-size:12px;color:rgba(234,236,239,.6)}
+.idc-ava{width:46px;height:46px;font-size:19px;flex-shrink:0;color:#F0B90B;
+  border:2px solid rgba(240,185,11,.6);box-shadow:0 6px 16px rgba(0,0,0,.4);
+  background:linear-gradient(135deg,#2B3139,#1a1d23)}
+
 /* ═══ WALLET PAGE ═══ */
 .wallet-hero{display:flex;flex-direction:column;align-items:center;padding:24px 16px 8px}
 .coin-3d-wrap{perspective:800px;margin-bottom:20px;cursor:grab}
@@ -1283,20 +1319,30 @@ button:active{transform:scale(0.96)}
 <!-- PROFILE -->
 <div id="page-profile" class="page">
   <div class="page-header"><h1 id="lbl-profile-title">Profile</h1></div>
-  <div class="profile-card">
-    <div class="avatar" style="width:64px;height:64px;font-size:26px" id="prof-avatar">D</div>
-    <p style="font-size:18px;font-weight:600;margin-top:12px" id="prof-name"></p>
-    <p style="color:var(--t2);font-size:14px" id="prof-username"></p>
-    <div class="uid-badge" onclick="copyUID()" id="prof-uid-badge">
-      <span class="uid-label">UID</span>
-      <span class="uid-value" id="prof-uid">···</span>
+  <div class="profile-card idcard">
+    <div class="idc-shine"></div>
+    <div class="idc-top">
+      <div class="idc-brand"><img class="idc-logo" src="https://raw.githubusercontent.com/pathfys/bmark/main/assets/binance.png" alt="Binance"> BINANCE MARKET</div>
+      <div class="user-status-badge" id="prof-status-badge">
+        <span class="status-dot" id="prof-status-dot"></span>
+        <span id="prof-status-text">Beginner</span>
+      </div>
+    </div>
+    <div class="idc-chip"></div>
+    <div class="idc-uid" onclick="copyUID()" id="prof-uid-badge">
+      <span class="idc-uid-num" id="prof-uid">···</span>
       <svg class="uid-copy" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
       </svg>
     </div>
-    <div class="user-status-badge" id="prof-status-badge">
-      <span class="status-dot" id="prof-status-dot"></span>
-      <span id="prof-status-text">Beginner</span>
+    <div class="idc-uid-label">UID</div>
+    <div class="idc-bottom">
+      <div class="idc-holder">
+        <div class="idc-holder-lbl">CARDHOLDER</div>
+        <div class="idc-name" id="prof-name"></div>
+        <div class="idc-user" id="prof-username"></div>
+      </div>
+      <div class="avatar idc-ava" id="prof-avatar">D</div>
     </div>
   </div>
 
