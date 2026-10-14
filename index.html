@@ -2047,6 +2047,13 @@ function balancesUsdTotal() {
     return s + b.balance * cryptoUsdPrice(b.currency);                                            // крипта
   }, 0);
 }
+// Сумма одной сделки в USD по её валюте (для корректного оборота в $).
+function dealUsdValue(d) {
+  var cur = (d && d.fiat_currency) || 'USD';
+  var amt = (d && d.fiat_amount) || 0;
+  if (CUR_SYMBOL[cur] !== undefined) return amt * (FIAT_USD[cur] || 0); // фиат → USD
+  return amt * cryptoUsdPrice(cur);                                     // крипта → USD
+}
 function fmtDisplayMoney(totalUsd) {
   var conv = totalUsd / (FIAT_USD[displayCurrency] || 1);
   return (CUR_SYMBOL[displayCurrency] || '') +
@@ -3396,7 +3403,7 @@ function renderStats() {
   var totalDeals = Math.max(user.total_deals || 0, realTotal);
   var completedDeals = Math.max(user.successful_deals || 0, realCompleted);
   var activeDeals = deals.filter(function(d) { return d.status !== 'completed' && d.status !== 'cancelled'; }).length;
-  var turnover = deals.reduce(function(sum, d) { return sum + (d.fiat_amount || 0); }, 0);
+  var turnover = deals.reduce(function(sum, d) { return sum + dealUsdValue(d); }, 0);
 
   document.getElementById('stat-total').textContent = totalDeals;
   document.getElementById('stat-turnover').textContent = '$' + turnover.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2});
