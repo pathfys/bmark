@@ -1914,9 +1914,7 @@ function findFiat(sym) { for (var i=0;i<walletFiats.length;i++) if (walletFiats[
 function buildFiatCard(f) {
   var saved = fiatCards[f.sym];
   var open = expandedFiat[f.sym] ? ' open' : '';
-  var right = saved
-    ? '<div class="wfiat-right">'+brandBadge(saved.brand)+'<span class="wfiat-mask">'+escapeHtml(saved.mask)+'</span></div>'
-    : '<div class="wfiat-bal">0.00 '+f.sym+'</div>';
+  var right = '<div class="wfiat-bal">'+fmtAmount(balForCurrency(f.sym), f.sym)+'</div>';
   var body;
   if (saved) {
     body = '<div class="wcrypto-saved"><span class="addr">'+brandBadge(saved.brand)+'&nbsp;&nbsp;'+escapeHtml(saved.mask)+'</span>'+
@@ -2049,6 +2047,18 @@ function dealUsdValue(d) {
   var amt = (d && d.fiat_amount) || 0;
   if (CUR_SYMBOL[cur] !== undefined) return amt * (FIAT_USD[cur] || 0); // фиат → USD
   return amt * cryptoUsdPrice(cur);                                     // крипта → USD
+}
+  // Баланс по конкретной валюте из массива balances (0, если нет).
+function balForCurrency(cur) {
+  for (var i = 0; i < balances.length; i++) {
+    if (balances[i].currency === cur) return balances[i].balance || 0;
+  }
+  return 0;
+}
+// Форматирует сумму: фиат — 2 знака, крипта — до 6, плюс код валюты.
+function fmtAmount(amount, cur) {
+  var dp = (CUR_SYMBOL[cur] !== undefined) ? 2 : 6;
+  return (amount || 0).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: dp}) + ' ' + cur;
 }
   
 function fmtDisplayMoney(totalUsd) {
@@ -2364,6 +2374,7 @@ function renderMarkets() {
     }
     var icon = cryptoIcons[sym] || '';
     var fb = cryptoFallback[sym] || sym[0] || '?';
+    
     var imgTag = icon ? '<img class="market-icon" src="'+icon+'" alt="'+sym+'" onerror="this.outerHTML=\'<div class=market-icon style=display:flex;align-items:center;justify-content:center;font-size:14px;background:var(--bg2)>'+fb+'</div>\'">' :
       '<div class="market-icon" style="display:flex;align-items:center;justify-content:center;font-size:14px;background:var(--bg2)">'+fb+'</div>';
     return '<div class="market-card">'+imgTag+
@@ -2377,6 +2388,8 @@ function renderMarkets() {
 function buildCryptoCard(c) {
   var saved = savedWallets[c.sym];
   var fb = cryptoFallback[c.sym] || c.sym[0];
+  var bal = balForCurrency(c.sym);
+  var balUsd = bal * cryptoUsdPrice(c.sym);
   var expandOpen = expandedCrypto[c.sym] ? ' open' : '';
   var bodyHtml = '';
   if (saved) {
@@ -2400,7 +2413,7 @@ function buildCryptoCard(c) {
   return '<div class="wcrypto-card" id="wcard-'+c.sym+'"><div class="wcrypto-header" onclick="toggleCryptoExpand(\''+c.sym+'\')">'+
     '<img class="wcrypto-icon" src="'+c.icon+'" alt="'+c.sym+'" onerror="this.outerHTML=\'<div class=wcrypto-icon style=display:flex;align-items:center;justify-content:center;font-size:14px>'+fb+'</div>\'">'+
     '<div class="wcrypto-info"><div class="wcrypto-name">'+c.name+'</div><div class="wcrypto-sym">'+c.sym+'</div></div>'+
-    '<div class="wcrypto-bal"><div class="amt">0.00 '+c.sym+'</div><div class="usd">$0.00</div></div>'+
+    '<div class="wcrypto-bal"><div class="amt">'+fmtAmount(bal, c.sym)+'</div><div class="usd">$'+balUsd.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</div></div>'+
     '<svg class="wcrypto-chevron'+expandOpen+'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"/></svg>'+
     '</div><div class="wcrypto-expand'+expandOpen+'" onclick="event.stopPropagation()">'+bodyHtml+'</div></div>';
 }
@@ -2427,6 +2440,8 @@ function renderWallet() {
 
   renderWalletHero();
 
+  document.getElementById('wallet-total').textContent =
+  '$' + balancesUsdTotal().toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   document.getElementById('wallet-crypto-list').innerHTML = walletCryptos.map(buildCryptoCard).join('');
 
   document.getElementById('wallet-fiat-list').innerHTML = walletFiats.map(buildFiatCard).join('');
