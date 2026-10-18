@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>GGZ Diag</title>
+<style>
+html,body{margin:0;background:#000;color:#fff;font:13px/1.5 -apple-system,monospace}
+#h{padding:14px;font-size:17px;font-weight:700;border-bottom:1px solid #222}
+#log{padding:12px;white-space:pre-wrap;word-break:break-all;user-select:text;-webkit-user-select:text}
+.ok{color:#30d158}.err{color:#ff453a}.inf{color:#8e8e93}
+</style>
+</head>
+<body>
+<div id="h">GGZ DIAG v1</div>
+<div id="log">booting...</div>
+<script>
+(function(){
+  var L=document.getElementById('log'); L.textContent='';
+  function add(cls,msg){var d=document.createElement('div');d.className=cls;d.textContent=msg;L.appendChild(d);}
+  window.onerror=function(m,s,l,c,e){add('err','WINDOW ERROR: '+m+' @'+l+':'+c);return false;};
+  window.addEventListener('unhandledrejection',function(e){add('err','UNHANDLED REJECT: '+e.reason);});
+
+  add('ok','[1] page rendered');
+  add('inf','    UA: '+navigator.userAgent.slice(0,90));
+  add('inf','    URL: '+location.href);
+
+  var tg=window.Telegram&&window.Telegram.WebApp;
+  add(tg?'ok':'err','[2] Telegram SDK: '+(tg?('present, v'+(tg.version||'?')+', platform='+(tg.platform||'?')):'ABSENT'));
+  if(tg){try{tg.ready();tg.expand();add('ok','    tg.ready() ok, initData len='+(tg.initData||'').length);}catch(e){add('err','    tg.ready() failed: '+e.message);}}
+
+  function timed(url){
+    var t0=Date.now();
+    return fetch(url,{cache:'no-store'}).then(function(r){
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      return r.text().then(function(t){
+        return {url:url,ms:Date.now()-t0,chars:t.length,text:t,ct:r.headers.get('content-type')||'?'};
+      });
+    });
+  }
+
+  var files=['/app-styles.css','/chunks/c0.js','/chunks/c1.js','/chunks/c2.js','/chunks/c3.js'];
+  var got=[];
+
+  function step(i){
+    if(i>=files.length) return finish();
+    add('inf','[3.'+i+'] fetching '+files[i]+' ...');
+    return timed(files[i]).then(function(r){
+      got.push(r);
+      add('ok','      OK '+r.chars+' chars, '+r.ms+'ms, '+r.ct);
+      return step(i+1);
+    }).catch(function(e){
+      add('err','      FAIL '+files[i]+' -> '+e.message);
+      return finish();
+    });
+  }
+
+  function finish(){
+    var js=got.filter(function(r){return r.url.indexOf('/chunks/')===0;}).map(function(r){return r.text;}).join('');
+    add('inf','[4] joined bundle: '+js.length+' chars (expect 1546156)');
+    if(js.length!==1546156){add('err','    SIZE MISMATCH - not executing');return;}
+    try{
+      var b=new Blob([js],{type:'application/javascript'});
+      var u=URL.createObjectURL(b);
+      add('ok','[5] blob created: '+u.slice(0,40));
+      var s=document.createElement('script');
+      s.type='module'; s.src=u;
+      s.onload=function(){add('ok','[6] bundle EXECUTED ok');};
+      s.onerror=function(){add('err','[6] bundle execution FAILED');};
+      document.body.appendChild(s);
+      add('inf','    script tag appended, waiting...');
+    }catch(e){add('err','[5] blob failed: '+e.message);}
+  }
+
+  setTimeout(function(){step(0);},100);
+})();
+</script>
+</body>
+</html>
