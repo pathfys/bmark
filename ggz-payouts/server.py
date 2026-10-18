@@ -44,6 +44,8 @@ ORIGINS = {s for s in (o.strip() for o in os.environ.get("ALLOWED_ORIGIN", "").s
 # чтобы они пережили перезапуск (по умолчанию только в памяти).
 LOG_CHANNEL_ID = os.environ.get("LOG_CHANNEL_ID", "").strip()
 APP_URL = os.environ.get("APP_URL", "").strip()
+# Приглашение в закрытый канал — выдаётся пользователю при одобрении заявки.
+INVITE_LINK = os.environ.get("INVITE_LINK", "").strip()
 DATA_FILE = os.environ.get("DATA_FILE", "").strip()
 BOT_POLL = os.environ.get("BOT_POLL", "1").lower() not in ("0", "", "false", "no")
 # База Bot API (переопределяется только для тестов; в проде не трогать)
@@ -283,6 +285,10 @@ Q_EXPERIENCE = (
 MSG_SUBMITTED = "✅ <b>Отлично, ваша заявка отправлена на рассмотрение, ожидайте.</b>"
 MSG_PENDING = "⏳ <b>Ваша заявка уже на рассмотрении. Ожидайте решения.</b>"
 MSG_APPROVED = "🎉 <b>Ваша заявка одобрена! Доступ к GGZ Pay открыт.</b>"
+if INVITE_LINK:
+    # Ссылку дублируем текстом: кнопку легко потерять в истории, а ссылку
+    # можно скопировать и переслать.
+    MSG_APPROVED += f"\n\n🔗 Ссылка на закрытый канал:\n{html.escape(INVITE_LINK)}"
 MSG_REJECTED = "❌ <b>К сожалению, ваша заявка отклонена.</b>"
 MSG_START_HINT = "👉 <b>Нажмите /start, чтобы подать заявку на вступление.</b>"
 
@@ -306,10 +312,13 @@ def _decision_keyboard(uid: str) -> dict:
 
 
 def _open_keyboard() -> dict | None:
+    rows = []
     # web_app-кнопка работает только по https и только в личке
-    if not APP_URL.startswith("https://"):
-        return None
-    return {"inline_keyboard": [[{"text": "🚀 Открыть GGZ Pay", "web_app": {"url": APP_URL}}]]}
+    if APP_URL.startswith("https://"):
+        rows.append([{"text": "🚀 Открыть GGZ Pay", "web_app": {"url": APP_URL}}])
+    if INVITE_LINK.startswith("https://"):
+        rows.append([{"text": "🔗 Вступить в канал", "url": INVITE_LINK}])
+    return {"inline_keyboard": rows} if rows else None
 
 
 # ── Выплаты: стадии и кнопки оператора в лог-канале ──────────────────────────
