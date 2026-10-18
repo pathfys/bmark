@@ -154,7 +154,6 @@ def verify_session(token: str, secret: str, now=None):
 
 # ── Состояние (демо в памяти; в проде — Redis/БД), защищено локом ───────────
 _lock = threading.Lock()
-_seen = {}       # hash -> expires_at (анти-replay)
 _bans = set()    # заблокированные user id
 _buckets = {}    # "name:ip" -> [count, reset_at] (rate limit)
 _apps = {}       # uid -> заявка на вступление {user, source, experience, status, ts}
@@ -163,19 +162,6 @@ _payouts = {}    # id -> заявка на выплату {uid, memo, amount, ad
 _articles = {}   # id -> статья {title, body, author, created_at, updated_at}
 _toolscfg = {}   # конфиг вкладки «Инструменты» (проекты + плитки), правит админ
 _subs = {}       # uid -> [subscribed_bool, checked_at] — кэш подписки на канал
-
-
-def use_once(h: str, now=None) -> bool:
-    now = now if now is not None else time.time()
-    with _lock:
-        if len(_seen) > 50_000:
-            for k in [k for k, exp in _seen.items() if exp <= now]:
-                _seen.pop(k, None)
-        exp = _seen.get(h)
-        if exp and exp > now:
-            return False
-        _seen[h] = now + INITDATA_TTL
-        return True
 
 
 def rate_limit(name: str, ip: str, max_hits: int, window: float, now=None) -> bool:
@@ -885,8 +871,11 @@ class Handler(BaseHTTPRequestHandler):
                 result, reason = verify_init_data(init_data, BOT_TOKEN, INITDATA_TTL)
                 if not result:
                     return self._send(401, {"error": "invalid_init_data", "reason": reason})
-                if not use_once(result["hash"]):
-                    return self._send(401, {"error": "replay_detected"})
+                # initData у Telegram не одноразовый: один и тот же подписанный
+                # payload приходит при каждом повторном открытии мини-аппа, пока
+                # не обновится сессия. Отбрасывать повтор нельзя — иначе рабочим
+                # остаётся только первое открытие. Защиту даёт подпись ботовым
+                # токеном плюс окно свежести auth_date (INITDATA_TTL).
                 uid = str((result["user"] or {}).get("id", ""))
                 if not uid:
                     return self._send(401, {"error": "no_user"})
