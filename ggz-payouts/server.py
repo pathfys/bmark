@@ -338,8 +338,12 @@ def format_payout(rec: dict, suffix: str = "") -> str:
         f"<b>Сумма:</b> {_ue(rec.get('amount', '—'), 32)} TON\n"
         f"<b>Адрес:</b> {_ue(rec.get('address', '—'), 80)}\n"
         f"<b>Memo:</b> {_ue(rec.get('memo', '—'), 32)}\n"
-        f"<b>Статус:</b> {html.escape(label)}"
     )
+    # Ссылки на подарки — оператор проверяет их перед выплатой, поэтому они
+    # идут отдельным блоком, а не в одну строку с остальным.
+    gifts = str(rec.get("gifts") or "").strip()
+    text += f"<b>Подарки:</b>\n{_ue(gifts, 700) if gifts else '— не указаны'}\n"
+    text += f"<b>Статус:</b> {html.escape(label)}"
     return text + suffix
 
 
@@ -351,6 +355,7 @@ def _payout_dto(rec: dict) -> dict:
         "amount": rec.get("amount", 0),
         "address": rec.get("address", ""),
         "comment": rec.get("comment") or "",
+        "gifts": rec.get("gifts") or "",
         "status": rec.get("status", "pending"),
         "createdAt": rec.get("created_at", 0),
         "updatedAt": rec.get("updated_at", 0),
@@ -992,11 +997,13 @@ class Handler(BaseHTTPRequestHandler):
                         return self._send(400, {"error": "bad_address"})
                     memo = str(body.get("memo", "")).strip()[:40]
                     comment = str(body.get("comment", "")).strip()[:280]
+                    gifts = str(body.get("gifts", "")).strip()[:1000]
                     now_ms = int(time.time() * 1000)
                     pid = "po_" + b64url(os.urandom(9))
                     rec = {
                         "id": pid, "uid": uid, "amount": amount, "address": address,
-                        "memo": memo, "comment": comment, "status": "pending",
+                        "memo": memo, "comment": comment, "gifts": gifts,
+                        "status": "pending",
                         "created_at": now_ms, "updated_at": now_ms, "paid_at": None,
                     }
                     with _lock:
