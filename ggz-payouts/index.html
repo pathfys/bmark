@@ -9,7 +9,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
-    <style>:root{--bg:#000;--surface:#0a0a0a;--border:#1c1c1e;--text:#fff;--text-muted:#8e8e93;--green:#30d158;--ease:cubic-bezier(.16,1,.3,1);--fast:.18s var(--ease);--base:.28s var(--ease);color-scheme:dark}*{margin:0;padding:0;box-sizing:border-box}html,body{width:100%;min-height:100%;background:var(--bg);color:var(--text);font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif;-webkit-font-smoothing:antialiased;overscroll-behavior-y:none;overflow-x:hidden}#root{min-height:100vh;min-height:100dvh;background:var(--bg)}body,button{user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}input,textarea{user-select:text;-webkit-user-select:text;font-family:inherit;color:inherit}button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}a{color:inherit;text-decoration:none}::-webkit-scrollbar{width:0;height:0}*{scrollbar-width:none}</style>
+    <link rel="stylesheet" href="/app-styles.css" />
+    <style>
+      html, body { margin: 0; background: #000000; }
+      #root { min-height: 100vh; min-height: 100dvh; background: #000; }
+    </style>
   </head>
   <body>
     <div id="root"></div>
@@ -18,34 +22,76 @@
       <div style="width:min(200px,54vw);height:3px;border-radius:999px;background:#1c1c1e;overflow:hidden">
         <div id="pbar" style="height:100%;width:0%;border-radius:999px;background:linear-gradient(90deg,#fff,#8e8e93);transition:width 0.3s ease"></div>
       </div>
-      <span style="font-size:13px;color:#8e8e93;animation:pulse 1.6s ease-in-out infinite">Loading...</span>
+      <span id="ptext" style="font-size:13px;color:#8e8e93;animation:pulse 1.6s ease-in-out infinite">Loading...</span>
     </div>
     <style>@keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}</style>
     <script>
-      var pb = document.getElementById('pbar');
-      pb.style.width = '30%';
-      setTimeout(function() {
-        pb.style.width = '60%';
-        var s = document.createElement('script');
-        s.type = 'module';
-        s.src = '/app-bundle.js?v=7';
-        s.onload = function() {
-          pb.style.width = '100%';
-          setTimeout(function() {
-            var sp = document.getElementById('splash');
-            if (sp) sp.style.display = 'none';
-          }, 300);
-        };
-        s.onerror = function() {
+      (function() {
+        var pb = document.getElementById('pbar');
+        var pt = document.getElementById('ptext');
+        var chunks = ['/chunks/c0.js', '/chunks/c1.js', '/chunks/c2.js', '/chunks/c3.js'];
+        var total = chunks.length;
+        var loaded = 0;
+        var parts = [];
+
+        function progress(n) {
+          var pct = Math.round((n / (total + 1)) * 100);
+          pb.style.width = pct + '%';
+        }
+
+        function loadChunk(url) {
+          return fetch(url + '?v=8').then(function(r) {
+            if (!r.ok) throw new Error(r.status);
+            return r.text();
+          });
+        }
+
+        function loadAll() {
+          progress(0);
+          var promises = chunks.map(function(url, i) {
+            return loadChunk(url).then(function(text) {
+              parts[i] = text;
+              loaded++;
+              progress(loaded);
+            });
+          });
+
+          Promise.all(promises).then(function() {
+            var code = parts.join('');
+            var blob = new Blob([code], { type: 'application/javascript' });
+            var blobUrl = URL.createObjectURL(blob);
+            var s = document.createElement('script');
+            s.type = 'module';
+            s.src = blobUrl;
+            s.onload = function() {
+              URL.revokeObjectURL(blobUrl);
+              progress(total + 1);
+              setTimeout(function() {
+                var sp = document.getElementById('splash');
+                if (sp) sp.style.display = 'none';
+              }, 300);
+            };
+            s.onerror = function() {
+              URL.revokeObjectURL(blobUrl);
+              showError('Script execution error');
+            };
+            document.body.appendChild(s);
+          }).catch(function(err) {
+            showError(err.message || 'Network error');
+          });
+        }
+
+        function showError(msg) {
           document.getElementById('splash').innerHTML =
             '<div style="text-align:center;padding:20px">' +
             '<div style="font-size:48px;margin-bottom:16px">GGZ</div>' +
-            '<div style="color:#8e8e93;font-size:14px">Loading error. Please try again.</div>' +
+            '<div style="color:#8e8e93;font-size:14px">Loading error: ' + msg + '</div>' +
             '<button onclick="location.reload()" style="margin-top:16px;padding:10px 24px;background:#30d158;color:#000;border-radius:12px;font-weight:600;font-size:14px">Retry</button>' +
             '</div>';
-        };
-        document.body.appendChild(s);
-      }, 100);
+        }
+
+        setTimeout(loadAll, 50);
+      })();
     </script>
   </body>
 </html>
