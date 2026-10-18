@@ -3,116 +3,78 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>GGZ Diag 2</title>
+<title>GGZ Diag 3</title>
 <style>
 html,body{margin:0;background:#000;color:#fff;font:13px/1.55 -apple-system,monospace}
 #h{padding:14px;font-size:17px;font-weight:700;border-bottom:1px solid #222}
-#prev{padding:12px 14px;background:#2a1a00;color:#ffb340;font-size:12px;display:none;
-  border-bottom:1px solid #332200}
 #log{padding:12px 14px;white-space:pre-wrap;word-break:break-all;
   user-select:text;-webkit-user-select:text}
 .ok{color:#30d158}.err{color:#ff453a}.inf{color:#8e8e93}.big{color:#ffd60a;font-weight:700}
-#btn{margin:14px;padding:12px 22px;background:#30d158;color:#000;border:none;border-radius:12px;
-  font:600 14px -apple-system;display:none}
 </style>
 </head>
 <body>
-<div id="h">GGZ DIAG v2</div>
-<div id="prev"></div>
+<div id="h">GGZ DIAG v3 — auth</div>
 <div id="log"></div>
-<button id="btn" onclick="localStorage.removeItem('ggz_step');location.reload()">Сбросить и повторить</button>
 <script>
 (function(){
   var L=document.getElementById('log');
   function add(c,m){var d=document.createElement('div');d.className=c;d.textContent=m;L.appendChild(d);}
 
-  // Хлебная крошка переживает падение WebView: если процесс умрёт,
-  // при следующем открытии мы увидим, до какого шага он успел дойти.
-  function mark(s){ try{ localStorage.setItem('ggz_step',s); }catch(e){} }
-
-  var prev=null;
-  try{ prev=localStorage.getItem('ggz_step'); }catch(e){}
-  if(prev){
-    var p=document.getElementById('prev');
-    p.textContent='ПРОШЛЫЙ ЗАПУСК ОБОРВАЛСЯ НА:\n'+prev;
-    p.style.display='block';
-  }
-
-  window.onerror=function(m,s,l,c,e){add('err','WINDOW ERROR: '+m+' @'+l+':'+c);mark('window.onerror: '+m);return false;};
-  window.addEventListener('unhandledrejection',function(e){add('err','REJECT: '+e.reason);});
-
-  mark('[1] page rendered');
-  add('ok','[1] page rendered');
-  add('inf','    '+navigator.userAgent.slice(0,80));
-  add('inf','    mem='+(navigator.deviceMemory||'?')+'GB cores='+(navigator.hardwareConcurrency||'?'));
-
-  function inject(src,mod){
+  function inject(src){
     return new Promise(function(res,rej){
       var s=document.createElement('script');
-      if(mod) s.type='module';
-      s.src=src; s.onload=function(){res();}; s.onerror=function(){rej(new Error(src));};
+      s.src=src; s.onload=res; s.onerror=function(){rej(new Error(src));};
       document.head.appendChild(s);
     });
   }
 
-  mark('[2] loading /tg-sdk.js');
-  add('inf','[2] loading /tg-sdk.js ...');
+  add('ok','[1] page rendered');
 
-  inject('/tg-sdk.js',false).then(function(){
-    add('ok','[2] SDK loaded');
+  inject('/tg-sdk.js').then(function(){
     var tg=window.Telegram&&window.Telegram.WebApp;
-    if(tg){ try{tg.ready();tg.expand();}catch(e){}
-      add('ok','    WebApp v'+(tg.version||'?')+' '+(tg.platform||'?')+' initData='+(tg.initData||'').length); }
-    else add('err','    window.Telegram.WebApp ABSENT');
-    mark('[3] SDK ok, about to test WebGL');
+    if(!tg){ add('err','[2] WebApp ABSENT — дальше нет смысла'); return; }
+    try{ tg.ready(); tg.expand(); }catch(e){}
+    var init=tg.initData||'';
+    add('ok','[2] SDK ok, initData length='+init.length);
+    if(!init){ add('err','    initData ПУСТОЙ — Telegram не передал данные'); return; }
 
-    // WebGL проверяем отдельно: Three.js занимает больше половины бандла,
-    // и если контекст не создаётся, падение будет именно здесь.
-    add('inf','[3] testing WebGL ...');
+    // Разбираем initData так же, как это делает сервер.
     try{
-      var cv=document.createElement('canvas');
-      var gl=cv.getContext('webgl2')||cv.getContext('webgl');
-      if(gl){
-        var dbg=gl.getExtension('WEBGL_debug_renderer_info');
-        add('ok','[3] WebGL OK: '+(dbg?gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER)));
-        add('inf','    maxTex='+gl.getParameter(gl.MAX_TEXTURE_SIZE));
-      } else add('err','[3] WebGL context NOT available');
-    }catch(e){ add('err','[3] WebGL threw: '+e.message); }
+      var p=new URLSearchParams(init);
+      var ad=parseInt(p.get('auth_date')||'0',10);
+      var age=Math.floor(Date.now()/1000)-ad;
+      add('inf','    auth_date='+ad+'  возраст='+age+'s  (сервер отвергает >3600s)');
+      add('inf','    hash='+(p.get('hash')||'').slice(0,20)+'...');
+      var u=p.get('user'); if(u) add('inf','    user='+u.slice(0,90));
+    }catch(e){ add('err','    разбор initData упал: '+e.message); }
 
-    mark('[4] countdown before executing bundle');
-    return countdown(3);
-  }).then(function(){
-    mark('[5] INJECTING /app-bundle.js  <-- если экран умер здесь, падает выполнение бандла');
-    add('big','[5] injecting /app-bundle.js ...');
-    return inject('/app-bundle.js?v=d2',true);
-  }).then(function(){
-    mark('[6] bundle onload fired');
-    add('ok','[6] bundle loaded and executed');
-    setTimeout(function(){
-      var n=document.getElementById('root')?document.getElementById('root').children.length:-1;
-      add(n>0?'ok':'err','[7] #root children = '+n);
-      mark('[7] done, root children='+n);
-      add('ok','ВСЁ ПРОШЛО. Бандл выполняется нормально.');
-      document.getElementById('btn').style.display='block';
-    },1200);
+    // Тот же запрос, что делает приложение, но БЕЗ таймаута в 8 секунд,
+    // чтобы отличить медленный ответ от ошибки.
+    add('big','[3] POST /api/auth ... (без таймаута)');
+    var t0=Date.now();
+    return fetch('/api/auth',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({initData:init}),
+      credentials:'omit'
+    }).then(function(r){
+      var ms=Date.now()-t0;
+      return r.text().then(function(txt){
+        var slow=ms>8000;
+        add(r.ok?'ok':'err','[4] HTTP '+r.status+'  за '+ms+'ms'+(slow?'  <-- ДОЛЬШЕ 8s, приложение бы оборвало':''));
+        add(r.ok?'ok':'err','    '+txt.slice(0,400));
+        if(r.ok && slow) add('big','ВЫВОД: сервер отвечает верно, но слишком медленно.');
+        else if(r.ok) add('big','ВЫВОД: авторизация проходит. Причина в другом месте.');
+        else add('big','ВЫВОД: сервер отвергает авторизацию, причина в ответе выше.');
+      });
+    }).catch(function(e){
+      add('err','[4] запрос упал за '+(Date.now()-t0)+'ms: '+e.message);
+      add('big','ВЫВОД: до сервера не дошло — сеть или блокировка.');
+    });
   }).catch(function(e){
     add('err','FAILED: '+(e&&e.message?e.message:e));
-    mark('FAILED at: '+(e&&e.message?e.message:e));
-    document.getElementById('btn').style.display='block';
   });
-
-  function countdown(n){
-    return new Promise(function(res){
-      var d=document.createElement('div'); d.className='big'; L.appendChild(d);
-      (function tick(){
-        if(n<=0){ d.textContent='[4] запускаю бандл СЕЙЧАС'; return res(); }
-        d.textContent='[4] бандл запустится через '+n+'...';
-        n--; setTimeout(tick,1000);
-      })();
-    });
-  }
 })();
 </script>
-<div id="root"></div>
 </body>
 </html>
