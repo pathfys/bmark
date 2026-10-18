@@ -1,97 +1,103 @@
 <!doctype html>
 <html lang="ru">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta name="theme-color" content="#000000" />
-    <title>GGZ Payouts</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app-styles.css" />
-    <style>
-      html, body { margin: 0; background: #000000; }
-      #root { min-height: 100vh; min-height: 100dvh; background: #000; }
-    </style>
-  </head>
-  <body>
-    <div id="root"></div>
-    <div id="splash" style="position:fixed;inset:0;z-index:100;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px">
-      <div style="font-size:clamp(56px,18vw,76px);font-weight:700;letter-spacing:-0.04em;color:#fff;text-shadow:0 0 40px rgba(255,255,255,0.18)">GGZ</div>
-      <div style="width:min(200px,54vw);height:3px;border-radius:999px;background:#1c1c1e;overflow:hidden">
-        <div id="pbar" style="height:100%;width:0%;border-radius:999px;background:linear-gradient(90deg,#fff,#8e8e93);transition:width 0.3s ease"></div>
-      </div>
-      <span id="ptext" style="font-size:13px;color:#8e8e93;animation:pulse 1.6s ease-in-out infinite">Loading...</span>
-    </div>
-    <style>@keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}</style>
-    <script>
-      (function() {
-        var pb = document.getElementById('pbar');
-        var pt = document.getElementById('ptext');
-        var chunks = ['/chunks/c0.js', '/chunks/c1.js', '/chunks/c2.js', '/chunks/c3.js'];
-        var total = chunks.length;
-        var loaded = 0;
-        var parts = [];
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>GGZ Payouts</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="/app-styles.css">
+<style>
+html,body{margin:0;background:#000}
+#root{min-height:100vh;min-height:100dvh;background:#000}
+#splash{position:fixed;inset:0;z-index:100;background:#000;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:28px;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif}
+#logo{font-size:clamp(56px,18vw,76px);font-weight:700;letter-spacing:-.04em;color:#fff;
+  text-shadow:0 0 40px rgba(255,255,255,.18)}
+#track{width:min(200px,54vw);height:3px;border-radius:999px;background:#1c1c1e;overflow:hidden}
+#pbar{height:100%;width:0;border-radius:999px;background:linear-gradient(90deg,#fff,#8e8e93);
+  transition:width .3s ease}
+#ptext{font-size:13px;color:#8e8e93;animation:pulse 1.6s ease-in-out infinite}
+#err{display:none;padding:0 24px;text-align:center;max-width:460px}
+#err b{display:block;font-size:15px;color:#ff453a;margin-bottom:10px}
+#err span{font-size:12px;color:#8e8e93;word-break:break-all;user-select:text;-webkit-user-select:text}
+#err button{margin-top:18px;padding:11px 26px;background:#30d158;color:#000;border:none;
+  border-radius:12px;font-weight:600;font-size:14px;font-family:inherit}
+@keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="splash">
+  <div id="logo">GGZ</div>
+  <div id="track"><div id="pbar"></div></div>
+  <div id="ptext">Загрузка…</div>
+  <div id="err"><b>Не удалось загрузить</b><span id="errmsg"></span>
+    <button onclick="location.reload()">Повторить</button></div>
+</div>
 
-        function progress(n) {
-          var pct = Math.round((n / (total + 1)) * 100);
-          pb.style.width = pct + '%';
-        }
+<!-- Шрифт подключается асинхронно: если fonts.googleapis.com недоступен,
+     страница всё равно отрисуется, CSS откатится на системный шрифт. -->
+<link rel="stylesheet" media="print" onload="this.media='all';this.onload=null"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap">
 
-        function loadChunk(url) {
-          return fetch(url + '?v=8').then(function(r) {
-            if (!r.ok) throw new Error(r.status);
-            return r.text();
-          });
-        }
+<script>
+(function(){
+  var CHUNKS = ['/chunks/c0.js','/chunks/c1.js','/chunks/c2.js','/chunks/c3.js'];
+  var VER = '9';
+  var pbar = document.getElementById('pbar');
+  var ptext = document.getElementById('ptext');
+  var done = 0;
 
-        function loadAll() {
-          progress(0);
-          var promises = chunks.map(function(url, i) {
-            return loadChunk(url).then(function(text) {
-              parts[i] = text;
-              loaded++;
-              progress(loaded);
-            });
-          });
+  function progress(n){ pbar.style.width = Math.round(n/(CHUNKS.length+1)*100) + '%'; }
 
-          Promise.all(promises).then(function() {
-            var code = parts.join('');
-            var blob = new Blob([code], { type: 'application/javascript' });
-            var blobUrl = URL.createObjectURL(blob);
-            var s = document.createElement('script');
-            s.type = 'module';
-            s.src = blobUrl;
-            s.onload = function() {
-              URL.revokeObjectURL(blobUrl);
-              progress(total + 1);
-              setTimeout(function() {
-                var sp = document.getElementById('splash');
-                if (sp) sp.style.display = 'none';
-              }, 300);
-            };
-            s.onerror = function() {
-              URL.revokeObjectURL(blobUrl);
-              showError('Script execution error');
-            };
-            document.body.appendChild(s);
-          }).catch(function(err) {
-            showError(err.message || 'Network error');
-          });
-        }
+  function fail(msg){
+    document.getElementById('logo').style.display = 'none';
+    document.getElementById('track').style.display = 'none';
+    ptext.style.display = 'none';
+    document.getElementById('errmsg').textContent = msg;
+    document.getElementById('err').style.display = 'block';
+  }
 
-        function showError(msg) {
-          document.getElementById('splash').innerHTML =
-            '<div style="text-align:center;padding:20px">' +
-            '<div style="font-size:48px;margin-bottom:16px">GGZ</div>' +
-            '<div style="color:#8e8e93;font-size:14px">Loading error: ' + msg + '</div>' +
-            '<button onclick="location.reload()" style="margin-top:16px;padding:10px 24px;background:#30d158;color:#000;border-radius:12px;font-weight:600;font-size:14px">Retry</button>' +
-            '</div>';
-        }
+  function grab(url){
+    return fetch(url + '?v=' + VER).then(function(r){
+      if(!r.ok) throw new Error(url + ' вернул HTTP ' + r.status);
+      return r.text();
+    }).then(function(text){
+      progress(++done);
+      return text;
+    });
+  }
 
-        setTimeout(loadAll, 50);
-      })();
-    </script>
-  </body>
+  progress(0);
+
+  Promise.all(CHUNKS.map(grab)).then(function(parts){
+    var code = parts.join('');
+
+    // try_files отдаёт index.html вместо отсутствующего файла — это пришло бы
+    // сюда как HTML с кодом 200 и молча сломало бандл.
+    if(/^\s*</.test(code)) throw new Error('вместо JS получен HTML — проверь /chunks/ на сервере');
+    if(code.length < 1000000) throw new Error('бандл неполный: ' + code.length + ' символов');
+
+    var url = URL.createObjectURL(new Blob([code], {type:'application/javascript'}));
+    var s = document.createElement('script');
+    s.type = 'module';
+    s.src = url;
+    s.onload = function(){
+      URL.revokeObjectURL(url);
+      progress(CHUNKS.length + 1);
+      setTimeout(function(){ document.getElementById('splash').style.display = 'none'; }, 300);
+    };
+    s.onerror = function(){
+      URL.revokeObjectURL(url);
+      fail('бандл не выполнился');
+    };
+    document.body.appendChild(s);
+  }).catch(function(e){
+    fail(e && e.message ? e.message : 'сеть недоступна');
+  });
+})();
+</script>
+</body>
 </html>
