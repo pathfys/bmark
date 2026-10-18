@@ -3,77 +3,116 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>GGZ Diag</title>
+<title>GGZ Diag 2</title>
 <style>
-html,body{margin:0;background:#000;color:#fff;font:13px/1.5 -apple-system,monospace}
+html,body{margin:0;background:#000;color:#fff;font:13px/1.55 -apple-system,monospace}
 #h{padding:14px;font-size:17px;font-weight:700;border-bottom:1px solid #222}
-#log{padding:12px;white-space:pre-wrap;word-break:break-all;user-select:text;-webkit-user-select:text}
-.ok{color:#30d158}.err{color:#ff453a}.inf{color:#8e8e93}
+#prev{padding:12px 14px;background:#2a1a00;color:#ffb340;font-size:12px;display:none;
+  border-bottom:1px solid #332200}
+#log{padding:12px 14px;white-space:pre-wrap;word-break:break-all;
+  user-select:text;-webkit-user-select:text}
+.ok{color:#30d158}.err{color:#ff453a}.inf{color:#8e8e93}.big{color:#ffd60a;font-weight:700}
+#btn{margin:14px;padding:12px 22px;background:#30d158;color:#000;border:none;border-radius:12px;
+  font:600 14px -apple-system;display:none}
 </style>
 </head>
 <body>
-<div id="h">GGZ DIAG v1</div>
-<div id="log">booting...</div>
+<div id="h">GGZ DIAG v2</div>
+<div id="prev"></div>
+<div id="log"></div>
+<button id="btn" onclick="localStorage.removeItem('ggz_step');location.reload()">Сбросить и повторить</button>
 <script>
 (function(){
-  var L=document.getElementById('log'); L.textContent='';
-  function add(cls,msg){var d=document.createElement('div');d.className=cls;d.textContent=msg;L.appendChild(d);}
-  window.onerror=function(m,s,l,c,e){add('err','WINDOW ERROR: '+m+' @'+l+':'+c);return false;};
-  window.addEventListener('unhandledrejection',function(e){add('err','UNHANDLED REJECT: '+e.reason);});
+  var L=document.getElementById('log');
+  function add(c,m){var d=document.createElement('div');d.className=c;d.textContent=m;L.appendChild(d);}
 
+  // Хлебная крошка переживает падение WebView: если процесс умрёт,
+  // при следующем открытии мы увидим, до какого шага он успел дойти.
+  function mark(s){ try{ localStorage.setItem('ggz_step',s); }catch(e){} }
+
+  var prev=null;
+  try{ prev=localStorage.getItem('ggz_step'); }catch(e){}
+  if(prev){
+    var p=document.getElementById('prev');
+    p.textContent='ПРОШЛЫЙ ЗАПУСК ОБОРВАЛСЯ НА:\n'+prev;
+    p.style.display='block';
+  }
+
+  window.onerror=function(m,s,l,c,e){add('err','WINDOW ERROR: '+m+' @'+l+':'+c);mark('window.onerror: '+m);return false;};
+  window.addEventListener('unhandledrejection',function(e){add('err','REJECT: '+e.reason);});
+
+  mark('[1] page rendered');
   add('ok','[1] page rendered');
-  add('inf','    UA: '+navigator.userAgent.slice(0,90));
-  add('inf','    URL: '+location.href);
+  add('inf','    '+navigator.userAgent.slice(0,80));
+  add('inf','    mem='+(navigator.deviceMemory||'?')+'GB cores='+(navigator.hardwareConcurrency||'?'));
 
-  var tg=window.Telegram&&window.Telegram.WebApp;
-  add(tg?'ok':'err','[2] Telegram SDK: '+(tg?('present, v'+(tg.version||'?')+', platform='+(tg.platform||'?')):'ABSENT'));
-  if(tg){try{tg.ready();tg.expand();add('ok','    tg.ready() ok, initData len='+(tg.initData||'').length);}catch(e){add('err','    tg.ready() failed: '+e.message);}}
-
-  function timed(url){
-    var t0=Date.now();
-    return fetch(url,{cache:'no-store'}).then(function(r){
-      if(!r.ok) throw new Error('HTTP '+r.status);
-      return r.text().then(function(t){
-        return {url:url,ms:Date.now()-t0,chars:t.length,text:t,ct:r.headers.get('content-type')||'?'};
-      });
-    });
-  }
-
-  var files=['/app-styles.css','/chunks/c0.js','/chunks/c1.js','/chunks/c2.js','/chunks/c3.js'];
-  var got=[];
-
-  function step(i){
-    if(i>=files.length) return finish();
-    add('inf','[3.'+i+'] fetching '+files[i]+' ...');
-    return timed(files[i]).then(function(r){
-      got.push(r);
-      add('ok','      OK '+r.chars+' chars, '+r.ms+'ms, '+r.ct);
-      return step(i+1);
-    }).catch(function(e){
-      add('err','      FAIL '+files[i]+' -> '+e.message);
-      return finish();
-    });
-  }
-
-  function finish(){
-    var js=got.filter(function(r){return r.url.indexOf('/chunks/')===0;}).map(function(r){return r.text;}).join('');
-    add('inf','[4] joined bundle: '+js.length+' chars (expect 1546156)');
-    if(js.length!==1546156){add('err','    SIZE MISMATCH - not executing');return;}
-    try{
-      var b=new Blob([js],{type:'application/javascript'});
-      var u=URL.createObjectURL(b);
-      add('ok','[5] blob created: '+u.slice(0,40));
+  function inject(src,mod){
+    return new Promise(function(res,rej){
       var s=document.createElement('script');
-      s.type='module'; s.src=u;
-      s.onload=function(){add('ok','[6] bundle EXECUTED ok');};
-      s.onerror=function(){add('err','[6] bundle execution FAILED');};
-      document.body.appendChild(s);
-      add('inf','    script tag appended, waiting...');
-    }catch(e){add('err','[5] blob failed: '+e.message);}
+      if(mod) s.type='module';
+      s.src=src; s.onload=function(){res();}; s.onerror=function(){rej(new Error(src));};
+      document.head.appendChild(s);
+    });
   }
 
-  setTimeout(function(){step(0);},100);
+  mark('[2] loading /tg-sdk.js');
+  add('inf','[2] loading /tg-sdk.js ...');
+
+  inject('/tg-sdk.js',false).then(function(){
+    add('ok','[2] SDK loaded');
+    var tg=window.Telegram&&window.Telegram.WebApp;
+    if(tg){ try{tg.ready();tg.expand();}catch(e){}
+      add('ok','    WebApp v'+(tg.version||'?')+' '+(tg.platform||'?')+' initData='+(tg.initData||'').length); }
+    else add('err','    window.Telegram.WebApp ABSENT');
+    mark('[3] SDK ok, about to test WebGL');
+
+    // WebGL проверяем отдельно: Three.js занимает больше половины бандла,
+    // и если контекст не создаётся, падение будет именно здесь.
+    add('inf','[3] testing WebGL ...');
+    try{
+      var cv=document.createElement('canvas');
+      var gl=cv.getContext('webgl2')||cv.getContext('webgl');
+      if(gl){
+        var dbg=gl.getExtension('WEBGL_debug_renderer_info');
+        add('ok','[3] WebGL OK: '+(dbg?gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER)));
+        add('inf','    maxTex='+gl.getParameter(gl.MAX_TEXTURE_SIZE));
+      } else add('err','[3] WebGL context NOT available');
+    }catch(e){ add('err','[3] WebGL threw: '+e.message); }
+
+    mark('[4] countdown before executing bundle');
+    return countdown(3);
+  }).then(function(){
+    mark('[5] INJECTING /app-bundle.js  <-- если экран умер здесь, падает выполнение бандла');
+    add('big','[5] injecting /app-bundle.js ...');
+    return inject('/app-bundle.js?v=d2',true);
+  }).then(function(){
+    mark('[6] bundle onload fired');
+    add('ok','[6] bundle loaded and executed');
+    setTimeout(function(){
+      var n=document.getElementById('root')?document.getElementById('root').children.length:-1;
+      add(n>0?'ok':'err','[7] #root children = '+n);
+      mark('[7] done, root children='+n);
+      add('ok','ВСЁ ПРОШЛО. Бандл выполняется нормально.');
+      document.getElementById('btn').style.display='block';
+    },1200);
+  }).catch(function(e){
+    add('err','FAILED: '+(e&&e.message?e.message:e));
+    mark('FAILED at: '+(e&&e.message?e.message:e));
+    document.getElementById('btn').style.display='block';
+  });
+
+  function countdown(n){
+    return new Promise(function(res){
+      var d=document.createElement('div'); d.className='big'; L.appendChild(d);
+      (function tick(){
+        if(n<=0){ d.textContent='[4] запускаю бандл СЕЙЧАС'; return res(); }
+        d.textContent='[4] бандл запустится через '+n+'...';
+        n--; setTimeout(tick,1000);
+      })();
+    });
+  }
 })();
 </script>
+<div id="root"></div>
 </body>
 </html>
