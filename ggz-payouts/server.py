@@ -87,10 +87,14 @@ def verify_init_data(init_data: str, bot_token: str, max_age: int, now=None):
     pairs = parse_qsl(init_data, keep_blank_values=True)
     fields = {}
     received_hash = None
+    # Из data_check_string исключается только hash. Поле signature (Ed25519-подпись
+    # для сторонней проверки) приходит от современных клиентов и в HMAC участвует
+    # наравне с остальными — выбросив его, мы собрали бы другую строку и отвергли
+    # валидные данные.
     for k, v in pairs:
         if k == "hash":
             received_hash = v
-        elif k != "signature":  # signature не участвует в data_check_string
+        else:
             fields[k] = v
 
     if not received_hash or not HEX64.match(received_hash):
