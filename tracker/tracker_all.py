@@ -1177,7 +1177,41 @@ def create_bot() -> TelegramClient:
     async def on_claim(event):
         await _handle_claim(bot, event)
 
+    @bot.on(events.CallbackQuery(pattern=rb"^seller:(\d+)$"))
+    async def on_seller(event):
+        await _handle_seller_profile(bot, event)
+
     return bot
+
+
+async def _handle_seller_profile(bot, event):
+    seller_id = int(event.pattern_match.group(1))
+    try:
+        entity = await bot.get_entity(seller_id)
+        uname = getattr(entity, "username", None)
+        fname = getattr(entity, "first_name", None) or ""
+        lname = getattr(entity, "last_name", None) or ""
+        name = f"{fname} {lname}".strip() or f"id:{seller_id}"
+        if uname:
+            await event.answer(url=f"t.me/{uname}")
+            return
+        text = f'<a href="tg://user?id={seller_id}">{name}</a>'
+        await event.answer(
+            f"Seller: {name}\nNo public username, opening profile...",
+            alert=True,
+        )
+        try:
+            msg = await bot.send_message(
+                event.chat_id, text, parse_mode="html",
+                reply_to=event.message_id,
+            )
+            await asyncio.sleep(15)
+            await bot.delete_messages(event.chat_id, [msg.id])
+        except Exception:
+            pass
+    except Exception as e:
+        logger.debug("Seller profile %d: %s", seller_id, e)
+        await event.answer(f"Seller id: {seller_id}", alert=True)
 
 
 def _build_listing_text(listing: ResaleListing, seller_level=None, seller_nft=None) -> str:
@@ -1207,15 +1241,17 @@ def _build_listing_text(listing: ResaleListing, seller_level=None, seller_nft=No
 
 
 def _build_buttons(listing: ResaleListing) -> list[list[Button]]:
-    if listing.owner_username:
-        profile_url = f"https://t.me/{listing.owner_username}"
-    elif listing.owner_id:
-        profile_url = f"tg://user?id={listing.owner_id}"
-    else:
-        profile_url = None
     row = []
-    if profile_url:
-        row.append(Button.url("Seller profile", profile_url))
+    if listing.owner_username:
+        row.append(Button.url(
+            "Seller profile",
+            f"https://t.me/{listing.owner_username}",
+        ))
+    elif listing.owner_id:
+        row.append(Button.inline(
+            "Seller profile",
+            data=f"seller:{listing.owner_id}".encode(),
+        ))
     row.append(Button.inline("Claim", data=f"claim:{listing.unique_gift_id}".encode()))
     return [row]
 
