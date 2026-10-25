@@ -688,6 +688,99 @@ async def resolve_owner_via_fragment(slug: str) -> tuple[str | None, str | None]
     return None, None
 
 
+_SLUG_PARTS_RE = re.compile(r'^(.+?)-(\d+)$')
+
+
+async def resolve_owner_via_fragment_json(slug: str) -> tuple[str | None, str | None]:
+    if not slug:
+        return None, None
+    m = _SLUG_PARTS_RE.match(slug)
+    if not m:
+        return None, None
+    gift_name, gift_num = m.group(1), m.group(2)
+    urls = [
+        f"https://nft.fragment.com/gift/{gift_name}-{gift_num}.json",
+        f"https://fragment.com/gift/{gift_name}-{gift_num}.json",
+    ]
+    for url in urls:
+        try:
+            req = urllib.request.Request(url, headers={
+                "Accept": "application/json",
+                "User-Agent": "Mozilla/5.0",
+            })
+            resp = await asyncio.to_thread(
+                urllib.request.urlopen, req, timeout=10, context=_ton_ctx,
+            )
+            data = json.loads(resp.read())
+            owner = data.get("owner") or {}
+            if isinstance(owner, str):
+                if owner.startswith("@"):
+                    uname = owner[1:]
+                    if uname:
+                        logger.info("FragmentJSON resolved %s -> @%s", slug, uname)
+                        return uname, None
+            else:
+                uname = owner.get("username") or owner.get("telegram_username")
+                oname = owner.get("name") or owner.get("telegram_name")
+                if uname:
+                    logger.info("FragmentJSON resolved %s -> @%s", slug, uname)
+                    return uname, oname
+                if oname:
+                    return None, oname
+
+            seller = data.get("seller") or {}
+            if isinstance(seller, dict):
+                uname = seller.get("username") or seller.get("telegram_username")
+                sname = seller.get("name") or seller.get("telegram_name")
+                if uname:
+                    logger.info("FragmentJSON(seller) resolved %s -> @%s", slug, uname)
+                    return uname, sname
+                if sname:
+                    return None, sname
+
+            for key in ("owner_username", "seller_username", "telegram_username"):
+                val = data.get(key)
+                if val and isinstance(val, str):
+                    uname = val.lstrip("@")
+                    if uname:
+                        logger.info("FragmentJSON(%s) resolved %s -> @%s", key, slug, uname)
+                        return uname, None
+
+            for key in ("owner_name", "seller_name", "name"):
+                val = data.get(key)
+                if val and isinstance(val, str):
+                    return None, val
+
+        except Exception as e:
+            logger.debug("FragmentJSON %s (%s): %s", slug, url, e)
+    return None, None
+
+
+async def resolve_owner_via_ton_account(wallet_address: str) -> tuple[str | None, str | None]:
+    if not wallet_address:
+        return None, None
+    try:
+        url = f"https://tonapi.io/v2/accounts/{wallet_address}"
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        resp = await asyncio.to_thread(
+            urllib.request.urlopen, req, timeout=10, context=_ton_ctx,
+        )
+        acct = json.loads(resp.read())
+        for s in acct.get("socials", []):
+            surl = s.get("url", "")
+            if "t.me/" in surl:
+                uname = surl.rstrip("/").split("/")[-1]
+                if uname and uname.lower() not in ("nft", "fragment", "ton"):
+                    logger.info("TON account socials %s -> @%s", wallet_address[:12], uname)
+                    return uname, acct.get("name")
+        name = acct.get("name")
+        if name:
+            return None, name
+    except Exception as e:
+        logger.debug("TON account resolve %s: %s", wallet_address[:12] if wallet_address else "", e)
+    return None, None
+
+
 async def resolve_username_to_id(
     client: TelegramClient, username: str, tag: str = "",
 ) -> int | None:
@@ -792,17 +885,19 @@ async def resolve_owner_full(
 ) -> tuple[int | None, str | None, str | None]:
     html_task = asyncio.create_task(resolve_owner_via_html(listing_slug))
     fragment_task = asyncio.create_task(resolve_owner_via_fragment(listing_slug))
+    frag_json_task = asyncio.create_task(resolve_owner_via_fragment_json(listing_slug))
     slug_task = asyncio.create_task(
         resolve_owner_by_slug(client, listing_slug, tag=tag)
     )
 
     html_uname, html_name = await html_task
     frag_uname, frag_name = await fragment_task
+    frag_json_uname, frag_json_name = await frag_json_task
     oid, oname, ouname, ton_addr = await slug_task
 
-    best_name = oname or html_name or frag_name or owner_name
+    best_name = oname or html_name or frag_name or frag_json_name or owner_name
 
-    reliable_uname = html_uname or frag_uname or ouname
+    reliable_uname = html_uname or frag_uname or frag_json_uname or ouname
     reliable_id = oid
 
     if reliable_uname:
@@ -817,10 +912,18 @@ async def resolve_owner_full(
 
     addr = ton_addr or listing_owner_address
     if addr:
-        ton_id, ton_uname = await resolve_owner_via_ton(addr)
-        if ton_uname:
+        ton_nft_task = asyncio.create_task(resolve_owner_via_ton(addr))
+        ton_acct_task = asyncio.create_task(resolve_owner_via_ton_account(addr))
+        ton_id, ton_uname = await ton_nft_task
+        ton_acct_uname, ton_acct_name = await ton_acct_task
+
+        best_ton_uname = ton_uname or ton_acct_uname
+        if not best_name and ton_acct_name:
+            best_name = ton_acct_name
+
+        if best_ton_uname:
             verified_id, verified_uname = await _verify_id_username(
-                client, ton_id, ton_uname, tag=tag,
+                client, ton_id, best_ton_uname, tag=tag,
             )
             return verified_id, best_name, verified_uname
         if ton_id:
@@ -1277,143 +1380,8 @@ def create_bot() -> TelegramClient:
     async def on_claim(event):
         await _handle_claim(bot, event)
 
-    @bot.on(events.CallbackQuery(pattern=rb"^seller:(\d+)$"))
-    async def on_seller(event):
-        await _handle_seller_profile(bot, event)
-
     return bot
 
-
-async def _handle_seller_profile(bot, event):
-    unique_gift_id = int(event.pattern_match.group(1))
-    listing_data = await get_listing_by_unique_id(_db_ref, unique_gift_id)
-    if not listing_data:
-        await event.answer("Listing not found", alert=True)
-        return
-
-    if listing_data.get("owner_username"):
-        uname = listing_data["owner_username"]
-        await event.answer("Opening seller profile...")
-        try:
-            listing = ResaleListing(
-                unique_gift_id=unique_gift_id,
-                gift_id=listing_data["gift_id"],
-                num=listing_data.get("num"), slug=listing_data.get("slug"),
-                title=listing_data.get("title"),
-                owner_id=listing_data.get("owner_id"), owner_name=listing_data.get("owner_name"),
-                owner_username=uname,
-                owner_address=listing_data.get("owner_address"),
-                price_stars=listing_data["price_stars"],
-            )
-            updated_buttons = _build_buttons(listing)
-            msg_id = listing_data.get("log_message_id") or event.message_id
-            txt = _build_listing_text(
-                listing,
-                listing_data.get("seller_level"),
-                listing_data.get("seller_nft_count"),
-            )
-            await bot.edit_message(
-                event.chat_id, msg_id, txt,
-                buttons=updated_buttons, parse_mode="html",
-                link_preview=False,
-            )
-        except Exception:
-            pass
-        await event.respond(
-            f'>> <a href="https://t.me/{uname}">Open seller @{uname}</a>',
-            parse_mode="html", reply_to=event.message_id,
-        )
-        return
-
-    await event.answer("Resolving seller...", alert=False)
-
-    userbot = _next_userbot()
-    slug = listing_data.get("slug")
-    owner_addr = listing_data.get("owner_address")
-    owner_name = listing_data.get("owner_name")
-    owner_id = listing_data.get("owner_id")
-
-    resolved_uname = None
-    resolved_id = owner_id
-
-    if userbot and slug:
-        oid, oname, ouname = await resolve_owner_full(
-            userbot, slug, owner_addr, tag="seller_btn",
-            owner_name=owner_name,
-        )
-        if ouname:
-            resolved_uname = ouname
-        if oid:
-            resolved_id = oid
-
-    if resolved_id and not resolved_uname:
-        resolved_uname = await _id_to_username(
-            userbot or bot, resolved_id, tag="seller_btn",
-        )
-
-    if resolved_uname:
-        if resolved_id:
-            verified_id, verified_uname = await _verify_id_username(
-                userbot or bot, resolved_id, resolved_uname, tag="seller_btn",
-            )
-            resolved_id = verified_id
-            resolved_uname = verified_uname
-
-    if resolved_uname:
-        async with _db_lock:
-            await _db_ref.execute(
-                "UPDATE listings SET owner_username=?, owner_id=? WHERE unique_gift_id=?",
-                (resolved_uname, resolved_id, unique_gift_id),
-            )
-            await _db_ref.commit()
-        try:
-            listing = ResaleListing(
-                unique_gift_id=unique_gift_id,
-                gift_id=listing_data["gift_id"],
-                num=listing_data.get("num"), slug=slug,
-                title=listing_data.get("title"),
-                owner_id=resolved_id, owner_name=owner_name,
-                owner_username=resolved_uname,
-                owner_address=owner_addr,
-                price_stars=listing_data["price_stars"],
-            )
-            updated_buttons = _build_buttons(listing)
-            msg_id = listing_data.get("log_message_id") or event.message_id
-            txt = _build_listing_text(
-                listing,
-                listing_data.get("seller_level"),
-                listing_data.get("seller_nft_count"),
-            )
-            await bot.edit_message(
-                event.chat_id, msg_id, txt,
-                buttons=updated_buttons, parse_mode="html",
-                link_preview=False,
-            )
-        except Exception:
-            pass
-        await event.respond(
-            f'>> <a href="https://t.me/{resolved_uname}">Open seller @{resolved_uname}</a>',
-            parse_mode="html", reply_to=event.message_id,
-        )
-        return
-
-    if resolved_id:
-        async with _db_lock:
-            await _db_ref.execute(
-                "UPDATE listings SET owner_id=? WHERE unique_gift_id=?",
-                (resolved_id, unique_gift_id),
-            )
-            await _db_ref.commit()
-        name = owner_name or f"id:{resolved_id}"
-        await event.respond(
-            f'Seller: <a href="tg://user?id={resolved_id}">{name}</a>\n'
-            f'(click name above to open profile)',
-            parse_mode="html", reply_to=event.message_id,
-        )
-        return
-
-    name = owner_name or "unknown"
-    await event.answer(f"Seller: {name} -- profile not resolved", alert=True)
 
 
 def _build_listing_text(listing: ResaleListing, seller_level=None, seller_nft=None) -> str:
@@ -1449,10 +1417,10 @@ def _build_buttons(listing: ResaleListing) -> list[list[Button]]:
             "Seller profile",
             f"https://t.me/{listing.owner_username}",
         ))
-    else:
-        row.append(Button.inline(
+    elif listing.slug:
+        row.append(Button.url(
             "Seller profile",
-            data=f"seller:{listing.unique_gift_id}".encode(),
+            f"https://t.me/nft/{listing.slug}",
         ))
     row.append(Button.inline("Claim", data=f"claim:{listing.unique_gift_id}".encode()))
     return [row]
