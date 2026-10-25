@@ -546,87 +546,207 @@ _ROW_RE = re.compile(r'<tr[^>]*?>(.*?)</tr>', re.DOTALL)
 _TH_RE = re.compile(r'<th[^>]*>(.*?)</th>', re.DOTALL)
 _TD_RE = re.compile(r'<td[^>]*>(.*?)</td>', re.DOTALL)
 _TAG_RE = re.compile(r'<[^>]+>')
+_META_TG_RE = re.compile(
+    r'<meta\s+(?:property|name)="og:description"[^>]*content="([^"]*)"',
+    re.IGNORECASE,
+)
+_FRAG_OWNER_RE = re.compile(
+    r'(?:owner|seller)["\s:]*(?:<[^>]+>)*\s*<a[^>]*href="https?://t\.me/([^"?/]+)"',
+    re.IGNORECASE | re.DOTALL,
+)
+_FRAG_LINK_RE = re.compile(r'href="https?://t\.me/([^"?/]+)"')
+
+
+def _make_html_request(url: str) -> urllib.request.Request:
+    return urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                          "AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/125.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml",
+            "Accept-Language": "en-US,en;q=0.9",
+        },
+    )
+
+
+async def _fetch_html(url: str, timeout: int = 12) -> str | None:
+    try:
+        req = _make_html_request(url)
+        resp = await asyncio.to_thread(
+            urllib.request.urlopen, req, timeout=timeout, context=_ton_ctx,
+        )
+        return resp.read().decode("utf-8", errors="replace")
+    except Exception:
+        return None
+
+
+def _parse_owner_from_html(html: str) -> tuple[str | None, str | None]:
+    owner_cell = None
+    for row_m in _ROW_RE.finditer(html):
+        row = row_m.group(1)
+        th_m = _TH_RE.search(row)
+        if not th_m:
+            continue
+        label = _TAG_RE.sub("", th_m.group(1)).strip().lower()
+        if "owner" in label:
+            td_m = _TD_RE.search(row)
+            if td_m:
+                owner_cell = td_m.group(1)
+            break
+
+    if owner_cell:
+        link_m = _TG_LINK_RE.search(owner_cell)
+        if link_m:
+            username = link_m.group(1)
+            if username and username.lower() not in (
+                "nft", "giftrelayer", "fragment", "ton",
+            ):
+                return username, None
+        name = _TAG_RE.sub("", owner_cell).strip()
+        name = re.sub(r'\s+', ' ', name).strip()
+        if name:
+            return None, name
+
+    meta_m = _META_TG_RE.search(html)
+    if meta_m:
+        desc = meta_m.group(1)
+        if "@" in desc:
+            at_m = re.search(r'@([A-Za-z]\w{3,31})', desc)
+            if at_m:
+                uname = at_m.group(1)
+                if uname.lower() not in ("nft", "giftrelayer", "fragment", "ton"):
+                    return uname, None
+
+    return None, None
 
 
 async def resolve_owner_via_html(slug: str) -> tuple[str | None, str | None]:
     if not slug:
         return None, None
     try:
-        url = f"https://t.me/nft/{slug}"
-        req = urllib.request.Request(
-            url,
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                              "AppleWebKit/537.36 (KHTML, like Gecko) "
-                              "Chrome/125.0.0.0 Safari/537.36",
-                "Accept": "text/html",
-                "Accept-Language": "en-US,en;q=0.9",
-            },
-        )
-        resp = await asyncio.to_thread(
-            urllib.request.urlopen, req, timeout=15, context=_ton_ctx,
-        )
-        html = resp.read().decode("utf-8", errors="replace")
-
-        owner_cell = None
-        for row_m in _ROW_RE.finditer(html):
-            row = row_m.group(1)
-            th_m = _TH_RE.search(row)
-            if not th_m:
-                continue
-            label = _TAG_RE.sub("", th_m.group(1)).strip().lower()
-            if "owner" in label:
-                td_m = _TD_RE.search(row)
-                if td_m:
-                    owner_cell = td_m.group(1)
-                break
-
-        if not owner_cell:
-            logger.debug("HTML parse %s: no Owner row", slug)
+        html = await _fetch_html(f"https://t.me/nft/{slug}")
+        if not html:
             return None, None
-
-        link_m = _TG_LINK_RE.search(owner_cell)
-        if link_m:
-            username = link_m.group(1)
-            if username and username.lower() not in ("nft", "giftrelayer"):
-                logger.info("HTML resolved %s -> @%s", slug, username)
-                return username, None
-
-        name = _TAG_RE.sub("", owner_cell).strip()
-        name = re.sub(r'\s+', ' ', name).strip()
-        if name:
-            logger.debug("HTML parse %s: owner name '%s' (no link)", slug, name)
-            return None, name
-
+        uname, name = _parse_owner_from_html(html)
+        if uname:
+            logger.info("HTML(t.me) resolved %s -> @%s", slug, uname)
+        elif name:
+            logger.debug("HTML(t.me) %s: name '%s' (no link)", slug, name)
+        return uname, name
     except Exception as e:
         logger.debug("HTML resolve %s: %s", slug, e)
     return None, None
+
+
+async def resolve_owner_via_fragment(slug: str) -> tuple[str | None, str | None]:
+    if not slug:
+        return None, None
+    for url in (
+        f"https://fragment.com/gift/{slug}",
+        f"https://fragment.com/nft/{slug}",
+    ):
+        try:
+            html = await _fetch_html(url)
+            if not html or len(html) < 200:
+                continue
+            m = _FRAG_OWNER_RE.search(html)
+            if m:
+                uname = m.group(1)
+                if uname.lower() not in ("nft", "giftrelayer", "fragment", "ton"):
+                    logger.info("Fragment resolved %s -> @%s", slug, uname)
+                    return uname, None
+
+            uname, name = _parse_owner_from_html(html)
+            if uname:
+                logger.info("Fragment(table) resolved %s -> @%s", slug, uname)
+                return uname, name
+            if name:
+                return None, name
+
+            links = _FRAG_LINK_RE.findall(html)
+            for link_uname in links:
+                if link_uname.lower() not in (
+                    "nft", "giftrelayer", "fragment", "ton",
+                    "telegram", "privacy", "tos",
+                ):
+                    logger.info("Fragment(link) resolved %s -> @%s", slug, link_uname)
+                    return link_uname, None
+        except Exception as e:
+            logger.debug("Fragment resolve %s (%s): %s", slug, url, e)
+    return None, None
+
+
+async def resolve_username_to_id(
+    client: TelegramClient, username: str, tag: str = "",
+) -> int | None:
+    if not username:
+        return None
+    try:
+        entity = await _api_call(
+            client,
+            functions.contacts.ResolveUsernameRequest(username=username),
+            tag=tag or f"resolve:@{username}",
+        )
+        if entity and hasattr(entity, "users") and entity.users:
+            return entity.users[0].id
+        if entity and hasattr(entity, "peer"):
+            peer_id = _peer_to_id(entity.peer)
+            if peer_id:
+                return peer_id
+    except _FATAL_ERRORS:
+        raise
+    except Exception as e:
+        logger.debug("Resolve @%s: %s", username, e)
+    try:
+        ent = await client.get_entity(username)
+        if ent and hasattr(ent, "id"):
+            return ent.id
+    except Exception:
+        pass
+    return None
 
 
 async def resolve_owner_full(
     client: TelegramClient, listing_slug: str,
     listing_owner_address: str | None, tag: str = "",
 ) -> tuple[int | None, str | None, str | None]:
-    html_uname, html_name = await resolve_owner_via_html(listing_slug)
-    if html_uname:
-        return None, html_name, html_uname
-
-    oid, oname, ouname, ton_addr = await resolve_owner_by_slug(
-        client, listing_slug, tag=tag,
+    html_task = asyncio.create_task(resolve_owner_via_html(listing_slug))
+    fragment_task = asyncio.create_task(resolve_owner_via_fragment(listing_slug))
+    slug_task = asyncio.create_task(
+        resolve_owner_by_slug(client, listing_slug, tag=tag)
     )
-    if oid or ouname:
-        return oid, oname, ouname
+
+    html_uname, html_name = await html_task
+    frag_uname, frag_name = await fragment_task
+    oid, oname, ouname, ton_addr = await slug_task
+
+    best_uname = html_uname or frag_uname or ouname
+    best_name = oname or html_name or frag_name
+    best_id = oid
+
+    if best_uname:
+        if not best_id:
+            resolved_id = await resolve_username_to_id(
+                client, best_uname, tag=tag,
+            )
+            if resolved_id:
+                best_id = resolved_id
+        return best_id, best_name, best_uname
+
+    if best_id:
+        return best_id, best_name, best_uname
 
     addr = ton_addr or listing_owner_address
     if addr:
         ton_id, ton_uname = await resolve_owner_via_ton(addr)
         if ton_uname:
-            return ton_id, oname, ton_uname
+            resolved_id = await resolve_username_to_id(
+                client, ton_uname, tag=tag,
+            )
+            return resolved_id or ton_id, best_name, ton_uname
 
-    if html_name and not oname:
-        return oid, html_name, ouname
-
-    return oid, oname, ouname
+    return best_id, best_name, best_uname
 
 
 async def get_resale_listings(
@@ -1166,9 +1286,11 @@ async def _handle_claim(bot, event):
     await set_claimed(_db_ref, unique_gift_id, claimer_id)
 
     owner_id = listing_data["owner_id"]
+    owner_username = listing_data.get("owner_username")
+    dm_target = owner_id or (f"@{owner_username}" if owner_username else None)
     dm_sent = False
     userbot = _next_userbot()
-    if userbot and owner_id:
+    if userbot and dm_target:
         try:
             dm_text = CLAIM_DM_TEMPLATE.format(
                 title=listing_data["title"] or "gift",
@@ -1176,18 +1298,18 @@ async def _handle_claim(bot, event):
                 price=listing_data["price_stars"],
                 link=f"https://t.me/nft/{listing_data['slug']}" if listing_data["slug"] else "",
             )
-            await userbot.send_message(owner_id, dm_text)
+            await userbot.send_message(dm_target, dm_text)
             dm_sent = True
         except FloodWaitError as e:
             logger.warning("DM FloodWait %ds", e.seconds)
             await asyncio.sleep(e.seconds + 1)
             try:
-                await userbot.send_message(owner_id, dm_text)
+                await userbot.send_message(dm_target, dm_text)
                 dm_sent = True
             except Exception as e2:
                 logger.warning("DM retry failed: %s", e2)
         except Exception as e:
-            logger.warning("DM to seller %d: %s", owner_id, e)
+            logger.warning("DM to seller %s: %s", dm_target, e)
 
     owner_display = (
         f"@{listing_data['owner_username']}" if listing_data.get("owner_username")
@@ -1253,6 +1375,31 @@ async def poll_collection(
             if not _passes_price_filter(listing):
                 continue
 
+            is_new = await upsert_listing(
+                db,
+                unique_gift_id=listing.unique_gift_id,
+                gift_id=listing.gift_id,
+                num=listing.num, slug=listing.slug, title=listing.title,
+                owner_id=listing.owner_id, owner_name=listing.owner_name,
+                owner_username=listing.owner_username,
+                owner_address=listing.owner_address,
+                price_stars=listing.price_stars,
+                attributes_json=listing.attributes_json,
+                seller_level=None, seller_nft_count=None,
+            )
+            if not is_new:
+                updated_count += 1
+                continue
+
+            new_count += 1
+            print_new_listing(listing, session_tag)
+
+            msg_id = None
+            if bot and LOG_GROUP_ID:
+                msg_id = await send_listing_to_group(bot, listing, None, None)
+                if msg_id:
+                    await set_log_message_id(db, listing.unique_gift_id, msg_id)
+
             if listing.owner_id is None and listing.owner_username is None and listing.slug:
                 oid, oname, ouname = await resolve_owner_full(
                     userbot, listing.slug, listing.owner_address,
@@ -1277,9 +1424,40 @@ async def poll_collection(
                 seller_level = seller.level
                 seller_nft = seller.nft_count
                 if not seller.passes_filter:
+                    if msg_id and bot:
+                        try:
+                            await bot.delete_messages(LOG_GROUP_ID, [msg_id])
+                        except Exception:
+                            pass
                     continue
+            elif listing.owner_username and not listing.owner_id and (MAX_SELLER_LEVEL or MAX_SELLER_NFT_COUNT):
+                resolved_id = await resolve_username_to_id(
+                    userbot, listing.owner_username, tag=session_tag,
+                )
+                if resolved_id:
+                    listing = ResaleListing(
+                        unique_gift_id=listing.unique_gift_id,
+                        gift_id=listing.gift_id,
+                        num=listing.num, slug=listing.slug, title=listing.title,
+                        owner_id=resolved_id,
+                        owner_name=listing.owner_name,
+                        owner_username=listing.owner_username,
+                        owner_address=listing.owner_address,
+                        price_stars=listing.price_stars,
+                        attributes=listing.attributes,
+                    )
+                    seller = await check_seller(userbot, resolved_id, tag=session_tag)
+                    seller_level = seller.level
+                    seller_nft = seller.nft_count
+                    if not seller.passes_filter:
+                        if msg_id and bot:
+                            try:
+                                await bot.delete_messages(LOG_GROUP_ID, [msg_id])
+                            except Exception:
+                                pass
+                        continue
 
-            is_new = await upsert_listing(
+            await upsert_listing(
                 db,
                 unique_gift_id=listing.unique_gift_id,
                 gift_id=listing.gift_id,
@@ -1291,15 +1469,18 @@ async def poll_collection(
                 attributes_json=listing.attributes_json,
                 seller_level=seller_level, seller_nft_count=seller_nft,
             )
-            if is_new:
-                new_count += 1
-                print_new_listing(listing, session_tag)
-                if bot and LOG_GROUP_ID:
-                    msg_id = await send_listing_to_group(bot, listing, seller_level, seller_nft)
-                    if msg_id:
-                        await set_log_message_id(db, listing.unique_gift_id, msg_id)
-            else:
-                updated_count += 1
+
+            if msg_id and bot and (listing.owner_username or listing.owner_id):
+                try:
+                    updated_text = _build_listing_text(listing, seller_level, seller_nft)
+                    updated_buttons = _build_buttons(listing)
+                    await bot.edit_message(
+                        LOG_GROUP_ID, msg_id, updated_text,
+                        buttons=updated_buttons, parse_mode="html",
+                        link_preview=False,
+                    )
+                except Exception as e:
+                    logger.debug("Edit listing msg: %s", e)
 
         page += 1
         if not next_offset or page >= 3:
