@@ -718,23 +718,64 @@ async def resolve_username_to_id(
     return None
 
 
+async def _search_owner_by_name(
+    client: TelegramClient, owner_name: str | None, tag: str = "",
+) -> tuple[int | None, str | None]:
+    if not owner_name or len(owner_name.strip()) < 2:
+        return None, None
+    try:
+        result = await _api_call(
+            client,
+            functions.contacts.SearchRequest(q=owner_name.strip(), limit=10),
+            tag=tag or f"name_search:{owner_name}",
+        )
+        norm = owner_name.strip().lower()
+        for u in getattr(result, "users", []):
+            fn = (getattr(u, "first_name", "") or "").strip()
+            ln = (getattr(u, "last_name", "") or "").strip()
+            full = f"{fn} {ln}".strip().lower()
+            if full == norm or fn.lower() == norm:
+                uid = getattr(u, "id", None)
+                uname = getattr(u, "username", None)
+                return uid, uname
+    except Exception as e:
+        logger.debug("Name search '%s': %s", owner_name, e)
+    return None, None
+
+
+async def _id_to_username(
+    client: TelegramClient, user_id: int, tag: str = "",
+) -> str | None:
+    try:
+        entity = await client.get_entity(user_id)
+        return getattr(entity, "username", None)
+    except Exception as e:
+        logger.debug("id_to_username(%d): %s", user_id, e)
+    return None
+
+
 async def resolve_owner_full(
     client: TelegramClient, listing_slug: str,
     listing_owner_address: str | None, tag: str = "",
+    owner_name: str | None = None,
 ) -> tuple[int | None, str | None, str | None]:
     html_task = asyncio.create_task(resolve_owner_via_html(listing_slug))
     fragment_task = asyncio.create_task(resolve_owner_via_fragment(listing_slug))
     slug_task = asyncio.create_task(
         resolve_owner_by_slug(client, listing_slug, tag=tag)
     )
+    name_task = asyncio.create_task(
+        _search_owner_by_name(client, owner_name, tag=tag)
+    )
 
     html_uname, html_name = await html_task
     frag_uname, frag_name = await fragment_task
     oid, oname, ouname, ton_addr = await slug_task
+    name_id, name_uname = await name_task
 
-    best_uname = html_uname or frag_uname or ouname
-    best_name = oname or html_name or frag_name
-    best_id = oid
+    best_uname = html_uname or frag_uname or ouname or name_uname
+    best_name = oname or html_name or frag_name or owner_name
+    best_id = oid or name_id
 
     if best_uname:
         if not best_id:
@@ -746,6 +787,9 @@ async def resolve_owner_full(
         return best_id, best_name, best_uname
 
     if best_id:
+        uname = await _id_to_username(client, best_id, tag=tag)
+        if uname:
+            return best_id, best_name, uname
         return best_id, best_name, best_uname
 
     addr = ton_addr or listing_owner_address
@@ -756,6 +800,10 @@ async def resolve_owner_full(
                 client, ton_uname, tag=tag,
             )
             return resolved_id or ton_id, best_name, ton_uname
+        if ton_id:
+            uname = await _id_to_username(client, ton_id, tag=tag)
+            if uname:
+                return ton_id, best_name, uname
 
     return best_id, best_name, best_uname
 
@@ -1250,6 +1298,7 @@ async def _handle_seller_profile(bot, event):
     if userbot and slug:
         oid, oname, ouname = await resolve_owner_full(
             userbot, slug, owner_addr, tag="seller_btn",
+            owner_name=owner_name,
         )
         if ouname:
             resolved_uname = ouname
@@ -1639,7 +1688,7 @@ async def poll_collection(
             if listing.owner_id is None and listing.owner_username is None and listing.slug:
                 oid, oname, ouname = await resolve_owner_full(
                     userbot, listing.slug, listing.owner_address,
-                    tag=session_tag,
+                    tag=session_tag, owner_name=listing.owner_name,
                 )
                 if oid or ouname:
                     listing = ResaleListing(
