@@ -1100,38 +1100,78 @@ async def _portals_search(auth: str, collection_name: str) -> list:
     return rows
 
 
-async def resolve_owner_via_portals(
-    client: TelegramClient, collection_name: str | None, num: int | None,
-) -> tuple[int | None, str | None]:
-    """Return (owner_id, owner_name) of the hidden seller, via Portals Market."""
-    if not PORTALS_ENABLED or not collection_name or num is None:
-        return None, None
-    auth = await get_portals_auth(client)
-    if not auth:
-        return None, None
-    rows = await _portals_search(auth, collection_name)
-    if not rows:
-        # token may have expired mid-poll; refresh once and retry
-        auth = await get_portals_auth(client, force=True)
-        if not auth:
-            return None, None
-        rows = await _portals_search(auth, collection_name)
+def _portals_collection_candidates(
+    collection_name: str | None, slug: str | None,
+) -> list[str]:
+    """Candidate values for Portals' filter_by_collections. The exact format
+    (display name vs lowercase vs slug) isn't documented, so we try several and
+    stop at the first that returns the gift we want."""
+    out: list[str] = []
+
+    def add(v: str | None) -> None:
+        v = (v or "").strip()
+        if v and v not in out:
+            out.append(v)
+
+    add(collection_name)
+    if collection_name:
+        add(collection_name.lower())
+    if slug:
+        m = _SLUG_PARTS_RE.match(slug)
+        if m:
+            add(m.group(1))             # "PlushPepe" from "PlushPepe-3"
+    return out
+
+
+def _portals_find_owner(rows: list, num: int) -> int | None:
     for g in rows:
         if not isinstance(g, dict):
             continue
         ext = g.get("external_collection_number")
+        if ext is None:
+            continue
         try:
-            if ext is not None and int(ext) == int(num):
+            if int(ext) == int(num):
                 oid = g.get("owner_id") or g.get("tg_id")
-                oname = g.get("owner_name")
                 if oid:
-                    logger.info(
-                        "Portals resolved %s #%s -> owner_id=%s",
-                        collection_name, num, oid,
-                    )
-                    return int(oid), oname
+                    return int(oid)
         except (TypeError, ValueError):
             continue
+    return None
+
+
+async def resolve_owner_via_portals(
+    client: TelegramClient, collection_name: str | None, num: int | None,
+    slug: str | None = None,
+) -> tuple[int | None, str | None]:
+    """Return (owner_id, None) of the hidden seller, via Portals Market.
+    Portals exposes no owner name, so the second tuple slot is always None."""
+    if not PORTALS_ENABLED or num is None:
+        return None, None
+    candidates = _portals_collection_candidates(collection_name, slug)
+    if not candidates:
+        return None, None
+    auth = await get_portals_auth(client)
+    if not auth:
+        return None, None
+
+    auth_retried = False
+    for cand in candidates:
+        rows = await _portals_search(auth, cand)
+        if not rows and not auth_retried:
+            # token may have expired mid-poll; refresh once and retry this cand
+            auth_retried = True
+            refreshed = await get_portals_auth(client, force=True)
+            if refreshed:
+                auth = refreshed
+                rows = await _portals_search(auth, cand)
+        oid = _portals_find_owner(rows, num)
+        if oid:
+            logger.info(
+                "Portals resolved %s #%s (filter=%r) -> owner_id=%s",
+                collection_name, num, cand, oid,
+            )
+            return oid, None
     return None, None
 
 
@@ -1245,7 +1285,7 @@ async def resolve_owner_full(
         resolve_owner_by_slug(client, listing_slug, tag=tag)
     )
     portals_task = asyncio.create_task(
-        resolve_owner_via_portals(client, collection_name, num)
+        resolve_owner_via_portals(client, collection_name, num, slug=listing_slug)
     )
 
     html_uname, html_name = await html_task
