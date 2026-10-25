@@ -1,1 +1,18 @@
 *.bak
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+
+# Tracker
+tracker/gifts.db
+tracker/*.session
+tracker/*.session-journal
+.env
+
+# IDE
+.vscode/
+.idea/
