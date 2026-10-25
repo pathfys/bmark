@@ -43,6 +43,7 @@ from telethon.errors import (
     AuthKeyUnregisteredError,
     UserDeactivatedBanError,
     SessionRevokedError,
+    ButtonUrlInvalidError,
 )
 
 load_dotenv()
@@ -1819,20 +1820,42 @@ def _build_listing_text(
     return "\n".join(lines)
 
 
-def _build_buttons(listing: ResaleListing) -> list[list[Button]]:
+def _build_buttons(listing: ResaleListing, tg_user: bool = True) -> list[list[Button]]:
+    """Seller button priority:
+      1. @username  -> https://t.me/<username>  (opens the chat directly)
+      2. owner_id   -> tg://user?id=<id>         (opens the seller's profile by id,
+                        works without a username; may be rejected -> see tg_user)
+      3. otherwise  -> the gift's own page, honestly labelled "Gift page" (NOT the
+                        seller: it is the NFT card, there is no chat behind it)
+    `tg_user=False` drops option 2 so a ButtonUrlInvalidError retry can fall back.
+    """
     row = []
     if listing.owner_username:
         row.append(Button.url(
             "Seller profile",
             f"https://t.me/{listing.owner_username}",
         ))
-    elif listing.slug:
+    elif tg_user and listing.owner_id:
         row.append(Button.url(
             "Seller profile",
+            f"tg://user?id={listing.owner_id}",
+        ))
+    elif listing.slug:
+        row.append(Button.url(
+            "Gift page",
             f"https://t.me/nft/{listing.slug}",
         ))
     row.append(Button.inline("Claim", data=f"claim:{listing.unique_gift_id}".encode()))
     return [row]
+
+
+async def _emit_with_buttons(send_fn, listing: ResaleListing):
+    """Send/edit a listing message, retrying without the tg://user button if
+    Telegram rejects it (ButtonUrlInvalidError)."""
+    try:
+        return await send_fn(_build_buttons(listing, tg_user=True))
+    except ButtonUrlInvalidError:
+        return await send_fn(_build_buttons(listing, tg_user=False))
 
 
 def _build_claimed_text(title, num, price_stars, owner_display, claimer_name) -> str:
@@ -1855,12 +1878,15 @@ async def send_listing_to_group(
     if not LOG_GROUP_ID:
         return None
     text = _build_listing_text(listing, seller_level, seller_nft, floor_note=floor_note)
-    buttons = _build_buttons(listing)
     async with _send_lock:
         for attempt in range(3):
             try:
-                msg = await bot.send_message(
-                    LOG_GROUP_ID, text, buttons=buttons, parse_mode="html", link_preview=False,
+                msg = await _emit_with_buttons(
+                    lambda b: bot.send_message(
+                        LOG_GROUP_ID, text, buttons=b,
+                        parse_mode="html", link_preview=False,
+                    ),
+                    listing,
                 )
                 await asyncio.sleep(0.1)
                 return msg.id
@@ -2097,11 +2123,12 @@ async def poll_collection(
                     updated_text = _build_listing_text(
                         listing, seller_level, seller_nft, floor_note=floor_note,
                     )
-                    updated_buttons = _build_buttons(listing)
-                    await bot.edit_message(
-                        LOG_GROUP_ID, msg_id, updated_text,
-                        buttons=updated_buttons, parse_mode="html",
-                        link_preview=False,
+                    await _emit_with_buttons(
+                        lambda b: bot.edit_message(
+                            LOG_GROUP_ID, msg_id, updated_text,
+                            buttons=b, parse_mode="html", link_preview=False,
+                        ),
+                        listing,
                     )
                 except Exception as e:
                     logger.debug("Edit listing msg: %s", e)
