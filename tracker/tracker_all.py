@@ -718,11 +718,15 @@ async def resolve_username_to_id(
     return None
 
 
+_name_search_seen: dict[int, int] = {}
+
+
 async def _search_owner_by_name(
     client: TelegramClient, owner_name: str | None, tag: str = "",
-) -> tuple[int | None, str | None]:
+) -> list[tuple[int | None, str | None]]:
     if not owner_name or len(owner_name.strip()) < 2:
-        return None, None
+        return []
+    candidates = []
     try:
         result = await _api_call(
             client,
@@ -737,10 +741,11 @@ async def _search_owner_by_name(
             if full == norm or fn.lower() == norm:
                 uid = getattr(u, "id", None)
                 uname = getattr(u, "username", None)
-                return uid, uname
+                if uid:
+                    candidates.append((uid, uname))
     except Exception as e:
         logger.debug("Name search '%s': %s", owner_name, e)
-    return None, None
+    return candidates
 
 
 async def _id_to_username(
@@ -754,6 +759,32 @@ async def _id_to_username(
     return None
 
 
+async def _verify_id_username(
+    client: TelegramClient, user_id: int | None, username: str | None,
+    tag: str = "",
+) -> tuple[int | None, str | None]:
+    if user_id and username:
+        try:
+            entity = await client.get_entity(username)
+            eid = getattr(entity, "id", None)
+            if eid == user_id:
+                return user_id, username
+            logger.debug(
+                "ID/username mismatch: id=%s, @%s resolved to id=%s",
+                user_id, username, eid,
+            )
+            return eid, username
+        except Exception:
+            pass
+    if username and not user_id:
+        rid = await resolve_username_to_id(client, username, tag=tag)
+        return rid, username
+    if user_id and not username:
+        uname = await _id_to_username(client, user_id, tag=tag)
+        return user_id, uname
+    return user_id, username
+
+
 async def resolve_owner_full(
     client: TelegramClient, listing_slug: str,
     listing_owner_address: str | None, tag: str = "",
@@ -764,48 +795,58 @@ async def resolve_owner_full(
     slug_task = asyncio.create_task(
         resolve_owner_by_slug(client, listing_slug, tag=tag)
     )
-    name_task = asyncio.create_task(
-        _search_owner_by_name(client, owner_name, tag=tag)
-    )
 
     html_uname, html_name = await html_task
     frag_uname, frag_name = await fragment_task
     oid, oname, ouname, ton_addr = await slug_task
-    name_id, name_uname = await name_task
 
-    best_uname = html_uname or frag_uname or ouname or name_uname
     best_name = oname or html_name or frag_name or owner_name
-    best_id = oid or name_id
 
-    if best_uname:
-        if not best_id:
-            resolved_id = await resolve_username_to_id(
-                client, best_uname, tag=tag,
-            )
-            if resolved_id:
-                best_id = resolved_id
-        return best_id, best_name, best_uname
+    reliable_uname = html_uname or frag_uname or ouname
+    reliable_id = oid
 
-    if best_id:
-        uname = await _id_to_username(client, best_id, tag=tag)
-        if uname:
-            return best_id, best_name, uname
-        return best_id, best_name, best_uname
+    if reliable_uname:
+        verified_id, verified_uname = await _verify_id_username(
+            client, reliable_id, reliable_uname, tag=tag,
+        )
+        return verified_id, best_name, verified_uname
+
+    if reliable_id:
+        uname = await _id_to_username(client, reliable_id, tag=tag)
+        return reliable_id, best_name, uname
 
     addr = ton_addr or listing_owner_address
     if addr:
         ton_id, ton_uname = await resolve_owner_via_ton(addr)
         if ton_uname:
-            resolved_id = await resolve_username_to_id(
-                client, ton_uname, tag=tag,
+            verified_id, verified_uname = await _verify_id_username(
+                client, ton_id, ton_uname, tag=tag,
             )
-            return resolved_id or ton_id, best_name, ton_uname
+            return verified_id, best_name, verified_uname
         if ton_id:
             uname = await _id_to_username(client, ton_id, tag=tag)
             if uname:
                 return ton_id, best_name, uname
 
-    return best_id, best_name, best_uname
+    name_candidates = await _search_owner_by_name(client, owner_name, tag=tag)
+    for cand_id, cand_uname in name_candidates:
+        if _name_search_seen.get(cand_id, 0) >= 3:
+            logger.debug("Skipping name candidate %d (seen %d times)", cand_id, _name_search_seen[cand_id])
+            continue
+        if cand_uname:
+            verified_id, verified_uname = await _verify_id_username(
+                client, cand_id, cand_uname, tag=tag,
+            )
+            if verified_id and verified_uname:
+                _name_search_seen[cand_id] = _name_search_seen.get(cand_id, 0) + 1
+                return verified_id, best_name, verified_uname
+        else:
+            uname = await _id_to_username(client, cand_id, tag=tag)
+            if uname:
+                _name_search_seen[cand_id] = _name_search_seen.get(cand_id, 0) + 1
+                return cand_id, best_name, uname
+
+    return None, best_name, None
 
 
 async def get_resale_listings(
@@ -1305,23 +1346,18 @@ async def _handle_seller_profile(bot, event):
         if oid:
             resolved_id = oid
 
-    if not resolved_uname and not resolved_id and owner_name and userbot:
-        try:
-            result = await _api_call(
-                userbot,
-                functions.contacts.SearchRequest(q=owner_name, limit=5),
-                tag=f"search:{owner_name}",
+    if resolved_id and not resolved_uname:
+        resolved_uname = await _id_to_username(
+            userbot or bot, resolved_id, tag="seller_btn",
+        )
+
+    if resolved_uname:
+        if resolved_id:
+            verified_id, verified_uname = await _verify_id_username(
+                userbot or bot, resolved_id, resolved_uname, tag="seller_btn",
             )
-            for u in getattr(result, "users", []):
-                fn = getattr(u, "first_name", "") or ""
-                ln = getattr(u, "last_name", "") or ""
-                full = f"{fn} {ln}".strip()
-                if full.lower() == owner_name.strip().lower() or fn.lower() == owner_name.strip().lower():
-                    resolved_id = u.id
-                    resolved_uname = getattr(u, "username", None)
-                    break
-        except Exception as e:
-            logger.debug("Contact search '%s': %s", owner_name, e)
+            resolved_id = verified_id
+            resolved_uname = verified_uname
 
     if resolved_uname:
         async with _db_lock:
@@ -1343,19 +1379,16 @@ async def _handle_seller_profile(bot, event):
             )
             updated_buttons = _build_buttons(listing)
             msg_id = listing_data.get("log_message_id") or event.message_id
-            try:
-                txt = _build_listing_text(
-                    listing,
-                    listing_data.get("seller_level"),
-                    listing_data.get("seller_nft_count"),
-                )
-                await bot.edit_message(
-                    event.chat_id, msg_id, txt,
-                    buttons=updated_buttons, parse_mode="html",
-                    link_preview=False,
-                )
-            except Exception:
-                pass
+            txt = _build_listing_text(
+                listing,
+                listing_data.get("seller_level"),
+                listing_data.get("seller_nft_count"),
+            )
+            await bot.edit_message(
+                event.chat_id, msg_id, txt,
+                buttons=updated_buttons, parse_mode="html",
+                link_preview=False,
+            )
         except Exception:
             pass
         await event.respond(
@@ -1371,93 +1404,13 @@ async def _handle_seller_profile(bot, event):
                 (resolved_id, unique_gift_id),
             )
             await _db_ref.commit()
-        try:
-            entity = None
-            if userbot:
-                try:
-                    entity = await userbot.get_entity(resolved_id)
-                except Exception:
-                    pass
-            if not entity:
-                try:
-                    entity = await bot.get_entity(resolved_id)
-                except Exception:
-                    pass
-            if entity:
-                uname = getattr(entity, "username", None)
-                if uname:
-                    async with _db_lock:
-                        await _db_ref.execute(
-                            "UPDATE listings SET owner_username=? WHERE unique_gift_id=?",
-                            (uname, unique_gift_id),
-                        )
-                        await _db_ref.commit()
-                    try:
-                        listing = ResaleListing(
-                            unique_gift_id=unique_gift_id,
-                            gift_id=listing_data["gift_id"],
-                            num=listing_data.get("num"), slug=slug,
-                            title=listing_data.get("title"),
-                            owner_id=resolved_id, owner_name=owner_name,
-                            owner_username=uname,
-                            owner_address=owner_addr,
-                            price_stars=listing_data["price_stars"],
-                        )
-                        updated_buttons = _build_buttons(listing)
-                        msg_id = listing_data.get("log_message_id") or event.message_id
-                        txt = _build_listing_text(
-                            listing,
-                            listing_data.get("seller_level"),
-                            listing_data.get("seller_nft_count"),
-                        )
-                        await bot.edit_message(
-                            event.chat_id, msg_id, txt,
-                            buttons=updated_buttons, parse_mode="html",
-                            link_preview=False,
-                        )
-                    except Exception:
-                        pass
-                    await event.respond(
-                        f'>> <a href="https://t.me/{uname}">Open seller @{uname}</a>',
-                        parse_mode="html", reply_to=event.message_id,
-                    )
-                    return
-                fname = getattr(entity, "first_name", "") or ""
-                lname = getattr(entity, "last_name", "") or ""
-                name = f"{fname} {lname}".strip() or f"id:{resolved_id}"
-            else:
-                name = owner_name or f"id:{resolved_id}"
-
-            await event.respond(
-                f'Seller: <a href="tg://user?id={resolved_id}">{name}</a>\n'
-                f'(click name above to open profile)',
-                parse_mode="html", reply_to=event.message_id,
-            )
-            return
-        except Exception as e:
-            logger.debug("Seller entity %d: %s", resolved_id, e)
-
-    if owner_name and userbot:
-        try:
-            result = await _api_call(
-                userbot,
-                functions.contacts.SearchRequest(q=owner_name, limit=10),
-                tag=f"fallback_search:{owner_name}",
-            )
-            for u in getattr(result, "users", []):
-                uname = getattr(u, "username", None)
-                if uname:
-                    fn = getattr(u, "first_name", "") or ""
-                    ln = getattr(u, "last_name", "") or ""
-                    full = f"{fn} {ln}".strip()
-                    if full.lower() == owner_name.strip().lower() or fn.lower() == owner_name.strip().lower():
-                        await event.respond(
-                            f'>> <a href="https://t.me/{uname}">Open seller @{uname}</a>',
-                            parse_mode="html", reply_to=event.message_id,
-                        )
-                        return
-        except Exception as e:
-            logger.debug("Fallback search '%s': %s", owner_name, e)
+        name = owner_name or f"id:{resolved_id}"
+        await event.respond(
+            f'Seller: <a href="tg://user?id={resolved_id}">{name}</a>\n'
+            f'(click name above to open profile)',
+            parse_mode="html", reply_to=event.message_id,
+        )
+        return
 
     name = owner_name or "unknown"
     await event.answer(f"Seller: {name} -- profile not resolved", alert=True)
