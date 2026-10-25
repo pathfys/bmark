@@ -1,18 +1,27 @@
-# 🎁 Telegram Gift Market Tracker
+# Telegram Gift Market Tracker
 
-Трекер маркета подарков Telegram Stars. Отслеживает новые листинги,
-изменения цен и снятия с продажи коллекционных подарков.
+Трекер маркета подарков Telegram Stars. Юзербот опрашивает маркет,
+бот отправляет листинги в группу с кнопками «Профиль продавца» и «Занять лот».
 
 ## Что делает
 
-- 📡 Опрашивает маркет подарков через MTProto API (`payments.getResaleStarGifts`)
-- 🆕 Детектит новые листинги и выводит полную информацию
-- 💰 Трекает изменения цен с историей
-- ❌ Замечает снятие с продажи
-- 👤 Показывает владельца (**если API его отдаёт**: `owner_id` → username, `owner_name`, или TON-адрес)
-- 📊 Ведёт SQLite базу со всей историей
-- 📢 Может слать уведомления в Telegram канал/чат
-- 🎨 Rich-вывод в консоль (таблицы, панели, цвета)
+- Опрашивает маркет подарков через MTProto API (`payments.getResaleStarGifts`)
+- Детектит новые листинги и снятия с продажи
+- Фильтрует продавцов по уровню профиля и количеству NFT подарков
+- Отправляет листинги в группу с инлайн-кнопками
+- «Профиль продавца» — открывает профиль в Telegram
+- «Занять лот» — отправляет DM продавцу и помечает лот занятым
+- Ведёт SQLite базу со всей историей
+- Rich-вывод в консоль
+
+## Архитектура
+
+Два клиента работают параллельно:
+
+| Клиент | Задачи |
+|--------|--------|
+| **Юзербот** (Telethon) | Маркет API, проверка профилей, DM продавцам |
+| **Бот** (Telethon) | Группа с кнопками, обработка callback'ов |
 
 ## Про скрытых владельцев
 
@@ -28,39 +37,35 @@ Telegram скрывает `owner_id` у подарков по умолчанию
 ## Установка
 
 ```bash
-# Клонируй репо
 git clone <repo-url>
 cd bmark
 
-# Виртуальное окружение (рекомендуется)
 python -m venv venv
 source venv/bin/activate  # Linux/Mac
-# venv\Scripts\activate   # Windows
 
-# Зависимости
 pip install -r tracker/requirements.txt
 ```
 
 ## Настройка
 
 1. Получи `API_ID` и `API_HASH` на https://my.telegram.org
-2. Скопируй `.env.example` → `.env` и заполни:
+2. Создай бота через [@BotFather](https://t.me/BotFather) и получи `BOT_TOKEN`
+3. Создай супергруппу, добавь бота как админа, получи `LOG_GROUP_ID`
+4. Скопируй и заполни `.env`:
 
 ```bash
 cp tracker/.env.example .env
 ```
 
-3. Редактируй `.env`:
-
 ```env
 API_ID=12345678
 API_HASH=your_api_hash_here
+BOT_TOKEN=123456:ABC-DEF...
+LOG_GROUP_ID=-1001234567890
 
-# Опционально: куда слать уведомления
-NOTIFY_CHAT_ID=-1001234567890
-
-# Опционально: трекать только определённые коллекции
-TRACK_COLLECTIONS=Lunar Snake,Heart Crown
+# Фильтры продавца
+MAX_SELLER_LEVEL=10
+MAX_SELLER_NFT_COUNT=10
 ```
 
 ## Запуск
@@ -69,12 +74,8 @@ TRACK_COLLECTIONS=Lunar Snake,Heart Crown
 python tracker/main.py
 ```
 
-При первом запуске Telethon попросит:
-1. Номер телефона
-2. Код из Telegram
-3. 2FA пароль (если есть)
-
-Сессия сохраняется в `gift_tracker.session`, повторный вход не нужен.
+При первом запуске Telethon попросит номер телефона, код из Telegram и 2FA пароль (если есть).
+Сессия сохраняется в `gift_tracker.session`.
 
 ## Структура
 
@@ -82,8 +83,10 @@ python tracker/main.py
 tracker/
 ├── main.py          # Точка входа, основной цикл
 ├── api.py           # MTProto обёртка (Telethon raw requests)
+├── bot.py           # Бот: группа + кнопки + callback'и
+├── checker.py       # Проверка профиля продавца (уровень, NFT)
 ├── db.py            # SQLite хранилище
-├── display.py       # Rich-вывод + Telegram-уведомления
+├── display.py       # Rich-вывод в консоль
 ├── config.py        # Конфигурация из .env
 ├── requirements.txt # Зависимости
 └── .env.example     # Пример конфигурации
@@ -92,5 +95,5 @@ tracker/
 ## Требования
 
 - Python 3.11+
-- Telethon с поддержкой layer 210+ (для `GetResaleStarGiftsRequest`)
-- Telegram аккаунт (userbot, не бот — метод доступен только юзерам)
+- Telethon с поддержкой layer 210+
+- Telegram аккаунт (юзербот) + бот (через BotFather)

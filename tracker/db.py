@@ -1,6 +1,6 @@
 """
 SQLite хранилище для трекинга листингов.
-Хранит историю листингов, цен, и снэпшоты владельцев.
+Хранит историю листингов, цен, снэпшоты владельцев и клеймы.
 """
 import aiosqlite
 from config import DB_PATH
@@ -25,18 +25,26 @@ async def init_db() -> aiosqlite.Connection:
             num             INTEGER,
             slug            TEXT,
             title           TEXT,
-            -- owner info (что отдаёт API)
+            -- owner info
             owner_id        INTEGER,
             owner_name      TEXT,
             owner_username  TEXT,
             owner_address   TEXT,
+            -- seller profile
+            seller_level    INTEGER,
+            seller_nft_count INTEGER,
             -- цена
             price_stars     INTEGER NOT NULL,
             -- метаданные
             attributes_json TEXT,
             first_seen      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             last_seen       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            is_active       BOOLEAN DEFAULT 1
+            is_active       BOOLEAN DEFAULT 1,
+            -- сообщение в группе (для редактирования при клейме)
+            log_message_id  INTEGER,
+            -- клейм
+            claimed_by      INTEGER,
+            claimed_at      TIMESTAMP
         );
 
         CREATE TABLE IF NOT EXISTS price_history (
@@ -70,6 +78,8 @@ async def upsert_listing(
     owner_address: str | None,
     price_stars: int,
     attributes_json: str | None,
+    seller_level: int | None = None,
+    seller_nft_count: int | None = None,
 ) -> bool:
     """
     Вставить или обновить листинг.
@@ -82,16 +92,17 @@ async def upsert_listing(
     row = await cursor.fetchone()
 
     if row is None:
-        # Новый листинг
         await db.execute(
             """INSERT INTO listings
                (unique_gift_id, gift_id, num, slug, title,
                 owner_id, owner_name, owner_username, owner_address,
+                seller_level, seller_nft_count,
                 price_stars, attributes_json)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 unique_gift_id, gift_id, num, slug, title,
                 owner_id, owner_name, owner_username, owner_address,
+                seller_level, seller_nft_count,
                 price_stars, attributes_json,
             ),
         )
@@ -107,10 +118,11 @@ async def upsert_listing(
     await db.execute(
         """UPDATE listings SET
             owner_id = ?, owner_name = ?, owner_username = ?,
-            owner_address = ?, price_stars = ?, last_seen = CURRENT_TIMESTAMP,
-            is_active = 1
+            owner_address = ?, seller_level = ?, seller_nft_count = ?,
+            price_stars = ?, last_seen = CURRENT_TIMESTAMP, is_active = 1
            WHERE unique_gift_id = ?""",
         (owner_id, owner_name, owner_username, owner_address,
+         seller_level, seller_nft_count,
          price_stars, unique_gift_id),
     )
 
@@ -124,11 +136,67 @@ async def upsert_listing(
     return False
 
 
+async def set_log_message_id(
+    db: aiosqlite.Connection, unique_gift_id: int, message_id: int
+):
+    """Сохранить ID сообщения в группе для последующего редактирования."""
+    await db.execute(
+        "UPDATE listings SET log_message_id = ? WHERE unique_gift_id = ?",
+        (message_id, unique_gift_id),
+    )
+    await db.commit()
+
+
+async def get_listing_by_unique_id(
+    db: aiosqlite.Connection, unique_gift_id: int
+) -> dict | None:
+    """Получить листинг по unique_gift_id."""
+    cursor = await db.execute(
+        """SELECT unique_gift_id, gift_id, num, slug, title,
+                  owner_id, owner_name, owner_username, owner_address,
+                  seller_level, seller_nft_count,
+                  price_stars, log_message_id, claimed_by
+           FROM listings WHERE unique_gift_id = ?""",
+        (unique_gift_id,),
+    )
+    row = await cursor.fetchone()
+    if not row:
+        return None
+    return {
+        "unique_gift_id": row[0],
+        "gift_id": row[1],
+        "num": row[2],
+        "slug": row[3],
+        "title": row[4],
+        "owner_id": row[5],
+        "owner_name": row[6],
+        "owner_username": row[7],
+        "owner_address": row[8],
+        "seller_level": row[9],
+        "seller_nft_count": row[10],
+        "price_stars": row[11],
+        "log_message_id": row[12],
+        "claimed_by": row[13],
+    }
+
+
+async def set_claimed(
+    db: aiosqlite.Connection, unique_gift_id: int, claimed_by: int
+):
+    """Пометить лот как занятый."""
+    await db.execute(
+        """UPDATE listings SET
+            claimed_by = ?, claimed_at = CURRENT_TIMESTAMP
+           WHERE unique_gift_id = ?""",
+        (claimed_by, unique_gift_id),
+    )
+    await db.commit()
+
+
 async def mark_delisted(
     db: aiosqlite.Connection, active_ids: set[int], gift_id: int
 ) -> list[dict]:
-    """Пометить листинги как неактивные, если их нет в текущем списке.
-    Возвращает список снятых листингов."""
+    """Пометить листинги как неактивные, если их нет в текущем списке."""
     cursor = await db.execute(
         "SELECT unique_gift_id, title, num, price_stars FROM listings "
         "WHERE is_active = 1 AND gift_id = ?",
@@ -188,8 +256,14 @@ async def get_stats(db: aiosqlite.Connection) -> dict:
     cursor = await db.execute("SELECT COUNT(*) FROM collections")
     collections = (await cursor.fetchone())[0]
 
+    cursor = await db.execute(
+        "SELECT COUNT(*) FROM listings WHERE claimed_by IS NOT NULL"
+    )
+    claimed = (await cursor.fetchone())[0]
+
     return {
         "active_listings": active,
         "total_seen": total,
         "collections_tracked": collections,
+        "total_claimed": claimed,
     }
