@@ -18,6 +18,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import shutil
 import signal
 import ssl
@@ -540,10 +541,76 @@ async def resolve_owner_via_ton(
     return None, None
 
 
+_TG_LINK_RE = re.compile(r'href="https?://t\.me/([^"?/]+)"')
+_ROW_RE = re.compile(r'<tr[^>]*?>(.*?)</tr>', re.DOTALL)
+_TH_RE = re.compile(r'<th[^>]*>(.*?)</th>', re.DOTALL)
+_TD_RE = re.compile(r'<td[^>]*>(.*?)</td>', re.DOTALL)
+_TAG_RE = re.compile(r'<[^>]+>')
+
+
+async def resolve_owner_via_html(slug: str) -> tuple[str | None, str | None]:
+    if not slug:
+        return None, None
+    try:
+        url = f"https://t.me/nft/{slug}"
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                              "AppleWebKit/537.36 (KHTML, like Gecko) "
+                              "Chrome/125.0.0.0 Safari/537.36",
+                "Accept": "text/html",
+                "Accept-Language": "en-US,en;q=0.9",
+            },
+        )
+        resp = await asyncio.to_thread(
+            urllib.request.urlopen, req, timeout=15, context=_ton_ctx,
+        )
+        html = resp.read().decode("utf-8", errors="replace")
+
+        owner_cell = None
+        for row_m in _ROW_RE.finditer(html):
+            row = row_m.group(1)
+            th_m = _TH_RE.search(row)
+            if not th_m:
+                continue
+            label = _TAG_RE.sub("", th_m.group(1)).strip().lower()
+            if "owner" in label:
+                td_m = _TD_RE.search(row)
+                if td_m:
+                    owner_cell = td_m.group(1)
+                break
+
+        if not owner_cell:
+            logger.debug("HTML parse %s: no Owner row", slug)
+            return None, None
+
+        link_m = _TG_LINK_RE.search(owner_cell)
+        if link_m:
+            username = link_m.group(1)
+            if username and username.lower() not in ("nft", "giftrelayer"):
+                logger.info("HTML resolved %s -> @%s", slug, username)
+                return username, None
+
+        name = _TAG_RE.sub("", owner_cell).strip()
+        name = re.sub(r'\s+', ' ', name).strip()
+        if name:
+            logger.debug("HTML parse %s: owner name '%s' (no link)", slug, name)
+            return None, name
+
+    except Exception as e:
+        logger.debug("HTML resolve %s: %s", slug, e)
+    return None, None
+
+
 async def resolve_owner_full(
     client: TelegramClient, listing_slug: str,
     listing_owner_address: str | None, tag: str = "",
 ) -> tuple[int | None, str | None, str | None]:
+    html_uname, html_name = await resolve_owner_via_html(listing_slug)
+    if html_uname:
+        return None, html_name, html_uname
+
     oid, oname, ouname, ton_addr = await resolve_owner_by_slug(
         client, listing_slug, tag=tag,
     )
@@ -555,6 +622,9 @@ async def resolve_owner_full(
         ton_id, ton_uname = await resolve_owner_via_ton(addr)
         if ton_uname:
             return ton_id, oname, ton_uname
+
+    if html_name and not oname:
+        return oid, html_name, ouname
 
     return oid, oname, ouname
 
