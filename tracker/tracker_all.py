@@ -437,6 +437,10 @@ def _resolve_owner(gift: TLObject, users_map: dict) -> tuple[int | None, str | N
     if owner_id is None:
         owner_id = _peer_to_id(_safe_getattr(gift, "host_id"))
 
+    # Only trust an explicit owner peer. The old "single user in map" and
+    # "match by display name" guesses picked whoever happened to be in the
+    # response (a relayer, a popular account) and produced wrong owners, so
+    # they are gone: an unknown owner stays unknown.
     if owner_id and owner_id in users_map:
         user = users_map[owner_id]
         owner_username = _safe_getattr(user, "username")
@@ -444,28 +448,6 @@ def _resolve_owner(gift: TLObject, users_map: dict) -> tuple[int | None, str | N
             first = _safe_getattr(user, "first_name", "")
             last = _safe_getattr(user, "last_name", "")
             owner_name = f"{first} {last}".strip() or None
-
-    if owner_id is None and users_map:
-        users_list = list(users_map.values())
-        if len(users_list) == 1:
-            u = users_list[0]
-            owner_id = _safe_getattr(u, "id")
-            owner_username = _safe_getattr(u, "username")
-            if not owner_name:
-                first = _safe_getattr(u, "first_name", "")
-                last = _safe_getattr(u, "last_name", "")
-                owner_name = f"{first} {last}".strip() or None
-
-        elif owner_name and len(users_list) > 1:
-            norm = owner_name.strip().lower()
-            for u in users_list:
-                fn = (_safe_getattr(u, "first_name", "") or "").strip()
-                ln = (_safe_getattr(u, "last_name", "") or "").strip()
-                full = f"{fn} {ln}".strip().lower()
-                if full == norm or fn.lower() == norm:
-                    owner_id = _safe_getattr(u, "id")
-                    owner_username = _safe_getattr(u, "username")
-                    break
 
     return owner_id, owner_name, owner_username
 
@@ -578,15 +560,10 @@ _ROW_RE = re.compile(r'<tr[^>]*?>(.*?)</tr>', re.DOTALL)
 _TH_RE = re.compile(r'<th[^>]*>(.*?)</th>', re.DOTALL)
 _TD_RE = re.compile(r'<td[^>]*>(.*?)</td>', re.DOTALL)
 _TAG_RE = re.compile(r'<[^>]+>')
-_META_TG_RE = re.compile(
-    r'<meta\s+(?:property|name)="og:description"[^>]*content="([^"]*)"',
-    re.IGNORECASE,
-)
 _FRAG_OWNER_RE = re.compile(
     r'(?:owner|seller)["\s:]*(?:<[^>]+>)*\s*<a[^>]*href="https?://t\.me/([^"?/]+)"',
     re.IGNORECASE | re.DOTALL,
 )
-_FRAG_LINK_RE = re.compile(r'href="https?://t\.me/([^"?/]+)"')
 
 
 def _make_html_request(url: str) -> urllib.request.Request:
@@ -640,16 +617,9 @@ def _parse_owner_from_html(html: str) -> tuple[str | None, str | None]:
         if name:
             return None, name
 
-    meta_m = _META_TG_RE.search(html)
-    if meta_m:
-        desc = meta_m.group(1)
-        if "@" in desc:
-            at_m = re.search(r'@([A-Za-z]\w{3,31})', desc)
-            if at_m:
-                uname = at_m.group(1)
-                if uname.lower() not in ("nft", "giftrelayer", "fragment", "ton"):
-                    return uname, None
-
+    # No explicit "Owner" row -> unknown. We do NOT scrape a random @mention
+    # from og:description or page links: that grabbed the collection author /
+    # a promoted channel (e.g. the same handle on every gift), not the owner.
     return None, None
 
 
@@ -695,15 +665,8 @@ async def resolve_owner_via_fragment(slug: str) -> tuple[str | None, str | None]
                 return uname, name
             if name:
                 return None, name
-
-            links = _FRAG_LINK_RE.findall(html)
-            for link_uname in links:
-                if link_uname.lower() not in (
-                    "nft", "giftrelayer", "fragment", "ton",
-                    "telegram", "privacy", "tos",
-                ):
-                    logger.info("Fragment(link) resolved %s -> @%s", slug, link_uname)
-                    return link_uname, None
+            # No "first t.me link" fallback: it matched the collection/channel
+            # handle shared by every gift, not the owner.
         except Exception as e:
             logger.debug("Fragment resolve %s (%s): %s", slug, url, e)
     return None, None
@@ -1206,36 +1169,6 @@ async def resolve_username_to_id(
     return None
 
 
-_name_search_seen: dict[int, int] = {}
-
-
-async def _search_owner_by_name(
-    client: TelegramClient, owner_name: str | None, tag: str = "",
-) -> list[tuple[int | None, str | None]]:
-    if not owner_name or len(owner_name.strip()) < 2:
-        return []
-    candidates = []
-    try:
-        result = await _api_call(
-            client,
-            functions.contacts.SearchRequest(q=owner_name.strip(), limit=10),
-            tag=tag or f"name_search:{owner_name}",
-        )
-        norm = owner_name.strip().lower()
-        for u in getattr(result, "users", []):
-            fn = (getattr(u, "first_name", "") or "").strip()
-            ln = (getattr(u, "last_name", "") or "").strip()
-            full = f"{fn} {ln}".strip().lower()
-            if full == norm or fn.lower() == norm:
-                uid = getattr(u, "id", None)
-                uname = getattr(u, "username", None)
-                if uid:
-                    candidates.append((uid, uname))
-    except Exception as e:
-        logger.debug("Name search '%s': %s", owner_name, e)
-    return candidates
-
-
 async def _id_to_username(
     client: TelegramClient, user_id: int, tag: str = "",
 ) -> str | None:
@@ -1297,24 +1230,33 @@ async def resolve_owner_full(
 
     best_name = oname or html_name or frag_name or frag_json_name or portals_name or owner_name
 
-    reliable_uname = html_uname or frag_uname or frag_json_uname or ouname
-    reliable_id = oid or portals_id
-
-    if reliable_uname:
-        verified_id, verified_uname = await _verify_id_username(
-            client, reliable_id, reliable_uname, tag=tag,
-        )
-        return verified_id, best_name, verified_uname
-
-    # Portals gives the real seller's Telegram id even when MTProto hides it.
+    # Priority = most authoritative first:
+    # 1. Portals seller record (owner_id): the account that actually listed the
+    #    gift on the market. Username derived from that id is guaranteed to
+    #    belong to it, so no cross-check needed.
     if portals_id:
         uname = await _id_to_username(client, portals_id, tag=tag)
         return portals_id, best_name, uname
 
-    if reliable_id:
-        uname = await _id_to_username(client, reliable_id, tag=tag)
-        return reliable_id, best_name, uname
+    # 2. Telegram's own getUniqueStarGift owner (explicit owner peer only).
+    if oid:
+        if ouname:
+            verified_id, verified_uname = await _verify_id_username(
+                client, oid, ouname, tag=tag,
+            )
+            return verified_id, best_name, verified_uname
+        uname = await _id_to_username(client, oid, tag=tag)
+        return oid, best_name, uname
 
+    # 3. Explicit "Owner" row scraped from the t.me / Fragment gift page.
+    page_uname = html_uname or frag_uname or frag_json_uname or ouname
+    if page_uname:
+        verified_id, verified_uname = await _verify_id_username(
+            client, None, page_uname, tag=tag,
+        )
+        return verified_id, best_name, verified_uname
+
+    # 4. TON wallet holding the gift -> its linked Telegram social.
     addr = ton_addr or listing_owner_address
     if addr:
         ton_nft_task = asyncio.create_task(resolve_owner_via_ton(addr))
@@ -1336,24 +1278,9 @@ async def resolve_owner_full(
             if uname:
                 return ton_id, best_name, uname
 
-    name_candidates = await _search_owner_by_name(client, owner_name, tag=tag)
-    for cand_id, cand_uname in name_candidates:
-        if _name_search_seen.get(cand_id, 0) >= 3:
-            logger.debug("Skipping name candidate %d (seen %d times)", cand_id, _name_search_seen[cand_id])
-            continue
-        if cand_uname:
-            verified_id, verified_uname = await _verify_id_username(
-                client, cand_id, cand_uname, tag=tag,
-            )
-            if verified_id and verified_uname:
-                _name_search_seen[cand_id] = _name_search_seen.get(cand_id, 0) + 1
-                return verified_id, best_name, verified_uname
-        else:
-            uname = await _id_to_username(client, cand_id, tag=tag)
-            if uname:
-                _name_search_seen[cand_id] = _name_search_seen.get(cand_id, 0) + 1
-                return cand_id, best_name, uname
-
+    # No contacts.Search-by-name guess: it returned whoever Telegram ranks
+    # highest for that display name (the same popular accounts over and over),
+    # not the actual owner. Unknown owner stays unknown -> no seller button.
     return None, best_name, None
 
 
