@@ -20,8 +20,10 @@ import logging
 import os
 import shutil
 import signal
+import ssl
 import sys
 import time
+import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -393,25 +395,45 @@ def _extract_price(gift: TLObject) -> int:
     return 0
 
 
+def _peer_to_id(peer) -> int | None:
+    if peer is None:
+        return None
+    if hasattr(peer, "user_id"):
+        return peer.user_id
+    if hasattr(peer, "channel_id"):
+        return peer.channel_id
+    if isinstance(peer, int):
+        return peer
+    return None
+
+
 def _resolve_owner(gift: TLObject, users_map: dict) -> tuple[int | None, str | None, str | None]:
-    owner_id_raw = _safe_getattr(gift, "owner_id")
     owner_name = _safe_getattr(gift, "owner_name")
     owner_username = None
-    owner_id = None
-    if owner_id_raw is not None:
-        if hasattr(owner_id_raw, "user_id"):
-            owner_id = owner_id_raw.user_id
-        elif hasattr(owner_id_raw, "channel_id"):
-            owner_id = owner_id_raw.channel_id
-        elif isinstance(owner_id_raw, int):
-            owner_id = owner_id_raw
-        if owner_id and owner_id in users_map:
-            user = users_map[owner_id]
-            owner_username = _safe_getattr(user, "username")
+    owner_id = _peer_to_id(_safe_getattr(gift, "owner_id"))
+
+    if owner_id is None:
+        owner_id = _peer_to_id(_safe_getattr(gift, "host_id"))
+
+    if owner_id and owner_id in users_map:
+        user = users_map[owner_id]
+        owner_username = _safe_getattr(user, "username")
+        if not owner_name:
+            first = _safe_getattr(user, "first_name", "")
+            last = _safe_getattr(user, "last_name", "")
+            owner_name = f"{first} {last}".strip() or None
+
+    if owner_id is None and users_map:
+        users_list = list(users_map.values())
+        if len(users_list) == 1:
+            u = users_list[0]
+            owner_id = _safe_getattr(u, "id")
+            owner_username = _safe_getattr(u, "username")
             if not owner_name:
-                first = _safe_getattr(user, "first_name", "")
-                last = _safe_getattr(user, "last_name", "")
+                first = _safe_getattr(u, "first_name", "")
+                last = _safe_getattr(u, "last_name", "")
                 owner_name = f"{first} {last}".strip() or None
+
     return owner_id, owner_name, owner_username
 
 
@@ -447,9 +469,9 @@ async def get_gift_catalog(client: TelegramClient, tag: str = "") -> list[Collec
 
 async def resolve_owner_by_slug(
     client: TelegramClient, slug: str, tag: str = "",
-) -> tuple[int | None, str | None, str | None]:
+) -> tuple[int | None, str | None, str | None, str | None]:
     if not slug:
-        return None, None, None
+        return None, None, None, None
     try:
         result = await _api_call(
             client,
@@ -460,11 +482,11 @@ async def resolve_owner_by_slug(
         raise
     except Exception as e:
         logger.debug("resolve_owner_by_slug(%s): %s", slug, e)
-        return None, None, None
+        return None, None, None, None
 
     gift = _safe_getattr(result, "gift")
     if gift is None:
-        return None, None, None
+        return None, None, None, None
 
     users_map = {}
     for user in _safe_getattr(result, "users", []):
@@ -473,25 +495,68 @@ async def resolve_owner_by_slug(
             users_map[uid] = user
 
     owner_id, owner_name, owner_username = _resolve_owner(gift, users_map)
+    gift_address = _safe_getattr(gift, "gift_address")
+    owner_address = _safe_getattr(gift, "owner_address")
 
-    if owner_id is None:
-        host_raw = _safe_getattr(gift, "host_id")
-        if host_raw is not None:
-            if hasattr(host_raw, "user_id"):
-                owner_id = host_raw.user_id
-            elif hasattr(host_raw, "channel_id"):
-                owner_id = host_raw.channel_id
-            elif isinstance(host_raw, int):
-                owner_id = host_raw
-            if owner_id and owner_id in users_map:
-                user = users_map[owner_id]
-                owner_username = _safe_getattr(user, "username")
-                if not owner_name:
-                    first = _safe_getattr(user, "first_name", "")
-                    last = _safe_getattr(user, "last_name", "")
-                    owner_name = f"{first} {last}".strip() or None
+    return owner_id, owner_name, owner_username, gift_address or owner_address
 
-    return owner_id, owner_name, owner_username
+
+_ton_ctx = ssl.create_default_context()
+
+
+async def resolve_owner_via_ton(
+    ton_address: str,
+) -> tuple[int | None, str | None]:
+    if not ton_address:
+        return None, None
+    try:
+        url = f"https://tonapi.io/v2/nfts/{ton_address}"
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        resp = await asyncio.to_thread(
+            urllib.request.urlopen, req, timeout=10, context=_ton_ctx,
+        )
+        data = json.loads(resp.read())
+        wallet = data.get("owner", {}).get("address")
+        if not wallet:
+            return None, None
+        url2 = f"https://tonapi.io/v2/accounts/{wallet}"
+        req2 = urllib.request.Request(url2, headers={"Accept": "application/json"})
+        resp2 = await asyncio.to_thread(
+            urllib.request.urlopen, req2, timeout=10, context=_ton_ctx,
+        )
+        acct = json.loads(resp2.read())
+        name = acct.get("name")
+        icon = acct.get("icon")
+        socials = acct.get("socials", [])
+        for s in socials:
+            if "t.me/" in s.get("url", ""):
+                uname = s["url"].rstrip("/").split("/")[-1]
+                if uname:
+                    return None, uname
+        if name:
+            return None, None
+    except Exception as e:
+        logger.debug("TON resolve %s: %s", ton_address, e)
+    return None, None
+
+
+async def resolve_owner_full(
+    client: TelegramClient, listing_slug: str,
+    listing_owner_address: str | None, tag: str = "",
+) -> tuple[int | None, str | None, str | None]:
+    oid, oname, ouname, ton_addr = await resolve_owner_by_slug(
+        client, listing_slug, tag=tag,
+    )
+    if oid or ouname:
+        return oid, oname, ouname
+
+    addr = ton_addr or listing_owner_address
+    if addr:
+        ton_id, ton_uname = await resolve_owner_via_ton(addr)
+        if ton_uname:
+            return ton_id, oname, ton_uname
+
+    return oid, oname, ouname
 
 
 async def get_resale_listings(
@@ -961,8 +1026,6 @@ def _build_buttons(listing: ResaleListing) -> list[list[Button]]:
     row = []
     if profile_url:
         row.append(Button.url("Seller profile", profile_url))
-    if listing.slug:
-        row.append(Button.url("Open gift", f"https://t.me/nft/{listing.slug}"))
     row.append(Button.inline("Claim", data=f"claim:{listing.unique_gift_id}".encode()))
     return [row]
 
@@ -1120,9 +1183,10 @@ async def poll_collection(
             if not _passes_price_filter(listing):
                 continue
 
-            if listing.owner_id is None and listing.slug:
-                oid, oname, ouname = await resolve_owner_by_slug(
-                    userbot, listing.slug, tag=session_tag,
+            if listing.owner_id is None and listing.owner_username is None and listing.slug:
+                oid, oname, ouname = await resolve_owner_full(
+                    userbot, listing.slug, listing.owner_address,
+                    tag=session_tag,
                 )
                 if oid or ouname:
                     listing = ResaleListing(
