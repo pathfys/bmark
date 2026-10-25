@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Telegram Gift Market Tracker (multi-session)
+Telegram Gift Market Tracker (multi-session, hardened)
 
 До 8 юзербот-сессий для параллельного опроса маркета.
-Коллекции распределяются между сессиями round-robin.
+Защита от слёта сессий: auto-reconnect, FloodWait handling,
+health checks, session backups, realistic device fingerprint.
 
 Запуск:
     1. pip install telethon aiosqlite rich python-dotenv
@@ -17,6 +18,7 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 import signal
 import sys
 import time
@@ -31,6 +33,13 @@ from rich.text import Text
 from telethon import TelegramClient, events, Button
 from telethon.tl import functions
 from telethon.tl.tlobject import TLObject
+from telethon.errors import (
+    FloodWaitError,
+    RPCError,
+    AuthKeyUnregisteredError,
+    UserDeactivatedBanError,
+    SessionRevokedError,
+)
 
 load_dotenv()
 
@@ -75,6 +84,22 @@ CLAIM_DM_TEMPLATE = os.getenv(
 SELLER_CACHE_TTL = int(os.getenv("SELLER_CACHE_TTL", "300"))
 
 MAX_CONCURRENT_PER_SESSION = int(os.getenv("MAX_CONCURRENT_PER_SESSION", "3"))
+
+# -- Session protection --
+DEVICE_MODEL = os.getenv("DEVICE_MODEL", "Desktop")
+SYSTEM_VERSION = os.getenv("SYSTEM_VERSION", "Windows 10")
+APP_VERSION = os.getenv("APP_VERSION", "4.16.8")
+LANG_CODE = os.getenv("LANG_CODE", "en")
+
+FLOOD_SLEEP_THRESHOLD = int(os.getenv("FLOOD_SLEEP_THRESHOLD", "120"))
+CONNECTION_RETRIES = int(os.getenv("CONNECTION_RETRIES", "10"))
+RETRY_DELAY = int(os.getenv("RETRY_DELAY", "2"))
+AUTH_DELAY = int(os.getenv("AUTH_DELAY", "5"))
+API_CALL_RETRIES = int(os.getenv("API_CALL_RETRIES", "3"))
+
+HEALTH_CHECK_EVERY_N_CYCLES = int(os.getenv("HEALTH_CHECK_CYCLES", "10"))
+SESSION_BACKUP_EVERY_N_CYCLES = int(os.getenv("SESSION_BACKUP_CYCLES", "60"))
+SESSION_BACKUP_DIR = os.getenv("SESSION_BACKUP_DIR", "session_backups")
 
 # ═══════════════════════════════════════════════════════
 #  LOGGING & CONSOLE
@@ -181,6 +206,149 @@ class SellerProfile:
 
 
 # ═══════════════════════════════════════════════════════
+#  SESSION PROTECTION
+# ═══════════════════════════════════════════════════════
+
+# Fatal errors that mean the session is permanently dead
+_FATAL_ERRORS = (AuthKeyUnregisteredError, UserDeactivatedBanError, SessionRevokedError)
+
+
+def _create_client(session_name: str) -> TelegramClient:
+    return TelegramClient(
+        session_name,
+        API_ID,
+        API_HASH,
+        device_model=DEVICE_MODEL,
+        system_version=SYSTEM_VERSION,
+        app_version=APP_VERSION,
+        lang_code=LANG_CODE,
+        auto_reconnect=True,
+        connection_retries=CONNECTION_RETRIES,
+        retry_delay=RETRY_DELAY,
+        flood_sleep_threshold=FLOOD_SLEEP_THRESHOLD,
+    )
+
+
+async def _api_call(client: TelegramClient, request, retries: int = 0, tag: str = ""):
+    if retries <= 0:
+        retries = API_CALL_RETRIES
+    last_exc = None
+    for attempt in range(retries):
+        try:
+            return await client(request)
+        except FloodWaitError as e:
+            # Telethon auto-sleeps up to flood_sleep_threshold;
+            # this catches waits ABOVE the threshold
+            logger.warning("[%s] FloodWait %ds, sleeping...", tag, e.seconds)
+            await asyncio.sleep(e.seconds + 1)
+        except _FATAL_ERRORS as e:
+            logger.error("[%s] FATAL session error: %s", tag, e)
+            raise
+        except (ConnectionError, TimeoutError, OSError) as e:
+            last_exc = e
+            if attempt >= retries - 1:
+                raise
+            delay = min(2 ** (attempt + 1), 30)
+            logger.warning("[%s] Network error: %s, retry #%d in %ds",
+                           tag, type(e).__name__, attempt + 1, delay)
+            await asyncio.sleep(delay)
+            if not client.is_connected():
+                try:
+                    await client.connect()
+                except Exception:
+                    pass
+        except RPCError:
+            raise
+        except Exception as e:
+            last_exc = e
+            if attempt >= retries - 1:
+                raise
+            delay = min(2 ** (attempt + 1), 10)
+            logger.warning("[%s] Unexpected error: %s, retry #%d in %ds",
+                           tag, e, attempt + 1, delay)
+            await asyncio.sleep(delay)
+    raise last_exc or RuntimeError(f"[{tag}] API call failed after {retries} retries")
+
+
+async def _ensure_connected(client: TelegramClient, name: str) -> bool:
+    try:
+        if not client.is_connected():
+            logger.warning("[%s] Disconnected, reconnecting...", name)
+            await client.connect()
+        if not await client.is_user_authorized():
+            logger.error("[%s] Auth lost! Session may need re-login.", name)
+            return False
+        await client.get_me()
+        return True
+    except _FATAL_ERRORS as e:
+        logger.error("[%s] Session permanently dead: %s", name, e)
+        return False
+    except Exception as e:
+        logger.warning("[%s] Health check failed: %s, trying hard reconnect...", name, e)
+        try:
+            await client.disconnect()
+        except Exception:
+            pass
+        await asyncio.sleep(2)
+        try:
+            await client.connect()
+            me = await client.get_me()
+            if me:
+                logger.info("[%s] Reconnected successfully", name)
+                return True
+        except Exception as e2:
+            logger.error("[%s] Reconnect failed: %s", name, e2)
+        return False
+
+
+def _backup_sessions():
+    os.makedirs(SESSION_BACKUP_DIR, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backed = 0
+    for name in SESSION_NAMES:
+        src = f"{name}.session"
+        if os.path.exists(src):
+            dst = os.path.join(SESSION_BACKUP_DIR, f"{name}_{ts}.session")
+            latest = os.path.join(SESSION_BACKUP_DIR, f"{name}_latest.session")
+            try:
+                shutil.copy2(src, dst)
+                shutil.copy2(src, latest)
+                backed += 1
+            except Exception as e:
+                logger.warning("Backup %s failed: %s", src, e)
+    bot_src = "gift_bot.session"
+    if os.path.exists(bot_src):
+        try:
+            shutil.copy2(bot_src, os.path.join(SESSION_BACKUP_DIR, f"gift_bot_{ts}.session"))
+            shutil.copy2(bot_src, os.path.join(SESSION_BACKUP_DIR, "gift_bot_latest.session"))
+            backed += 1
+        except Exception:
+            pass
+    # keep only last 10 backups per session
+    _cleanup_old_backups()
+    if backed:
+        logger.info("Backed up %d session files to %s", backed, SESSION_BACKUP_DIR)
+
+
+def _cleanup_old_backups():
+    try:
+        files_by_prefix: dict[str, list[str]] = {}
+        for f in os.listdir(SESSION_BACKUP_DIR):
+            if f.endswith(".session") and "_latest" not in f:
+                prefix = f.rsplit("_", 2)[0] if f.count("_") >= 2 else f
+                files_by_prefix.setdefault(prefix, []).append(f)
+        for prefix, files in files_by_prefix.items():
+            files.sort()
+            for old in files[:-10]:
+                try:
+                    os.remove(os.path.join(SESSION_BACKUP_DIR, old))
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
+# ═══════════════════════════════════════════════════════
 #  API
 # ═══════════════════════════════════════════════════════
 
@@ -233,9 +401,13 @@ def _resolve_owner(gift: TLObject, users_map: dict) -> tuple[int | None, str | N
     return owner_id, owner_name, owner_username
 
 
-async def get_gift_catalog(client: TelegramClient) -> list[CollectionInfo]:
+async def get_gift_catalog(client: TelegramClient, tag: str = "") -> list[CollectionInfo]:
     try:
-        result = await client(functions.payments.GetStarGiftsRequest(hash=0))
+        result = await _api_call(
+            client, functions.payments.GetStarGiftsRequest(hash=0), tag=tag or "catalog",
+        )
+    except _FATAL_ERRORS:
+        raise
     except Exception as e:
         logger.error("Catalog error: %s", e)
         return []
@@ -262,14 +434,21 @@ async def get_gift_catalog(client: TelegramClient) -> list[CollectionInfo]:
 async def get_resale_listings(
     client: TelegramClient, gift_id: int,
     limit: int = 50, offset: str = "", sort_by_price: bool = False,
+    tag: str = "",
 ) -> tuple[list[ResaleListing], str]:
     try:
-        result = await client(functions.payments.GetResaleStarGiftsRequest(
-            gift_id=gift_id, offset=offset, limit=limit, sort_by_price=sort_by_price,
-        ))
+        result = await _api_call(
+            client,
+            functions.payments.GetResaleStarGiftsRequest(
+                gift_id=gift_id, offset=offset, limit=limit, sort_by_price=sort_by_price,
+            ),
+            tag=tag or f"listings:{gift_id}",
+        )
     except AttributeError:
         logger.error("Telethon does not support GetResaleStarGiftsRequest (need layer 210+)")
         return [], ""
+    except _FATAL_ERRORS:
+        raise
     except Exception as e:
         logger.error("Listings gift_id=%d: %s", gift_id, e)
         return [], ""
@@ -315,9 +494,12 @@ def _is_cached(user_id: int) -> bool:
     return (time.time() - _seller_cache[user_id].checked_at) < SELLER_CACHE_TTL
 
 
-async def get_user_level(client: TelegramClient, user_id: int) -> int | None:
+async def get_user_level(client: TelegramClient, user_id: int, tag: str = "") -> int | None:
     try:
-        full = await client(functions.users.GetFullUserRequest(id=user_id))
+        full = await _api_call(
+            client, functions.users.GetFullUserRequest(id=user_id),
+            tag=tag or f"level:{user_id}",
+        )
         uf = full.full_user
         level = getattr(uf, "level", None)
         if level is not None:
@@ -333,22 +515,30 @@ async def get_user_level(client: TelegramClient, user_id: int) -> int | None:
             if level is not None:
                 return int(level)
         return 0
+    except _FATAL_ERRORS:
+        raise
     except Exception as e:
         logger.warning("Level user_id=%d: %s", user_id, e)
         return None
 
 
-async def get_user_nft_count(client: TelegramClient, user_id: int) -> int | None:
+async def get_user_nft_count(client: TelegramClient, user_id: int, tag: str = "") -> int | None:
     try:
         try:
-            result = await client(functions.payments.GetSavedStarGiftsRequest(
-                peer=user_id, offset="", limit=100,
-            ))
+            result = await _api_call(
+                client, functions.payments.GetSavedStarGiftsRequest(
+                    peer=user_id, offset="", limit=100,
+                ),
+                tag=tag or f"nft:{user_id}",
+            )
         except (AttributeError, TypeError):
             try:
-                result = await client(functions.payments.GetUserStarGiftsRequest(
-                    user_id=user_id, offset="", limit=100,
-                ))
+                result = await _api_call(
+                    client, functions.payments.GetUserStarGiftsRequest(
+                        user_id=user_id, offset="", limit=100,
+                    ),
+                    tag=tag or f"nft:{user_id}",
+                )
             except (AttributeError, TypeError):
                 return None
         gifts = getattr(result, "gifts", [])
@@ -360,16 +550,18 @@ async def get_user_nft_count(client: TelegramClient, user_id: int) -> int | None
             if "unique" in type(inner).__name__.lower():
                 nft_count += 1
         return nft_count
+    except _FATAL_ERRORS:
+        raise
     except Exception as e:
         logger.warning("NFT count user_id=%d: %s", user_id, e)
         return None
 
 
-async def check_seller(client: TelegramClient, user_id: int) -> SellerProfile:
+async def check_seller(client: TelegramClient, user_id: int, tag: str = "") -> SellerProfile:
     if _is_cached(user_id):
         return _seller_cache[user_id]
-    level = await get_user_level(client, user_id)
-    nft_count = await get_user_nft_count(client, user_id)
+    level = await get_user_level(client, user_id, tag)
+    nft_count = await get_user_nft_count(client, user_id, tag)
     username = first_name = None
     try:
         entity = await client.get_entity(user_id)
@@ -396,6 +588,8 @@ _db_lock = asyncio.Lock()
 
 async def init_db() -> aiosqlite.Connection:
     db = await aiosqlite.connect(DB_PATH)
+    await db.execute("PRAGMA journal_mode=WAL")
+    await db.execute("PRAGMA busy_timeout=5000")
     await db.executescript("""
         CREATE TABLE IF NOT EXISTS collections (
             gift_id       INTEGER PRIMARY KEY,
@@ -643,7 +837,7 @@ def set_dependencies(db, userbots: list[TelegramClient]):
 
 
 def create_bot() -> TelegramClient:
-    bot = TelegramClient("gift_bot", API_ID, API_HASH)
+    bot = _create_client("gift_bot")
 
     @bot.on(events.CallbackQuery(pattern=rb"^claim:(\d+)$"))
     async def on_claim(event):
@@ -712,15 +906,30 @@ async def send_listing_to_group(bot, listing, seller_level=None, seller_nft=None
     text = _build_listing_text(listing, seller_level, seller_nft)
     buttons = _build_buttons(listing)
     async with _send_lock:
-        try:
-            msg = await bot.send_message(
-                LOG_GROUP_ID, text, buttons=buttons, parse_mode="html", link_preview=False,
-            )
-            await asyncio.sleep(0.1)
-            return msg.id
-        except Exception as e:
-            logger.error("Send to group: %s", e)
-            return None
+        for attempt in range(3):
+            try:
+                msg = await bot.send_message(
+                    LOG_GROUP_ID, text, buttons=buttons, parse_mode="html", link_preview=False,
+                )
+                await asyncio.sleep(0.1)
+                return msg.id
+            except FloodWaitError as e:
+                logger.warning("Send FloodWait %ds, sleeping...", e.seconds)
+                await asyncio.sleep(e.seconds + 1)
+            except (ConnectionError, TimeoutError, OSError) as e:
+                if attempt >= 2:
+                    logger.error("Send to group failed after retries: %s", e)
+                    return None
+                await asyncio.sleep(2 ** (attempt + 1))
+                if not bot.is_connected():
+                    try:
+                        await bot.connect()
+                    except Exception:
+                        pass
+            except Exception as e:
+                logger.error("Send to group: %s", e)
+                return None
+    return None
 
 
 async def _handle_claim(bot, event):
@@ -755,6 +964,14 @@ async def _handle_claim(bot, event):
             )
             await userbot.send_message(owner_id, dm_text)
             dm_sent = True
+        except FloodWaitError as e:
+            logger.warning("DM FloodWait %ds", e.seconds)
+            await asyncio.sleep(e.seconds + 1)
+            try:
+                await userbot.send_message(owner_id, dm_text)
+                dm_sent = True
+            except Exception as e2:
+                logger.warning("DM retry failed: %s", e2)
         except Exception as e:
             logger.warning("DM to seller %d: %s", owner_id, e)
 
@@ -813,6 +1030,7 @@ async def poll_collection(
     while True:
         listings, next_offset = await get_resale_listings(
             userbot, gift_id, limit=MAX_GIFTS_PER_PAGE, offset=offset,
+            tag=session_tag,
         )
         if not listings:
             break
@@ -823,7 +1041,7 @@ async def poll_collection(
 
             seller_level = seller_nft = None
             if listing.owner_id and (MAX_SELLER_LEVEL or MAX_SELLER_NFT_COUNT):
-                seller = await check_seller(userbot, listing.owner_id)
+                seller = await check_seller(userbot, listing.owner_id, tag=session_tag)
                 seller_level = seller.level
                 seller_nft = seller.nft_count
                 if not seller.passes_filter:
@@ -879,8 +1097,10 @@ async def _poll_session_batch(
 
     total_new = total_updated = total_delisted = 0
     for r in results:
+        if isinstance(r, _FATAL_ERRORS):
+            raise r
         if isinstance(r, Exception):
-            logger.error("Poll error: %s", r)
+            logger.error("[%s] Poll error: %s", session_tag, r)
             continue
         total_new += r[0]
         total_updated += r[1]
@@ -917,29 +1137,67 @@ async def run_tracker():
         f"Seller filter: level <= {MAX_SELLER_LEVEL or 'inf'}, "
         f"NFT <= {MAX_SELLER_NFT_COUNT or 'inf'}\n"
         f"Collections: {', '.join(TRACK_COLLECTIONS) or 'all'}\n"
-        f"Price: {MIN_PRICE_STARS or '--'} - {MAX_PRICE_STARS or 'inf'} Stars",
+        f"Price: {MIN_PRICE_STARS or '--'} - {MAX_PRICE_STARS or 'inf'} Stars\n\n"
+        f"[dim]Protection: flood_sleep={FLOOD_SLEEP_THRESHOLD}s, "
+        f"conn_retries={CONNECTION_RETRIES}, "
+        f"api_retries={API_CALL_RETRIES}, "
+        f"auth_delay={AUTH_DELAY}s[/]",
         border_style="bright_magenta",
     ))
 
+    # -- Sequential auth with delay to avoid security flags --
     userbots: list[TelegramClient] = []
+    dead_sessions: set[str] = set()
+
     for i, name in enumerate(SESSION_NAMES, 1):
         console.print(f"[dim]Connecting session {i}/{n}: {name}...[/]")
-        ub = TelegramClient(name, API_ID, API_HASH)
-        await ub.start()
-        me = await ub.get_me()
-        tag = f"@{me.username}" if me.username else f"id:{me.id}"
-        console.print(f"  [green]{name}[/] -- {tag}")
-        userbots.append(ub)
+        ub = _create_client(name)
+        try:
+            await ub.start()
+            me = await ub.get_me()
+            tag = f"@{me.username}" if me.username else f"id:{me.id}"
+            console.print(f"  [green]{name}[/] -- {tag}")
+            userbots.append(ub)
+        except _FATAL_ERRORS as e:
+            console.print(f"  [bold red]{name} -- SESSION DEAD: {e}[/]")
+            console.print(f"  [yellow]Delete {name}.session and re-login to fix[/]")
+            dead_sessions.add(name)
+            continue
+        except Exception as e:
+            console.print(f"  [red]{name} -- connect error: {e}[/]")
+            dead_sessions.add(name)
+            continue
+
+        if i < n:
+            console.print(f"  [dim]Waiting {AUTH_DELAY}s before next session...[/]")
+            await asyncio.sleep(AUTH_DELAY)
+
+    if not userbots:
+        console.print("[bold red]No sessions connected. Exiting.[/]")
+        return
+
+    if dead_sessions:
+        console.print(f"[yellow]{len(dead_sessions)} sessions failed: {', '.join(dead_sessions)}[/]")
+        console.print(f"[green]Continuing with {len(userbots)} active sessions[/]")
+
+    # -- Initial session backup --
+    _backup_sessions()
 
     bot = create_bot()
-    await bot.start(bot_token=BOT_TOKEN)
-    console.print("[green]Bot connected[/]")
+    try:
+        await bot.start(bot_token=BOT_TOKEN)
+        console.print("[green]Bot connected[/]")
+    except Exception as e:
+        console.print(f"[bold red]Bot failed: {e}[/]")
+        for ub in userbots:
+            await ub.disconnect()
+        return
 
     db = await init_db()
     set_dependencies(db, userbots)
 
     console.print("[dim]Loading gift catalog...[/]")
-    catalog = await get_gift_catalog(userbots[0])
+    catalog = await get_gift_catalog(userbots[0], tag=SESSION_NAMES[0])
     if not catalog:
         console.print("[yellow]Catalog empty.[/]")
         await _cleanup(userbots, bot, db)
@@ -955,8 +1213,9 @@ async def run_tracker():
     for c in catalog:
         await upsert_collection(db, c.gift_id, c.title, c.slug, c.total_issued)
 
+    active_names = [s for s in SESSION_NAMES if s not in dead_sessions]
     buckets = _distribute_collections(catalog, len(userbots))
-    for i, (ub_name, bucket) in enumerate(zip(SESSION_NAMES, buckets)):
+    for ub_name, bucket in zip(active_names, buckets):
         titles = [c.title for c in bucket]
         console.print(f"  [dim]{ub_name}:[/] {len(bucket)} collections -- {', '.join(titles[:5])}"
                        + ("..." if len(titles) > 5 else ""))
@@ -969,21 +1228,70 @@ async def run_tracker():
         now = datetime.now().strftime("%H:%M:%S")
         console.rule(f"[dim]Cycle #{cycle} -- {now}[/]")
 
+        # -- Health check --
+        if cycle % HEALTH_CHECK_EVERY_N_CYCLES == 0:
+            console.print("[dim]Running health check...[/]")
+            healthy = []
+            for ub, name in zip(userbots, active_names):
+                ok = await _ensure_connected(ub, name)
+                if ok:
+                    healthy.append((ub, name))
+                else:
+                    console.print(f"  [red]{name} -- DEAD, removing from rotation[/]")
+            if not healthy:
+                console.print("[bold red]All sessions dead! Waiting 60s before retry...[/]")
+                await asyncio.sleep(60)
+                # try reconnecting all
+                healthy = []
+                for ub, name in zip(userbots, active_names):
+                    ok = await _ensure_connected(ub, name)
+                    if ok:
+                        healthy.append((ub, name))
+                if not healthy:
+                    console.print("[bold red]All sessions still dead. Exiting.[/]")
+                    break
+            userbots_active = [h[0] for h in healthy]
+            names_active = [h[1] for h in healthy]
+            if len(userbots_active) < len(userbots):
+                buckets = _distribute_collections(catalog, len(userbots_active))
+                console.print(f"  [yellow]Redistributed to {len(userbots_active)} sessions[/]")
+            else:
+                userbots_active = userbots
+                names_active = active_names
+        else:
+            userbots_active = userbots
+            names_active = active_names
+            if cycle > 1:
+                buckets = _distribute_collections(catalog, len(userbots_active))
+
+        # -- Session backup --
+        if cycle % SESSION_BACKUP_EVERY_N_CYCLES == 0:
+            _backup_sessions()
+
+        # -- Poll --
         tasks = []
-        for ub, bucket, name in zip(userbots, buckets, SESSION_NAMES):
+        for ub, bucket, name in zip(userbots_active, buckets, names_active):
             if bucket:
                 tasks.append(_poll_session_batch(ub, bot, db, bucket, name))
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         total_new = total_updated = total_delisted = 0
+        session_died = False
         for r in results:
+            if isinstance(r, _FATAL_ERRORS):
+                logger.error("Session fatal error during poll: %s", r)
+                session_died = True
+                continue
             if isinstance(r, Exception):
                 logger.error("Session error: %s", r)
                 continue
             total_new += r[0]
             total_updated += r[1]
             total_delisted += r[2]
+
+        if session_died:
+            console.print("[yellow]A session died during polling, will health-check next cycle[/]")
 
         if total_new or total_delisted:
             console.print(
@@ -998,6 +1306,15 @@ async def run_tracker():
             stats = await get_stats(db)
             print_stats(stats)
 
+        # -- Bot health --
+        if cycle % HEALTH_CHECK_EVERY_N_CYCLES == 0:
+            if not bot.is_connected():
+                logger.warning("Bot disconnected, reconnecting...")
+                try:
+                    await bot.connect()
+                except Exception as e:
+                    logger.error("Bot reconnect failed: %s", e)
+
         if _running:
             try:
                 await asyncio.sleep(POLL_INTERVAL_SECONDS)
@@ -1009,10 +1326,20 @@ async def run_tracker():
 
 async def _cleanup(userbots: list[TelegramClient], bot, db):
     console.print("\n[dim]Closing connections...[/]")
-    await db.close()
-    await bot.disconnect()
+    _backup_sessions()
+    try:
+        await db.close()
+    except Exception:
+        pass
+    try:
+        await bot.disconnect()
+    except Exception:
+        pass
     for ub in userbots:
-        await ub.disconnect()
+        try:
+            await ub.disconnect()
+        except Exception:
+            pass
     console.print("[green]Tracker stopped.[/]")
 
 
