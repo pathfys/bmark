@@ -1203,7 +1203,37 @@ async def _handle_seller_profile(bot, event):
         return
 
     if listing_data.get("owner_username"):
-        await event.answer(url=f"t.me/{listing_data['owner_username']}")
+        uname = listing_data["owner_username"]
+        await event.answer("Opening seller profile...")
+        try:
+            listing = ResaleListing(
+                unique_gift_id=unique_gift_id,
+                gift_id=listing_data["gift_id"],
+                num=listing_data.get("num"), slug=listing_data.get("slug"),
+                title=listing_data.get("title"),
+                owner_id=listing_data.get("owner_id"), owner_name=listing_data.get("owner_name"),
+                owner_username=uname,
+                owner_address=listing_data.get("owner_address"),
+                price_stars=listing_data["price_stars"],
+            )
+            updated_buttons = _build_buttons(listing)
+            msg_id = listing_data.get("log_message_id") or event.message_id
+            txt = _build_listing_text(
+                listing,
+                listing_data.get("seller_level"),
+                listing_data.get("seller_nft_count"),
+            )
+            await bot.edit_message(
+                event.chat_id, msg_id, txt,
+                buttons=updated_buttons, parse_mode="html",
+                link_preview=False,
+            )
+        except Exception:
+            pass
+        await event.respond(
+            f'>> <a href="https://t.me/{uname}">Open seller @{uname}</a>',
+            parse_mode="html", reply_to=event.message_id,
+        )
         return
 
     await event.answer("Resolving seller...", alert=False)
@@ -1263,25 +1293,24 @@ async def _handle_seller_profile(bot, event):
                 price_stars=listing_data["price_stars"],
             )
             updated_buttons = _build_buttons(listing)
-            msg_id = listing_data.get("log_message_id")
-            if msg_id:
-                try:
-                    txt = _build_listing_text(
-                        listing,
-                        listing_data.get("seller_level"),
-                        listing_data.get("seller_nft_count"),
-                    )
-                    await bot.edit_message(
-                        event.chat_id, msg_id, txt,
-                        buttons=updated_buttons, parse_mode="html",
-                        link_preview=False,
-                    )
-                except Exception:
-                    pass
+            msg_id = listing_data.get("log_message_id") or event.message_id
+            try:
+                txt = _build_listing_text(
+                    listing,
+                    listing_data.get("seller_level"),
+                    listing_data.get("seller_nft_count"),
+                )
+                await bot.edit_message(
+                    event.chat_id, msg_id, txt,
+                    buttons=updated_buttons, parse_mode="html",
+                    link_preview=False,
+                )
+            except Exception:
+                pass
         except Exception:
             pass
         await event.respond(
-            f'Seller: <a href="https://t.me/{resolved_uname}">@{resolved_uname}</a>',
+            f'>> <a href="https://t.me/{resolved_uname}">Open seller @{resolved_uname}</a>',
             parse_mode="html", reply_to=event.message_id,
         )
         return
@@ -1308,8 +1337,39 @@ async def _handle_seller_profile(bot, event):
             if entity:
                 uname = getattr(entity, "username", None)
                 if uname:
+                    async with _db_lock:
+                        await _db_ref.execute(
+                            "UPDATE listings SET owner_username=? WHERE unique_gift_id=?",
+                            (uname, unique_gift_id),
+                        )
+                        await _db_ref.commit()
+                    try:
+                        listing = ResaleListing(
+                            unique_gift_id=unique_gift_id,
+                            gift_id=listing_data["gift_id"],
+                            num=listing_data.get("num"), slug=slug,
+                            title=listing_data.get("title"),
+                            owner_id=resolved_id, owner_name=owner_name,
+                            owner_username=uname,
+                            owner_address=owner_addr,
+                            price_stars=listing_data["price_stars"],
+                        )
+                        updated_buttons = _build_buttons(listing)
+                        msg_id = listing_data.get("log_message_id") or event.message_id
+                        txt = _build_listing_text(
+                            listing,
+                            listing_data.get("seller_level"),
+                            listing_data.get("seller_nft_count"),
+                        )
+                        await bot.edit_message(
+                            event.chat_id, msg_id, txt,
+                            buttons=updated_buttons, parse_mode="html",
+                            link_preview=False,
+                        )
+                    except Exception:
+                        pass
                     await event.respond(
-                        f'Seller: <a href="https://t.me/{uname}">@{uname}</a>',
+                        f'>> <a href="https://t.me/{uname}">Open seller @{uname}</a>',
                         parse_mode="html", reply_to=event.message_id,
                     )
                     return
@@ -1319,22 +1379,39 @@ async def _handle_seller_profile(bot, event):
             else:
                 name = owner_name or f"id:{resolved_id}"
 
-            msg = await bot.send_message(
-                event.chat_id,
-                f'Seller: <a href="tg://user?id={resolved_id}">{name}</a>',
+            await event.respond(
+                f'Seller: <a href="tg://user?id={resolved_id}">{name}</a>\n'
+                f'(click name above to open profile)',
                 parse_mode="html", reply_to=event.message_id,
             )
-            await asyncio.sleep(20)
-            try:
-                await bot.delete_messages(event.chat_id, [msg.id])
-            except Exception:
-                pass
             return
         except Exception as e:
             logger.debug("Seller entity %d: %s", resolved_id, e)
 
+    if owner_name and userbot:
+        try:
+            result = await _api_call(
+                userbot,
+                functions.contacts.SearchRequest(q=owner_name, limit=10),
+                tag=f"fallback_search:{owner_name}",
+            )
+            for u in getattr(result, "users", []):
+                uname = getattr(u, "username", None)
+                if uname:
+                    fn = getattr(u, "first_name", "") or ""
+                    ln = getattr(u, "last_name", "") or ""
+                    full = f"{fn} {ln}".strip()
+                    if full.lower() == owner_name.strip().lower() or fn.lower() == owner_name.strip().lower():
+                        await event.respond(
+                            f'>> <a href="https://t.me/{uname}">Open seller @{uname}</a>',
+                            parse_mode="html", reply_to=event.message_id,
+                        )
+                        return
+        except Exception as e:
+            logger.debug("Fallback search '%s': %s", owner_name, e)
+
     name = owner_name or "unknown"
-    await event.answer(f"Seller: {name}\nProfile not found", alert=True)
+    await event.answer(f"Seller: {name} -- profile not resolved", alert=True)
 
 
 def _build_listing_text(listing: ResaleListing, seller_level=None, seller_nft=None) -> str:
