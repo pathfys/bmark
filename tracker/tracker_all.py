@@ -961,6 +961,8 @@ def _build_buttons(listing: ResaleListing) -> list[list[Button]]:
     row = []
     if profile_url:
         row.append(Button.url("Seller profile", profile_url))
+    if listing.slug:
+        row.append(Button.url("Open gift", f"https://t.me/nft/{listing.slug}"))
     row.append(Button.inline("Claim", data=f"claim:{listing.unique_gift_id}".encode()))
     return [row]
 
