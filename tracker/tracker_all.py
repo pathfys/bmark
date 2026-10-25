@@ -379,6 +379,20 @@ def _parse_attributes(gift: TLObject) -> list[GiftAttribute]:
     return attrs
 
 
+def _extract_price(gift: TLObject) -> int:
+    resell = _safe_getattr(gift, "resell_amount")
+    if resell and isinstance(resell, (list, tuple)):
+        for sa in resell:
+            amt = _safe_getattr(sa, "amount")
+            if amt and isinstance(amt, int) and amt > 0:
+                return amt
+    for field in ("transfer_star_count", "star_count", "stars"):
+        val = _safe_getattr(gift, field)
+        if val and isinstance(val, int) and val > 0:
+            return val
+    return 0
+
+
 def _resolve_owner(gift: TLObject, users_map: dict) -> tuple[int | None, str | None, str | None]:
     owner_id_raw = _safe_getattr(gift, "owner_id")
     owner_name = _safe_getattr(gift, "owner_name")
@@ -431,6 +445,55 @@ async def get_gift_catalog(client: TelegramClient, tag: str = "") -> list[Collec
     return catalog
 
 
+async def resolve_owner_by_slug(
+    client: TelegramClient, slug: str, tag: str = "",
+) -> tuple[int | None, str | None, str | None]:
+    if not slug:
+        return None, None, None
+    try:
+        result = await _api_call(
+            client,
+            functions.payments.GetUniqueStarGiftRequest(slug=slug),
+            tag=tag or f"slug:{slug}",
+        )
+    except _FATAL_ERRORS:
+        raise
+    except Exception as e:
+        logger.debug("resolve_owner_by_slug(%s): %s", slug, e)
+        return None, None, None
+
+    gift = _safe_getattr(result, "gift")
+    if gift is None:
+        return None, None, None
+
+    users_map = {}
+    for user in _safe_getattr(result, "users", []):
+        uid = _safe_getattr(user, "id")
+        if uid:
+            users_map[uid] = user
+
+    owner_id, owner_name, owner_username = _resolve_owner(gift, users_map)
+
+    if owner_id is None:
+        host_raw = _safe_getattr(gift, "host_id")
+        if host_raw is not None:
+            if hasattr(host_raw, "user_id"):
+                owner_id = host_raw.user_id
+            elif hasattr(host_raw, "channel_id"):
+                owner_id = host_raw.channel_id
+            elif isinstance(host_raw, int):
+                owner_id = host_raw
+            if owner_id and owner_id in users_map:
+                user = users_map[owner_id]
+                owner_username = _safe_getattr(user, "username")
+                if not owner_name:
+                    first = _safe_getattr(user, "first_name", "")
+                    last = _safe_getattr(user, "last_name", "")
+                    owner_name = f"{first} {last}".strip() or None
+
+    return owner_id, owner_name, owner_username
+
+
 async def get_resale_listings(
     client: TelegramClient, gift_id: int,
     limit: int = 50, offset: str = "", sort_by_price: bool = False,
@@ -462,11 +525,27 @@ async def get_resale_listings(
     gifts = _safe_getattr(result, "gifts", [])
     next_offset = _safe_getattr(result, "next_offset", "") or ""
     listings = []
+
+    # Debug: dump first gift's TL structure once to find correct field names
+    if gifts and logger.isEnabledFor(logging.DEBUG):
+        g0 = gifts[0]
+        logger.debug("TL class: %s", type(g0).__name__)
+        for attr_name in dir(g0):
+            if attr_name.startswith("_"):
+                continue
+            try:
+                val = getattr(g0, attr_name)
+                if not callable(val):
+                    logger.debug("  %s = %r", attr_name, val)
+            except Exception:
+                pass
+
     for gift in gifts:
         unique_id = _safe_getattr(gift, "id")
         if unique_id is None:
             continue
         owner_id, owner_name, owner_username = _resolve_owner(gift, users_map)
+        price = _extract_price(gift)
         listings.append(ResaleListing(
             unique_gift_id=unique_id, gift_id=gift_id,
             num=_safe_getattr(gift, "num"),
@@ -475,7 +554,7 @@ async def get_resale_listings(
             owner_id=owner_id, owner_name=owner_name,
             owner_username=owner_username,
             owner_address=_safe_getattr(gift, "owner_address"),
-            price_stars=_safe_getattr(gift, "resale_star_count", 0) or 0,
+            price_stars=price,
             attributes=_parse_attributes(gift),
         ))
     return listings, next_offset
@@ -1038,6 +1117,23 @@ async def poll_collection(
             all_active_ids.add(listing.unique_gift_id)
             if not _passes_price_filter(listing):
                 continue
+
+            if listing.owner_id is None and listing.slug:
+                oid, oname, ouname = await resolve_owner_by_slug(
+                    userbot, listing.slug, tag=session_tag,
+                )
+                if oid or ouname:
+                    listing = ResaleListing(
+                        unique_gift_id=listing.unique_gift_id,
+                        gift_id=listing.gift_id,
+                        num=listing.num, slug=listing.slug, title=listing.title,
+                        owner_id=oid or listing.owner_id,
+                        owner_name=oname or listing.owner_name,
+                        owner_username=ouname or listing.owner_username,
+                        owner_address=listing.owner_address,
+                        price_stars=listing.price_stars,
+                        attributes=listing.attributes,
+                    )
 
             seller_level = seller_nft = None
             if listing.owner_id and (MAX_SELLER_LEVEL or MAX_SELLER_NFT_COUNT):
