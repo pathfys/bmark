@@ -1793,15 +1793,27 @@ def _build_listing_text(
     listing: ResaleListing, seller_level=None, seller_nft=None,
     floor_note: str | None = None,
 ) -> str:
-    owner = listing.owner_display
     attrs = "\n".join(
         f"  - {a.type}: <b>{a.name}</b> ({a.rarity_percent:.1f}%)" for a in listing.attributes
     )
+    # Seller line links straight to the owner's profile when resolved.
+    if listing.owner_username:
+        seller_line = (
+            f'Seller: <a href="https://t.me/{listing.owner_username}">'
+            f'@{listing.owner_username}</a>'
+        )
+    elif listing.owner_id:
+        label = listing.owner_name or f"id {listing.owner_id}"
+        seller_line = (
+            f'Seller: <a href="tg://user?id={listing.owner_id}">{label}</a>'
+        )
+    else:
+        seller_line = f"Seller: <code>{listing.owner_display}</code>"
     lines = [
         "<b>New listing</b>", "",
         f"<b>{listing.title}</b> #{listing.num or '?'}",
         f"Price: <b>{format_stars(listing.price_stars)}</b>",
-        f"Seller: <code>{owner}</code>",
+        seller_line,
     ]
     if floor_note:
         lines.append(floor_note)
@@ -1821,13 +1833,14 @@ def _build_listing_text(
 
 
 def _build_buttons(listing: ResaleListing, tg_user: bool = True) -> list[list[Button]]:
-    """Seller button priority:
-      1. @username  -> https://t.me/<username>  (opens the chat directly)
-      2. owner_id   -> tg://user?id=<id>         (opens the seller's profile by id,
-                        works without a username; may be rejected -> see tg_user)
-      3. otherwise  -> the gift's own page, honestly labelled "Gift page" (NOT the
-                        seller: it is the NFT card, there is no chat behind it)
-    `tg_user=False` drops option 2 so a ButtonUrlInvalidError retry can fall back.
+    """The "Seller profile" button ALWAYS opens the gift owner's Telegram
+    profile -- never the NFT card:
+      1. @username -> https://t.me/<username>  (opens the owner's profile/chat)
+      2. owner_id  -> tg://user?id=<id>         (opens the owner's profile by id,
+                       no username needed)
+    If the owner is not resolved yet, no seller button is shown (only Claim) --
+    we never substitute the gift card for it. `tg_user=False` is the
+    ButtonUrlInvalidError fallback (drops the tg:// button).
     """
     row = []
     if listing.owner_username:
@@ -1839,11 +1852,6 @@ def _build_buttons(listing: ResaleListing, tg_user: bool = True) -> list[list[Bu
         row.append(Button.url(
             "Seller profile",
             f"tg://user?id={listing.owner_id}",
-        ))
-    elif listing.slug:
-        row.append(Button.url(
-            "Gift page",
-            f"https://t.me/nft/{listing.slug}",
         ))
     row.append(Button.inline("Claim", data=f"claim:{listing.unique_gift_id}".encode()))
     return [row]
