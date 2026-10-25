@@ -1025,11 +1025,17 @@ async def _acquire_portals_auth(client: TelegramClient) -> str | None:
         return None
     try:
         frag = urllib.parse.urlparse(url).fragment
-        params = urllib.parse.parse_qs(frag)
-        init_data = params.get("tgWebAppData", [None])[0]
+        # initData is one value in the fragment; its own '&'/'=' are encoded, so
+        # splitting the fragment on '&' is safe. Unquote exactly once -- the
+        # Authorization header must carry initData in its native form (the
+        # user=... JSON stays percent-encoded, or Portals' hash check fails).
+        init_data = None
+        for part in frag.split("&"):
+            if part.startswith("tgWebAppData="):
+                init_data = urllib.parse.unquote(part[len("tgWebAppData="):])
+                break
         if not init_data:
             return None
-        init_data = urllib.parse.unquote(init_data)
         return f"tma {init_data}"
     except Exception as e:
         logger.debug("Portals initData parse: %s", e)
