@@ -435,6 +435,17 @@ def _resolve_owner(gift: TLObject, users_map: dict) -> tuple[int | None, str | N
                 last = _safe_getattr(u, "last_name", "")
                 owner_name = f"{first} {last}".strip() or None
 
+        elif owner_name and len(users_list) > 1:
+            norm = owner_name.strip().lower()
+            for u in users_list:
+                fn = (_safe_getattr(u, "first_name", "") or "").strip()
+                ln = (_safe_getattr(u, "last_name", "") or "").strip()
+                full = f"{fn} {ln}".strip().lower()
+                if full == norm or fn.lower() == norm:
+                    owner_id = _safe_getattr(u, "id")
+                    owner_username = _safe_getattr(u, "username")
+                    break
+
     return owner_id, owner_name, owner_username
 
 
@@ -1185,33 +1196,145 @@ def create_bot() -> TelegramClient:
 
 
 async def _handle_seller_profile(bot, event):
-    seller_id = int(event.pattern_match.group(1))
-    try:
-        entity = await bot.get_entity(seller_id)
-        uname = getattr(entity, "username", None)
-        fname = getattr(entity, "first_name", None) or ""
-        lname = getattr(entity, "last_name", None) or ""
-        name = f"{fname} {lname}".strip() or f"id:{seller_id}"
-        if uname:
-            await event.answer(url=f"t.me/{uname}")
-            return
-        text = f'<a href="tg://user?id={seller_id}">{name}</a>'
-        await event.answer(
-            f"Seller: {name}\nNo public username, opening profile...",
-            alert=True,
+    unique_gift_id = int(event.pattern_match.group(1))
+    listing_data = await get_listing_by_unique_id(_db_ref, unique_gift_id)
+    if not listing_data:
+        await event.answer("Listing not found", alert=True)
+        return
+
+    if listing_data.get("owner_username"):
+        await event.answer(url=f"t.me/{listing_data['owner_username']}")
+        return
+
+    await event.answer("Resolving seller...", alert=False)
+
+    userbot = _next_userbot()
+    slug = listing_data.get("slug")
+    owner_addr = listing_data.get("owner_address")
+    owner_name = listing_data.get("owner_name")
+    owner_id = listing_data.get("owner_id")
+
+    resolved_uname = None
+    resolved_id = owner_id
+
+    if userbot and slug:
+        oid, oname, ouname = await resolve_owner_full(
+            userbot, slug, owner_addr, tag="seller_btn",
         )
+        if ouname:
+            resolved_uname = ouname
+        if oid:
+            resolved_id = oid
+
+    if not resolved_uname and not resolved_id and owner_name and userbot:
         try:
-            msg = await bot.send_message(
-                event.chat_id, text, parse_mode="html",
-                reply_to=event.message_id,
+            result = await _api_call(
+                userbot,
+                functions.contacts.SearchRequest(q=owner_name, limit=5),
+                tag=f"search:{owner_name}",
             )
-            await asyncio.sleep(15)
-            await bot.delete_messages(event.chat_id, [msg.id])
+            for u in getattr(result, "users", []):
+                fn = getattr(u, "first_name", "") or ""
+                ln = getattr(u, "last_name", "") or ""
+                full = f"{fn} {ln}".strip()
+                if full.lower() == owner_name.strip().lower() or fn.lower() == owner_name.strip().lower():
+                    resolved_id = u.id
+                    resolved_uname = getattr(u, "username", None)
+                    break
+        except Exception as e:
+            logger.debug("Contact search '%s': %s", owner_name, e)
+
+    if resolved_uname:
+        async with _db_lock:
+            await _db_ref.execute(
+                "UPDATE listings SET owner_username=?, owner_id=? WHERE unique_gift_id=?",
+                (resolved_uname, resolved_id, unique_gift_id),
+            )
+            await _db_ref.commit()
+        try:
+            listing = ResaleListing(
+                unique_gift_id=unique_gift_id,
+                gift_id=listing_data["gift_id"],
+                num=listing_data.get("num"), slug=slug,
+                title=listing_data.get("title"),
+                owner_id=resolved_id, owner_name=owner_name,
+                owner_username=resolved_uname,
+                owner_address=owner_addr,
+                price_stars=listing_data["price_stars"],
+            )
+            updated_buttons = _build_buttons(listing)
+            msg_id = listing_data.get("log_message_id")
+            if msg_id:
+                try:
+                    txt = _build_listing_text(
+                        listing,
+                        listing_data.get("seller_level"),
+                        listing_data.get("seller_nft_count"),
+                    )
+                    await bot.edit_message(
+                        event.chat_id, msg_id, txt,
+                        buttons=updated_buttons, parse_mode="html",
+                        link_preview=False,
+                    )
+                except Exception:
+                    pass
         except Exception:
             pass
-    except Exception as e:
-        logger.debug("Seller profile %d: %s", seller_id, e)
-        await event.answer(f"Seller id: {seller_id}", alert=True)
+        await event.respond(
+            f'Seller: <a href="https://t.me/{resolved_uname}">@{resolved_uname}</a>',
+            parse_mode="html", reply_to=event.message_id,
+        )
+        return
+
+    if resolved_id:
+        async with _db_lock:
+            await _db_ref.execute(
+                "UPDATE listings SET owner_id=? WHERE unique_gift_id=?",
+                (resolved_id, unique_gift_id),
+            )
+            await _db_ref.commit()
+        try:
+            entity = None
+            if userbot:
+                try:
+                    entity = await userbot.get_entity(resolved_id)
+                except Exception:
+                    pass
+            if not entity:
+                try:
+                    entity = await bot.get_entity(resolved_id)
+                except Exception:
+                    pass
+            if entity:
+                uname = getattr(entity, "username", None)
+                if uname:
+                    await event.respond(
+                        f'Seller: <a href="https://t.me/{uname}">@{uname}</a>',
+                        parse_mode="html", reply_to=event.message_id,
+                    )
+                    return
+                fname = getattr(entity, "first_name", "") or ""
+                lname = getattr(entity, "last_name", "") or ""
+                name = f"{fname} {lname}".strip() or f"id:{resolved_id}"
+            else:
+                name = owner_name or f"id:{resolved_id}"
+
+            msg = await bot.send_message(
+                event.chat_id,
+                f'Seller: <a href="tg://user?id={resolved_id}">{name}</a>',
+                parse_mode="html", reply_to=event.message_id,
+            )
+            await asyncio.sleep(20)
+            try:
+                await bot.delete_messages(event.chat_id, [msg.id])
+            except Exception:
+                pass
+            return
+        except Exception as e:
+            logger.debug("Seller entity %d: %s", resolved_id, e)
+
+    name = owner_name or "unknown"
+    await event.answer(f"Seller: {name}\nProfile not found", alert=True)
 
 
 def _build_listing_text(listing: ResaleListing, seller_level=None, seller_nft=None) -> str:
@@ -1247,10 +1370,10 @@ def _build_buttons(listing: ResaleListing) -> list[list[Button]]:
             "Seller profile",
             f"https://t.me/{listing.owner_username}",
         ))
-    elif listing.owner_id:
+    else:
         row.append(Button.inline(
             "Seller profile",
-            data=f"seller:{listing.owner_id}".encode(),
+            data=f"seller:{listing.unique_gift_id}".encode(),
         ))
     row.append(Button.inline("Claim", data=f"claim:{listing.unique_gift_id}".encode()))
     return [row]
