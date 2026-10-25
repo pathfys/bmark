@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-Telegram Gift Market Tracker (single-file version)
+Telegram Gift Market Tracker (multi-session)
 
-Юзербот опрашивает маркет подарков Telegram Stars,
-бот отправляет листинги в группу с кнопками
-«Профиль продавца» и «Занять лот».
+До 8 юзербот-сессий для параллельного опроса маркета.
+Коллекции распределяются между сессиями round-robin.
 
 Запуск:
     1. pip install telethon aiosqlite rich python-dotenv
-    2. Заполни переменные ниже или создай .env
+    2. Заполни .env (см. ниже)
     3. python tracker_all.py
+       При первом запуске каждая сессия попросит номер + код.
 """
 from __future__ import annotations
 
@@ -40,7 +40,17 @@ load_dotenv()
 
 API_ID = int(os.getenv("API_ID", "0"))
 API_HASH = os.getenv("API_HASH", "")
+
+# Сессии юзерботов — через запятую: s1,s2,s3,...
+# Каждая сессия = отдельный Telegram-аккаунт
+# Если пусто — одна сессия с именем SESSION_NAME
+SESSION_NAMES_RAW = os.getenv("SESSION_NAMES", "").strip()
 SESSION_NAME = os.getenv("SESSION_NAME", "gift_tracker")
+
+if SESSION_NAMES_RAW:
+    SESSION_NAMES = [s.strip() for s in SESSION_NAMES_RAW.split(",") if s.strip()]
+else:
+    SESSION_NAMES = [SESSION_NAME]
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 LOG_GROUP_ID = int(os.getenv("LOG_GROUP_ID", "0")) or None
@@ -66,6 +76,9 @@ CLAIM_DM_TEMPLATE = os.getenv(
 )
 
 SELLER_CACHE_TTL = int(os.getenv("SELLER_CACHE_TTL", "300"))
+
+# Макс. параллельных опросов коллекций на одну сессию
+MAX_CONCURRENT_PER_SESSION = int(os.getenv("MAX_CONCURRENT_PER_SESSION", "3"))
 
 # ═══════════════════════════════════════════════════════
 #  LOGGING & CONSOLE
@@ -189,14 +202,14 @@ def _parse_attributes(gift: TLObject) -> list[GiftAttribute]:
     if not raw_attrs:
         return attrs
     for attr in raw_attrs:
-        class_name = type(attr).__name__.lower()
-        if "model" in class_name:
+        cn = type(attr).__name__.lower()
+        if "model" in cn:
             attrs.append(GiftAttribute("model", _safe_getattr(attr, "name", "?"),
                                        _safe_getattr(attr, "rarity_permille", 0) / 10.0))
-        elif "pattern" in class_name:
+        elif "pattern" in cn:
             attrs.append(GiftAttribute("pattern", _safe_getattr(attr, "name", "?"),
                                        _safe_getattr(attr, "rarity_permille", 0) / 10.0))
-        elif "backdrop" in class_name:
+        elif "backdrop" in cn:
             attrs.append(GiftAttribute("backdrop", _safe_getattr(attr, "name", "?"),
                                        _safe_getattr(attr, "rarity_permille", 0) / 10.0))
     return attrs
@@ -228,7 +241,7 @@ async def get_gift_catalog(client: TelegramClient) -> list[CollectionInfo]:
     try:
         result = await client(functions.payments.GetStarGiftsRequest(hash=0))
     except Exception as e:
-        logger.error("Ошибка получения каталога: %s", e)
+        logger.error("Ошибка каталога: %s", e)
         return []
     gifts = _safe_getattr(result, "gifts", [])
     catalog = []
@@ -240,8 +253,7 @@ async def get_gift_catalog(client: TelegramClient) -> list[CollectionInfo]:
         if not isinstance(title_raw, str):
             title_raw = str(gift_id)
         catalog.append(CollectionInfo(
-            gift_id=gift_id,
-            title=title_raw,
+            gift_id=gift_id, title=title_raw,
             slug=_safe_getattr(gift, "slug", None),
             total_issued=_safe_getattr(gift, "availability_total", 0) or 0,
             availability_remains=_safe_getattr(gift, "availability_remains", 0) or 0,
@@ -260,10 +272,10 @@ async def get_resale_listings(
             gift_id=gift_id, offset=offset, limit=limit, sort_by_price=sort_by_price,
         ))
     except AttributeError:
-        logger.error("Telethon не поддерживает GetResaleStarGiftsRequest (нужен layer 210+)")
+        logger.error("Telethon не поддерживает GetResaleStarGiftsRequest (layer 210+)")
         return [], ""
     except Exception as e:
-        logger.error("Ошибка листингов gift_id=%d: %s", gift_id, e)
+        logger.error("Листинги gift_id=%d: %s", gift_id, e)
         return [], ""
 
     users_map = {}
@@ -281,13 +293,11 @@ async def get_resale_listings(
             continue
         owner_id, owner_name, owner_username = _resolve_owner(gift, users_map)
         listings.append(ResaleListing(
-            unique_gift_id=unique_id,
-            gift_id=gift_id,
+            unique_gift_id=unique_id, gift_id=gift_id,
             num=_safe_getattr(gift, "num"),
             slug=_safe_getattr(gift, "slug"),
             title=_safe_getattr(gift, "title", ""),
-            owner_id=owner_id,
-            owner_name=owner_name,
+            owner_id=owner_id, owner_name=owner_name,
             owner_username=owner_username,
             owner_address=_safe_getattr(gift, "owner_address"),
             price_stars=_safe_getattr(gift, "resale_star_count", 0) or 0,
@@ -345,7 +355,6 @@ async def get_user_nft_count(client: TelegramClient, user_id: int) -> int | None
                 ))
             except (AttributeError, TypeError):
                 return None
-
         gifts = getattr(result, "gifts", [])
         if not gifts:
             return getattr(result, "count", 0)
@@ -365,8 +374,7 @@ async def check_seller(client: TelegramClient, user_id: int) -> SellerProfile:
         return _seller_cache[user_id]
     level = await get_user_level(client, user_id)
     nft_count = await get_user_nft_count(client, user_id)
-    username = None
-    first_name = None
+    username = first_name = None
     try:
         entity = await client.get_entity(user_id)
         username = getattr(entity, "username", None)
@@ -386,6 +394,8 @@ async def check_seller(client: TelegramClient, user_id: int) -> SellerProfile:
 # ═══════════════════════════════════════════════════════
 #  DATABASE (SQLite)
 # ═══════════════════════════════════════════════════════
+
+_db_lock = asyncio.Lock()
 
 
 async def init_db() -> aiosqlite.Connection:
@@ -436,54 +446,56 @@ async def init_db() -> aiosqlite.Connection:
 
 async def upsert_listing(db, **kw) -> bool:
     uid = kw["unique_gift_id"]
-    cursor = await db.execute(
-        "SELECT id, price_stars FROM listings WHERE unique_gift_id = ?", (uid,),
-    )
-    row = await cursor.fetchone()
-    if row is None:
+    async with _db_lock:
+        cursor = await db.execute(
+            "SELECT id, price_stars FROM listings WHERE unique_gift_id=?", (uid,),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            await db.execute(
+                """INSERT INTO listings
+                   (unique_gift_id, gift_id, num, slug, title,
+                    owner_id, owner_name, owner_username, owner_address,
+                    seller_level, seller_nft_count, price_stars, attributes_json)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (uid, kw["gift_id"], kw.get("num"), kw.get("slug"), kw.get("title"),
+                 kw.get("owner_id"), kw.get("owner_name"), kw.get("owner_username"),
+                 kw.get("owner_address"), kw.get("seller_level"), kw.get("seller_nft_count"),
+                 kw["price_stars"], kw.get("attributes_json")),
+            )
+            await db.execute(
+                "INSERT INTO price_history (unique_gift_id, price_stars) VALUES (?,?)",
+                (uid, kw["price_stars"]),
+            )
+            await db.commit()
+            return True
+        old_price = row[1]
         await db.execute(
-            """INSERT INTO listings
-               (unique_gift_id, gift_id, num, slug, title,
-                owner_id, owner_name, owner_username, owner_address,
-                seller_level, seller_nft_count, price_stars, attributes_json)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (uid, kw["gift_id"], kw.get("num"), kw.get("slug"), kw.get("title"),
-             kw.get("owner_id"), kw.get("owner_name"), kw.get("owner_username"),
+            """UPDATE listings SET
+                owner_id=?, owner_name=?, owner_username=?, owner_address=?,
+                seller_level=?, seller_nft_count=?, price_stars=?,
+                last_seen=CURRENT_TIMESTAMP, is_active=1
+               WHERE unique_gift_id=?""",
+            (kw.get("owner_id"), kw.get("owner_name"), kw.get("owner_username"),
              kw.get("owner_address"), kw.get("seller_level"), kw.get("seller_nft_count"),
-             kw["price_stars"], kw.get("attributes_json")),
+             kw["price_stars"], uid),
         )
-        await db.execute(
-            "INSERT INTO price_history (unique_gift_id, price_stars) VALUES (?,?)",
-            (uid, kw["price_stars"]),
-        )
+        if old_price != kw["price_stars"]:
+            await db.execute(
+                "INSERT INTO price_history (unique_gift_id, price_stars) VALUES (?,?)",
+                (uid, kw["price_stars"]),
+            )
         await db.commit()
-        return True
-    old_price = row[1]
-    await db.execute(
-        """UPDATE listings SET
-            owner_id=?, owner_name=?, owner_username=?, owner_address=?,
-            seller_level=?, seller_nft_count=?, price_stars=?,
-            last_seen=CURRENT_TIMESTAMP, is_active=1
-           WHERE unique_gift_id=?""",
-        (kw.get("owner_id"), kw.get("owner_name"), kw.get("owner_username"),
-         kw.get("owner_address"), kw.get("seller_level"), kw.get("seller_nft_count"),
-         kw["price_stars"], uid),
-    )
-    if old_price != kw["price_stars"]:
-        await db.execute(
-            "INSERT INTO price_history (unique_gift_id, price_stars) VALUES (?,?)",
-            (uid, kw["price_stars"]),
-        )
-    await db.commit()
-    return False
+        return False
 
 
 async def set_log_message_id(db, unique_gift_id: int, message_id: int):
-    await db.execute(
-        "UPDATE listings SET log_message_id=? WHERE unique_gift_id=?",
-        (message_id, unique_gift_id),
-    )
-    await db.commit()
+    async with _db_lock:
+        await db.execute(
+            "UPDATE listings SET log_message_id=? WHERE unique_gift_id=?",
+            (message_id, unique_gift_id),
+        )
+        await db.commit()
 
 
 async def get_listing_by_unique_id(db, unique_gift_id: int) -> dict | None:
@@ -506,41 +518,44 @@ async def get_listing_by_unique_id(db, unique_gift_id: int) -> dict | None:
 
 
 async def set_claimed(db, unique_gift_id: int, claimed_by: int):
-    await db.execute(
-        "UPDATE listings SET claimed_by=?, claimed_at=CURRENT_TIMESTAMP WHERE unique_gift_id=?",
-        (claimed_by, unique_gift_id),
-    )
-    await db.commit()
+    async with _db_lock:
+        await db.execute(
+            "UPDATE listings SET claimed_by=?, claimed_at=CURRENT_TIMESTAMP WHERE unique_gift_id=?",
+            (claimed_by, unique_gift_id),
+        )
+        await db.commit()
 
 
 async def mark_delisted(db, active_ids: set[int], gift_id: int) -> list[dict]:
-    cursor = await db.execute(
-        "SELECT unique_gift_id, title, num, price_stars FROM listings "
-        "WHERE is_active=1 AND gift_id=?", (gift_id,),
-    )
-    rows = await cursor.fetchall()
-    delisted = []
-    for uid, title, num, price in rows:
-        if uid not in active_ids:
-            await db.execute(
-                "UPDATE listings SET is_active=0, last_seen=CURRENT_TIMESTAMP "
-                "WHERE unique_gift_id=?", (uid,),
-            )
-            delisted.append({"unique_gift_id": uid, "title": title, "num": num, "price_stars": price})
-    if delisted:
-        await db.commit()
+    async with _db_lock:
+        cursor = await db.execute(
+            "SELECT unique_gift_id, title, num, price_stars FROM listings "
+            "WHERE is_active=1 AND gift_id=?", (gift_id,),
+        )
+        rows = await cursor.fetchall()
+        delisted = []
+        for uid, title, num, price in rows:
+            if uid not in active_ids:
+                await db.execute(
+                    "UPDATE listings SET is_active=0, last_seen=CURRENT_TIMESTAMP "
+                    "WHERE unique_gift_id=?", (uid,),
+                )
+                delisted.append({"unique_gift_id": uid, "title": title, "num": num, "price_stars": price})
+        if delisted:
+            await db.commit()
     return delisted
 
 
 async def upsert_collection(db, gift_id, title, slug, total_issued):
-    await db.execute(
-        """INSERT INTO collections (gift_id, title, slug, total_issued)
-           VALUES (?,?,?,?)
-           ON CONFLICT(gift_id) DO UPDATE SET
-               title=excluded.title, slug=excluded.slug, total_issued=excluded.total_issued""",
-        (gift_id, title, slug, total_issued),
-    )
-    await db.commit()
+    async with _db_lock:
+        await db.execute(
+            """INSERT INTO collections (gift_id, title, slug, total_issued)
+               VALUES (?,?,?,?)
+               ON CONFLICT(gift_id) DO UPDATE SET
+                   title=excluded.title, slug=excluded.slug, total_issued=excluded.total_issued""",
+            (gift_id, title, slug, total_issued),
+        )
+        await db.commit()
 
 
 async def get_stats(db) -> dict:
@@ -565,10 +580,12 @@ def format_stars(amount: int) -> str:
     return f"{amount} ⭐"
 
 
-def print_new_listing(listing: ResaleListing):
+def print_new_listing(listing: ResaleListing, session_tag: str = ""):
     owner = listing.owner_display
     attrs = ", ".join(f"{a.type}: {a.name} ({a.rarity_percent:.1f}%)" for a in listing.attributes)
     t = Text()
+    if session_tag:
+        t.append(f"[{session_tag}] ", style="dim magenta")
     t.append("Коллекция: ", style="dim")
     t.append(f"{listing.title}\n", style="bold")
     t.append("Номер: ", style="dim")
@@ -607,16 +624,26 @@ def print_stats(stats: dict):
 #  BOT (group messages + inline buttons)
 # ═══════════════════════════════════════════════════════
 
-_db = None
-_userbot: TelegramClient | None = None
+_db_ref = None
+_userbots: list[TelegramClient] = []
+_userbot_rr = 0  # round-robin index for DM
 
 FOOTER = "\n\n<i>Dev by fiesta</i>"
 
 
-def set_dependencies(db, userbot: TelegramClient):
-    global _db, _userbot
-    _db = db
-    _userbot = userbot
+def _next_userbot() -> TelegramClient | None:
+    global _userbot_rr
+    if not _userbots:
+        return None
+    ub = _userbots[_userbot_rr % len(_userbots)]
+    _userbot_rr += 1
+    return ub
+
+
+def set_dependencies(db, userbots: list[TelegramClient]):
+    global _db_ref, _userbots
+    _db_ref = db
+    _userbots = userbots
 
 
 def create_bot() -> TelegramClient:
@@ -670,15 +697,18 @@ def _build_buttons(listing: ResaleListing) -> list[list[Button]]:
 
 
 def _build_claimed_text(title, num, price_stars, owner_display, claimer_name) -> str:
-    lines = [
+    return "\n".join([
         f"📦 <b>{title}</b> #{num or '?'}",
         f"💰 Цена: <b>{format_stars(price_stars)}</b>",
         f"👤 Продавец: <code>{owner_display}</code>",
         "",
         f"✅ <b>Лот был занят</b> — {claimer_name}",
         FOOTER,
-    ]
-    return "\n".join(lines)
+    ])
+
+
+# Семафор для отправки в группу (Telegram rate limit ~30 msg/sec)
+_send_lock = asyncio.Lock()
 
 
 async def send_listing_to_group(bot, listing, seller_level=None, seller_nft=None) -> int | None:
@@ -686,14 +716,16 @@ async def send_listing_to_group(bot, listing, seller_level=None, seller_nft=None
         return None
     text = _build_listing_text(listing, seller_level, seller_nft)
     buttons = _build_buttons(listing)
-    try:
-        msg = await bot.send_message(
-            LOG_GROUP_ID, text, buttons=buttons, parse_mode="html", link_preview=False,
-        )
-        return msg.id
-    except Exception as e:
-        logger.error("Ошибка отправки в группу: %s", e)
-        return None
+    async with _send_lock:
+        try:
+            msg = await bot.send_message(
+                LOG_GROUP_ID, text, buttons=buttons, parse_mode="html", link_preview=False,
+            )
+            await asyncio.sleep(0.1)  # ~10 msg/sec чтобы не словить flood wait
+            return msg.id
+        except Exception as e:
+            logger.error("Отправка в группу: %s", e)
+            return None
 
 
 async def _handle_claim(bot, event):
@@ -705,7 +737,7 @@ async def _handle_claim(bot, event):
         else (claimer.first_name or f"id:{claimer_id}")
     )
 
-    listing_data = await get_listing_by_unique_id(_db, unique_gift_id)
+    listing_data = await get_listing_by_unique_id(_db_ref, unique_gift_id)
     if not listing_data:
         await event.answer("❌ Листинг не найден", alert=True)
         return
@@ -713,11 +745,12 @@ async def _handle_claim(bot, event):
         await event.answer("❌ Этот лот уже занят!", alert=True)
         return
 
-    await set_claimed(_db, unique_gift_id, claimer_id)
+    await set_claimed(_db_ref, unique_gift_id, claimer_id)
 
     owner_id = listing_data["owner_id"]
     dm_sent = False
-    if _userbot and owner_id:
+    userbot = _next_userbot()
+    if userbot and owner_id:
         try:
             dm_text = CLAIM_DM_TEMPLATE.format(
                 title=listing_data["title"] or "подарок",
@@ -725,7 +758,7 @@ async def _handle_claim(bot, event):
                 price=listing_data["price_stars"],
                 link=f"https://t.me/nft/{listing_data['slug']}" if listing_data["slug"] else "",
             )
-            await _userbot.send_message(owner_id, dm_text)
+            await userbot.send_message(owner_id, dm_text)
             dm_sent = True
         except Exception as e:
             logger.warning("DM продавцу %d: %s", owner_id, e)
@@ -745,14 +778,14 @@ async def _handle_claim(bot, event):
             LOG_GROUP_ID, event.message_id, claimed_text, buttons=None, parse_mode="html",
         )
     except Exception as e:
-        logger.error("Ошибка редактирования: %s", e)
+        logger.error("Редактирование: %s", e)
 
     status = "✅ Лот занят! DM отправлен." if dm_sent else "✅ Лот занят!"
     await event.answer(status, alert=True)
 
 
 # ═══════════════════════════════════════════════════════
-#  MAIN TRACKER LOOP
+#  MAIN TRACKER LOOP (multi-session)
 # ═══════════════════════════════════════════════════════
 
 _running = True
@@ -772,7 +805,10 @@ def _passes_price_filter(listing: ResaleListing) -> bool:
     return True
 
 
-async def poll_collection(userbot, bot, db, gift_id, collection_title) -> tuple[int, int, int]:
+async def poll_collection(
+    userbot: TelegramClient, bot, db, gift_id: int,
+    collection_title: str, session_tag: str,
+) -> tuple[int, int, int]:
     new_count = 0
     updated_count = 0
     all_active_ids: set[int] = set()
@@ -790,8 +826,7 @@ async def poll_collection(userbot, bot, db, gift_id, collection_title) -> tuple[
             if not _passes_price_filter(listing):
                 continue
 
-            seller_level = None
-            seller_nft = None
+            seller_level = seller_nft = None
             if listing.owner_id and (MAX_SELLER_LEVEL or MAX_SELLER_NFT_COUNT):
                 seller = await check_seller(userbot, listing.owner_id)
                 seller_level = seller.level
@@ -803,21 +838,17 @@ async def poll_collection(userbot, bot, db, gift_id, collection_title) -> tuple[
                 db,
                 unique_gift_id=listing.unique_gift_id,
                 gift_id=listing.gift_id,
-                num=listing.num,
-                slug=listing.slug,
-                title=listing.title,
-                owner_id=listing.owner_id,
-                owner_name=listing.owner_name,
+                num=listing.num, slug=listing.slug, title=listing.title,
+                owner_id=listing.owner_id, owner_name=listing.owner_name,
                 owner_username=listing.owner_username,
                 owner_address=listing.owner_address,
                 price_stars=listing.price_stars,
                 attributes_json=listing.attributes_json,
-                seller_level=seller_level,
-                seller_nft_count=seller_nft,
+                seller_level=seller_level, seller_nft_count=seller_nft,
             )
             if is_new:
                 new_count += 1
-                print_new_listing(listing)
+                print_new_listing(listing, session_tag)
                 if bot and LOG_GROUP_ID:
                     msg_id = await send_listing_to_group(bot, listing, seller_level, seller_nft)
                     if msg_id:
@@ -836,19 +867,59 @@ async def poll_collection(userbot, bot, db, gift_id, collection_title) -> tuple[
     return new_count, updated_count, len(delisted)
 
 
+async def _poll_session_batch(
+    userbot: TelegramClient, bot, db,
+    collections: list[CollectionInfo], session_tag: str,
+) -> tuple[int, int, int]:
+    """Опросить пачку коллекций одной сессией с ограничением параллельности."""
+    sem = asyncio.Semaphore(MAX_CONCURRENT_PER_SESSION)
+    results = []
+
+    async def _poll_one(col: CollectionInfo):
+        async with sem:
+            if not _running:
+                return (0, 0, 0)
+            return await poll_collection(userbot, bot, db, col.gift_id, col.title, session_tag)
+
+    tasks = [_poll_one(c) for c in collections]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    total_new = total_updated = total_delisted = 0
+    for r in results:
+        if isinstance(r, Exception):
+            logger.error("Ошибка опроса: %s", r)
+            continue
+        total_new += r[0]
+        total_updated += r[1]
+        total_delisted += r[2]
+    return total_new, total_updated, total_delisted
+
+
+def _distribute_collections(
+    catalog: list[CollectionInfo], n_sessions: int,
+) -> list[list[CollectionInfo]]:
+    """Распределить коллекции между сессиями round-robin."""
+    buckets: list[list[CollectionInfo]] = [[] for _ in range(n_sessions)]
+    for i, col in enumerate(catalog):
+        buckets[i % n_sessions].append(col)
+    return buckets
+
+
 async def run_tracker():
     if not API_ID or not API_HASH:
-        console.print("[bold red]Ошибка:[/] API_ID и API_HASH не заданы. Создай .env")
+        console.print("[bold red]Ошибка:[/] API_ID и API_HASH не заданы.")
         sys.exit(1)
     if not BOT_TOKEN:
-        console.print("[bold red]Ошибка:[/] BOT_TOKEN не задан. Создай бота через @BotFather")
+        console.print("[bold red]Ошибка:[/] BOT_TOKEN не задан.")
         sys.exit(1)
     if not LOG_GROUP_ID:
         console.print("[bold red]Ошибка:[/] LOG_GROUP_ID не задан.")
         sys.exit(1)
 
+    n = len(SESSION_NAMES)
     console.print(Panel(
-        "[bold]🎁 Telegram Gift Market Tracker[/]\n\n"
+        f"[bold]🎁 Telegram Gift Market Tracker[/]\n\n"
+        f"Сессий: [bold cyan]{n}[/] ({', '.join(SESSION_NAMES)})\n"
         f"Интервал: {POLL_INTERVAL_SECONDS}с\n"
         f"Группа: {LOG_GROUP_ID}\n"
         f"Фильтр продавца: уровень ≤ {MAX_SELLER_LEVEL or '∞'}, "
@@ -858,50 +929,75 @@ async def run_tracker():
         border_style="bright_magenta",
     ))
 
-    userbot = TelegramClient(SESSION_NAME, API_ID, API_HASH)
-    await userbot.start()
-    console.print("[green]✅ Юзербот подключен[/]")
+    # ── Подключаем юзерботы ──
+    userbots: list[TelegramClient] = []
+    for i, name in enumerate(SESSION_NAMES, 1):
+        console.print(f"[dim]Подключаю сессию {i}/{n}: {name}...[/]")
+        ub = TelegramClient(name, API_ID, API_HASH)
+        await ub.start()
+        me = await ub.get_me()
+        tag = f"@{me.username}" if me.username else f"id:{me.id}"
+        console.print(f"  [green]✅ {name}[/] — {tag}")
+        userbots.append(ub)
 
+    # ── Подключаем бота ──
     bot = create_bot()
     await bot.start(bot_token=BOT_TOKEN)
     console.print("[green]✅ Бот подключен[/]")
 
     db = await init_db()
-    set_dependencies(db, userbot)
+    set_dependencies(db, userbots)
 
+    # ── Загружаем каталог (через первую сессию) ──
     console.print("[dim]Загружаю каталог коллекций...[/]")
-    catalog = await get_gift_catalog(userbot)
+    catalog = await get_gift_catalog(userbots[0])
     if not catalog:
         console.print("[yellow]⚠ Каталог пуст.[/]")
-        await _cleanup(userbot, bot, db)
+        await _cleanup(userbots, bot, db)
         return
 
     if TRACK_COLLECTIONS:
         catalog = [c for c in catalog if c.title.lower() in [t.lower() for t in TRACK_COLLECTIONS]]
         if not catalog:
             console.print(f"[yellow]⚠ Коллекции {TRACK_COLLECTIONS} не найдены.[/]")
-            await _cleanup(userbot, bot, db)
+            await _cleanup(userbots, bot, db)
             return
 
     for c in catalog:
         await upsert_collection(db, c.gift_id, c.title, c.slug, c.total_issued)
-    console.print(f"[green]📚 Отслеживаю {len(catalog)} коллекций[/]\n")
 
+    # ── Распределяем коллекции ──
+    buckets = _distribute_collections(catalog, len(userbots))
+    for i, (ub_name, bucket) in enumerate(zip(SESSION_NAMES, buckets)):
+        titles = [c.title for c in bucket]
+        console.print(f"  [dim]{ub_name}:[/] {len(bucket)} коллекций — {', '.join(titles[:5])}"
+                       + ("..." if len(titles) > 5 else ""))
+
+    console.print(f"\n[green]📚 Отслеживаю {len(catalog)} коллекций через {len(userbots)} сессий[/]\n")
+
+    # ── Основной цикл ──
     cycle = 0
     while _running:
         cycle += 1
         now = datetime.now().strftime("%H:%M:%S")
         console.rule(f"[dim]Цикл #{cycle} — {now}[/]")
 
+        # Запускаем все сессии параллельно
+        tasks = []
+        for ub, bucket, name in zip(userbots, buckets, SESSION_NAMES):
+            if bucket:
+                tasks.append(_poll_session_batch(ub, bot, db, bucket, name))
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
         total_new = total_updated = total_delisted = 0
-        for collection in catalog:
-            if not _running:
-                break
-            new, updated, dl = await poll_collection(userbot, bot, db, collection.gift_id, collection.title)
-            total_new += new
-            total_updated += updated
-            total_delisted += dl
-            await asyncio.sleep(1)
+        for r in results:
+            if isinstance(r, Exception):
+                logger.error("Ошибка сессии: %s", r)
+                continue
+            total_new += r[0]
+            total_updated += r[1]
+            total_delisted += r[2]
 
         if total_new or total_delisted:
             console.print(
@@ -922,14 +1018,15 @@ async def run_tracker():
             except asyncio.CancelledError:
                 break
 
-    await _cleanup(userbot, bot, db)
+    await _cleanup(userbots, bot, db)
 
 
-async def _cleanup(userbot, bot, db):
+async def _cleanup(userbots: list[TelegramClient], bot, db):
     console.print("\n[dim]Закрываю соединения...[/]")
     await db.close()
     await bot.disconnect()
-    await userbot.disconnect()
+    for ub in userbots:
+        await ub.disconnect()
     console.print("[green]✅ Трекер остановлен.[/]")
 
 
