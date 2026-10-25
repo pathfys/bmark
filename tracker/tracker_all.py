@@ -24,6 +24,7 @@ import signal
 import ssl
 import sys
 import time
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -103,6 +104,25 @@ API_CALL_RETRIES = int(os.getenv("API_CALL_RETRIES", "3"))
 HEALTH_CHECK_EVERY_N_CYCLES = int(os.getenv("HEALTH_CHECK_CYCLES", "10"))
 SESSION_BACKUP_EVERY_N_CYCLES = int(os.getenv("SESSION_BACKUP_CYCLES", "60"))
 SESSION_BACKUP_DIR = os.getenv("SESSION_BACKUP_DIR", "session_backups")
+
+# -- Giftstat (floor prices, no API key) --
+GIFTSTAT_ENABLED = os.getenv("GIFTSTAT_ENABLED", "1") not in ("0", "", "false", "False")
+GIFTSTAT_API = os.getenv("GIFTSTAT_API", "https://api.giftstat.app").rstrip("/")
+GIFTSTAT_MARKETPLACE = os.getenv("GIFTSTAT_MARKETPLACE", "portals")
+GIFTSTAT_REFRESH_SEC = int(os.getenv("GIFTSTAT_REFRESH", "600"))
+# Flag a listing as underpriced when its price is >= this % below floor. 0 = off.
+UNDERPRICED_PCT = float(os.getenv("UNDERPRICED_PCT", "0"))
+# Stars per 1 TON, used to compare a stars-priced listing against a TON floor.
+# 0 = skip the comparison (only show floor context, no underpriced math).
+STARS_PER_TON = float(os.getenv("STARS_PER_TON", "0"))
+
+# -- Portals Market (seller-resolution bypass) --
+PORTALS_ENABLED = os.getenv("PORTALS_ENABLED", "1") not in ("0", "", "false", "False")
+PORTALS_API = os.getenv("PORTALS_API", "https://portals-market.com/api/")
+PORTALS_BOT = os.getenv("PORTALS_BOT", "portals")
+PORTALS_AUTH_TTL = int(os.getenv("PORTALS_AUTH_TTL", "1800"))
+PORTALS_SEARCH_LIMIT = int(os.getenv("PORTALS_SEARCH_LIMIT", "50"))
+PORTALS_SEARCH_PAGES = int(os.getenv("PORTALS_SEARCH_PAGES", "3"))
 
 # ═══════════════════════════════════════════════════════
 #  LOGGING & CONSOLE
@@ -781,6 +801,334 @@ async def resolve_owner_via_ton_account(wallet_address: str) -> tuple[str | None
     return None, None
 
 
+# ═══════════════════════════════════════════════════════
+#  GIFTSTAT (floor prices across marketplaces, no API key)
+# ═══════════════════════════════════════════════════════
+
+_giftstat_floors: dict[str, float] = {}        # collection name/slug (lower) -> floor TON
+_giftstat_model_floors: dict[str, float] = {}  # "collection_slug|model" (lower) -> floor TON
+_giftstat_ton_rate: float = 0.0
+_giftstat_last_refresh: float = 0.0
+_giftstat_lock = asyncio.Lock()
+
+
+async def _giftstat_get(path: str, params: dict | None = None):
+    url = GIFTSTAT_API + path
+    if params:
+        url += "?" + urllib.parse.urlencode({k: v for k, v in params.items() if v not in (None, "")})
+    req = urllib.request.Request(url, headers={
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0",
+    })
+    resp = await asyncio.to_thread(
+        urllib.request.urlopen, req, timeout=15, context=_ton_ctx,
+    )
+    return json.loads(resp.read())
+
+
+def _giftstat_rows(payload) -> list:
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        for key in ("data", "results", "items", "floorPrices", "floor_prices"):
+            val = payload.get(key)
+            if isinstance(val, list):
+                return val
+    return []
+
+
+async def _refresh_giftstat() -> None:
+    global _giftstat_ton_rate, _giftstat_last_refresh
+    try:
+        col = await _giftstat_get("/current/collections/floor", {
+            "marketplace": GIFTSTAT_MARKETPLACE, "limit": 1000,
+        })
+        floors = {}
+        for row in _giftstat_rows(col):
+            if not isinstance(row, dict):
+                continue
+            price = row.get("floor_price") or row.get("floorPrice") or row.get("floor")
+            if price in (None, ""):
+                continue
+            try:
+                price = float(price)
+            except (TypeError, ValueError):
+                continue
+            for key in (row.get("collection"), row.get("name"), row.get("slug")):
+                if key:
+                    floors[str(key).strip().lower()] = price
+        if floors:
+            _giftstat_floors.clear()
+            _giftstat_floors.update(floors)
+    except Exception as e:
+        logger.debug("Giftstat collection floor refresh: %s", e)
+
+    try:
+        mod = await _giftstat_get("/current/collections/models/floor", {"limit": 5000})
+        model_floors = {}
+        for row in _giftstat_rows(mod):
+            if not isinstance(row, dict):
+                continue
+            price = row.get("floor_price") or row.get("floorPrice") or row.get("floor")
+            model = row.get("model") or row.get("model_name")
+            coll = (row.get("collection_slug") or row.get("collection")
+                    or row.get("slug") or row.get("name"))
+            if price in (None, "") or not model or not coll:
+                continue
+            try:
+                price = float(price)
+            except (TypeError, ValueError):
+                continue
+            model_floors[f"{str(coll).strip().lower()}|{str(model).strip().lower()}"] = price
+        if model_floors:
+            _giftstat_model_floors.clear()
+            _giftstat_model_floors.update(model_floors)
+    except Exception as e:
+        logger.debug("Giftstat model floor refresh: %s", e)
+
+    try:
+        rate = await _giftstat_get("/current/ton-rate")
+        if isinstance(rate, dict):
+            for key in ("rate", "price", "usd", "ton_usd", "value"):
+                if rate.get(key):
+                    _giftstat_ton_rate = float(rate[key])
+                    break
+        elif isinstance(rate, (int, float)):
+            _giftstat_ton_rate = float(rate)
+    except Exception as e:
+        logger.debug("Giftstat ton-rate refresh: %s", e)
+
+    _giftstat_last_refresh = time.time()
+    logger.info(
+        "Giftstat refreshed: %d collection floors, %d model floors, TON=%.3f",
+        len(_giftstat_floors), len(_giftstat_model_floors), _giftstat_ton_rate,
+    )
+
+
+async def _ensure_giftstat_fresh() -> None:
+    if not GIFTSTAT_ENABLED:
+        return
+    if (time.time() - _giftstat_last_refresh) < GIFTSTAT_REFRESH_SEC and _giftstat_floors:
+        return
+    async with _giftstat_lock:
+        if (time.time() - _giftstat_last_refresh) < GIFTSTAT_REFRESH_SEC and _giftstat_floors:
+            return
+        await _refresh_giftstat()
+
+
+def _lookup_floor(collection: str | None, model: str | None = None) -> float | None:
+    if model and collection:
+        mf = _giftstat_model_floors.get(
+            f"{collection.strip().lower()}|{model.strip().lower()}"
+        )
+        if mf:
+            return mf
+    if collection:
+        return _giftstat_floors.get(collection.strip().lower())
+    return None
+
+
+async def floor_context_for(listing: "ResaleListing") -> tuple[str | None, bool]:
+    """Return (floor_note, is_underpriced) for a listing, best-effort."""
+    if not GIFTSTAT_ENABLED:
+        return None, False
+    try:
+        await _ensure_giftstat_fresh()
+    except Exception:
+        return None, False
+    model = None
+    for a in listing.attributes:
+        if (a.type or "").strip().lower() in ("model", "модель"):
+            model = a.name
+            break
+    floor = _lookup_floor(listing.title, model)
+    if not floor:
+        return None, False
+
+    note = f"Floor: {floor:g} TON ({GIFTSTAT_MARKETPLACE})"
+    if _giftstat_ton_rate:
+        note += f" ~ ${floor * _giftstat_ton_rate:,.0f}"
+
+    underpriced = False
+    if STARS_PER_TON > 0 and UNDERPRICED_PCT > 0 and listing.price_stars:
+        floor_stars = floor * STARS_PER_TON
+        if floor_stars > 0:
+            discount = (floor_stars - listing.price_stars) / floor_stars * 100
+            if discount >= UNDERPRICED_PCT:
+                underpriced = True
+                note += f" | UNDERPRICED -{discount:.0f}%"
+    return note, underpriced
+
+
+# ═══════════════════════════════════════════════════════
+#  PORTALS MARKET (seller-resolution bypass)
+# ═══════════════════════════════════════════════════════
+#
+# Resale listings from the MTProto API hide owner_id because the gift sits in
+# the marketplace escrow during a sale. Portals is a Telegram mini-app: sellers
+# list through it with their own Telegram account, so its API exposes the real
+# owner_id (seller's Telegram user id) and external_collection_number (== num).
+# We match a hidden listing to its Portals twin by (collection, num) and recover
+# the seller's id, then resolve it to a @username via Telethon.
+
+try:
+    from curl_cffi import requests as _cffi_requests  # type: ignore
+    _HAS_CFFI = True
+except Exception:
+    _HAS_CFFI = False
+
+_portals_auth: str | None = None
+_portals_auth_ts: float = 0.0
+_portals_lock = asyncio.Lock()
+
+_PORTALS_SORTS = {
+    "price_asc": "&sort_by=price+asc",
+    "latest": "&sort_by=listed_at+desc",
+}
+
+_PORTALS_HEADERS = {
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9,ru;q=0.8",
+    "Origin": "https://portals-market.com",
+    "Referer": "https://portals-market.com/",
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+    ),
+}
+
+
+async def _acquire_portals_auth(client: TelegramClient) -> str | None:
+    try:
+        bot = await client.get_entity(PORTALS_BOT)
+    except Exception as e:
+        logger.debug("Portals bot entity: %s", e)
+        return None
+
+    res = None
+    try:
+        res = await client(functions.messages.RequestMainWebViewRequest(
+            peer=bot, bot=bot, platform="android",
+        ))
+    except Exception:
+        try:
+            res = await client(functions.messages.RequestWebViewRequest(
+                peer=bot, bot=bot, platform="android",
+                url="https://portals-market.com/",
+            ))
+        except Exception as e:
+            logger.debug("Portals webview request: %s", e)
+            return None
+
+    url = getattr(res, "url", None)
+    if not url:
+        return None
+    try:
+        frag = urllib.parse.urlparse(url).fragment
+        params = urllib.parse.parse_qs(frag)
+        init_data = params.get("tgWebAppData", [None])[0]
+        if not init_data:
+            return None
+        init_data = urllib.parse.unquote(init_data)
+        return f"tma {init_data}"
+    except Exception as e:
+        logger.debug("Portals initData parse: %s", e)
+        return None
+
+
+async def get_portals_auth(client: TelegramClient, force: bool = False) -> str | None:
+    global _portals_auth, _portals_auth_ts
+    if not PORTALS_ENABLED:
+        return None
+    async with _portals_lock:
+        fresh = _portals_auth and (time.time() - _portals_auth_ts) < PORTALS_AUTH_TTL
+        if fresh and not force:
+            return _portals_auth
+        auth = await _acquire_portals_auth(client)
+        if auth:
+            _portals_auth = auth
+            _portals_auth_ts = time.time()
+            logger.info("Portals auth acquired")
+        return _portals_auth
+
+
+def _portals_http_get(url: str, auth: str) -> dict | list | None:
+    headers = dict(_PORTALS_HEADERS)
+    headers["Authorization"] = auth
+    if _HAS_CFFI:
+        r = _cffi_requests.get(url, headers=headers, impersonate="chrome110", timeout=15)
+        if r.status_code != 200:
+            raise RuntimeError(f"portals http {r.status_code}")
+        return r.json()
+    req = urllib.request.Request(url, headers=headers)
+    resp = urllib.request.urlopen(req, timeout=15, context=_ton_ctx)
+    return json.loads(resp.read())
+
+
+async def _portals_search(auth: str, collection_name: str) -> list:
+    rows: list = []
+    coll = urllib.parse.quote(collection_name or "")
+    for page in range(max(1, PORTALS_SEARCH_PAGES)):
+        offset = page * PORTALS_SEARCH_LIMIT
+        url = (
+            f"{PORTALS_API.rstrip('/')}/nfts/search?"
+            f"offset={offset}&limit={PORTALS_SEARCH_LIMIT}"
+            f"{_PORTALS_SORTS['latest']}"
+            f"&filter_by_collections={coll}&status=listed"
+        )
+        try:
+            payload = await asyncio.to_thread(_portals_http_get, url, auth)
+        except Exception as e:
+            logger.debug("Portals search '%s' p%d: %s", collection_name, page, e)
+            break
+        batch = []
+        if isinstance(payload, dict):
+            batch = payload.get("results") or payload.get("nfts") or []
+        elif isinstance(payload, list):
+            batch = payload
+        if not batch:
+            break
+        rows.extend(batch)
+        if len(batch) < PORTALS_SEARCH_LIMIT:
+            break
+    return rows
+
+
+async def resolve_owner_via_portals(
+    client: TelegramClient, collection_name: str | None, num: int | None,
+) -> tuple[int | None, str | None]:
+    """Return (owner_id, owner_name) of the hidden seller, via Portals Market."""
+    if not PORTALS_ENABLED or not collection_name or num is None:
+        return None, None
+    auth = await get_portals_auth(client)
+    if not auth:
+        return None, None
+    rows = await _portals_search(auth, collection_name)
+    if not rows:
+        # token may have expired mid-poll; refresh once and retry
+        auth = await get_portals_auth(client, force=True)
+        if not auth:
+            return None, None
+        rows = await _portals_search(auth, collection_name)
+    for g in rows:
+        if not isinstance(g, dict):
+            continue
+        ext = g.get("external_collection_number")
+        try:
+            if ext is not None and int(ext) == int(num):
+                oid = g.get("owner_id") or g.get("tg_id")
+                oname = g.get("owner_name")
+                if oid:
+                    logger.info(
+                        "Portals resolved %s #%s -> owner_id=%s",
+                        collection_name, num, oid,
+                    )
+                    return int(oid), oname
+        except (TypeError, ValueError):
+            continue
+    return None, None
+
+
 async def resolve_username_to_id(
     client: TelegramClient, username: str, tag: str = "",
 ) -> int | None:
@@ -882,6 +1230,7 @@ async def resolve_owner_full(
     client: TelegramClient, listing_slug: str,
     listing_owner_address: str | None, tag: str = "",
     owner_name: str | None = None,
+    collection_name: str | None = None, num: int | None = None,
 ) -> tuple[int | None, str | None, str | None]:
     html_task = asyncio.create_task(resolve_owner_via_html(listing_slug))
     fragment_task = asyncio.create_task(resolve_owner_via_fragment(listing_slug))
@@ -889,22 +1238,31 @@ async def resolve_owner_full(
     slug_task = asyncio.create_task(
         resolve_owner_by_slug(client, listing_slug, tag=tag)
     )
+    portals_task = asyncio.create_task(
+        resolve_owner_via_portals(client, collection_name, num)
+    )
 
     html_uname, html_name = await html_task
     frag_uname, frag_name = await fragment_task
     frag_json_uname, frag_json_name = await frag_json_task
     oid, oname, ouname, ton_addr = await slug_task
+    portals_id, portals_name = await portals_task
 
-    best_name = oname or html_name or frag_name or frag_json_name or owner_name
+    best_name = oname or html_name or frag_name or frag_json_name or portals_name or owner_name
 
     reliable_uname = html_uname or frag_uname or frag_json_uname or ouname
-    reliable_id = oid
+    reliable_id = oid or portals_id
 
     if reliable_uname:
         verified_id, verified_uname = await _verify_id_username(
             client, reliable_id, reliable_uname, tag=tag,
         )
         return verified_id, best_name, verified_uname
+
+    # Portals gives the real seller's Telegram id even when MTProto hides it.
+    if portals_id:
+        uname = await _id_to_username(client, portals_id, tag=tag)
+        return portals_id, best_name, uname
 
     if reliable_id:
         uname = await _id_to_username(client, reliable_id, tag=tag)
@@ -1384,7 +1742,10 @@ def create_bot() -> TelegramClient:
 
 
 
-def _build_listing_text(listing: ResaleListing, seller_level=None, seller_nft=None) -> str:
+def _build_listing_text(
+    listing: ResaleListing, seller_level=None, seller_nft=None,
+    floor_note: str | None = None,
+) -> str:
     owner = listing.owner_display
     attrs = "\n".join(
         f"  - {a.type}: <b>{a.name}</b> ({a.rarity_percent:.1f}%)" for a in listing.attributes
@@ -1395,6 +1756,8 @@ def _build_listing_text(listing: ResaleListing, seller_level=None, seller_nft=No
         f"Price: <b>{format_stars(listing.price_stars)}</b>",
         f"Seller: <code>{owner}</code>",
     ]
+    if floor_note:
+        lines.append(floor_note)
     parts = []
     if seller_level is not None:
         parts.append(f"Level: {seller_level}")
@@ -1440,10 +1803,12 @@ def _build_claimed_text(title, num, price_stars, owner_display, claimer_name) ->
 _send_lock = asyncio.Lock()
 
 
-async def send_listing_to_group(bot, listing, seller_level=None, seller_nft=None) -> int | None:
+async def send_listing_to_group(
+    bot, listing, seller_level=None, seller_nft=None, floor_note=None,
+) -> int | None:
     if not LOG_GROUP_ID:
         return None
-    text = _build_listing_text(listing, seller_level, seller_nft)
+    text = _build_listing_text(listing, seller_level, seller_nft, floor_note=floor_note)
     buttons = _build_buttons(listing)
     async with _send_lock:
         for attempt in range(3):
@@ -1600,9 +1965,13 @@ async def poll_collection(
             new_count += 1
             print_new_listing(listing, session_tag)
 
+            floor_note, _underpriced = await floor_context_for(listing)
+
             msg_id = None
             if bot and LOG_GROUP_ID:
-                msg_id = await send_listing_to_group(bot, listing, None, None)
+                msg_id = await send_listing_to_group(
+                    bot, listing, None, None, floor_note=floor_note,
+                )
                 if msg_id:
                     await set_log_message_id(db, listing.unique_gift_id, msg_id)
 
@@ -1610,6 +1979,7 @@ async def poll_collection(
                 oid, oname, ouname = await resolve_owner_full(
                     userbot, listing.slug, listing.owner_address,
                     tag=session_tag, owner_name=listing.owner_name,
+                    collection_name=listing.title, num=listing.num,
                 )
                 if oid or ouname:
                     listing = ResaleListing(
@@ -1678,7 +2048,9 @@ async def poll_collection(
 
             if msg_id and bot and (listing.owner_username or listing.owner_id):
                 try:
-                    updated_text = _build_listing_text(listing, seller_level, seller_nft)
+                    updated_text = _build_listing_text(
+                        listing, seller_level, seller_nft, floor_note=floor_note,
+                    )
                     updated_buttons = _build_buttons(listing)
                     await bot.edit_message(
                         LOG_GROUP_ID, msg_id, updated_text,
