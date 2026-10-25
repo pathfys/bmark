@@ -41,9 +41,6 @@ load_dotenv()
 API_ID = int(os.getenv("API_ID", "0"))
 API_HASH = os.getenv("API_HASH", "")
 
-# Сессии юзерботов — через запятую: s1,s2,s3,...
-# Каждая сессия = отдельный Telegram-аккаунт
-# Если пусто — одна сессия с именем SESSION_NAME
 SESSION_NAMES_RAW = os.getenv("SESSION_NAMES", "").strip()
 SESSION_NAME = os.getenv("SESSION_NAME", "gift_tracker")
 
@@ -71,13 +68,12 @@ MAX_PRICE_STARS = int(os.getenv("MAX_PRICE_STARS", "0"))
 
 CLAIM_DM_TEMPLATE = os.getenv(
     "CLAIM_DM_TEMPLATE",
-    "Привет! Хочу приобрести ваш подарок «{title}» #{num} за {price} ⭐\n"
+    "Привет! Хочу приобрести ваш подарок \"{title}\" #{num} за {price} Stars\n"
     "Ссылка: {link}",
 )
 
 SELLER_CACHE_TTL = int(os.getenv("SELLER_CACHE_TTL", "300"))
 
-# Макс. параллельных опросов коллекций на одну сессию
 MAX_CONCURRENT_PER_SESSION = int(os.getenv("MAX_CONCURRENT_PER_SESSION", "3"))
 
 # ═══════════════════════════════════════════════════════
@@ -125,10 +121,10 @@ class ResaleListing:
         if self.owner_name:
             return self.owner_name
         if self.owner_address:
-            return f"TON:{self.owner_address[:8]}…{self.owner_address[-4:]}"
+            return f"TON:{self.owner_address[:8]}...{self.owner_address[-4:]}"
         if self.owner_id:
             return f"id:{self.owner_id}"
-        return "скрыт"
+        return "hidden"
 
     @property
     def attributes_json(self) -> str:
@@ -178,14 +174,14 @@ class SellerProfile:
     def filter_reason(self) -> str:
         reasons = []
         if MAX_SELLER_LEVEL and self.level is not None and self.level > MAX_SELLER_LEVEL:
-            reasons.append(f"уровень {self.level} > {MAX_SELLER_LEVEL}")
+            reasons.append(f"level {self.level} > {MAX_SELLER_LEVEL}")
         if MAX_SELLER_NFT_COUNT and self.nft_count is not None and self.nft_count > MAX_SELLER_NFT_COUNT:
             reasons.append(f"NFT {self.nft_count} > {MAX_SELLER_NFT_COUNT}")
         return ", ".join(reasons)
 
 
 # ═══════════════════════════════════════════════════════
-#  API — MTProto marketplace
+#  API
 # ═══════════════════════════════════════════════════════
 
 
@@ -241,7 +237,7 @@ async def get_gift_catalog(client: TelegramClient) -> list[CollectionInfo]:
     try:
         result = await client(functions.payments.GetStarGiftsRequest(hash=0))
     except Exception as e:
-        logger.error("Ошибка каталога: %s", e)
+        logger.error("Catalog error: %s", e)
         return []
     gifts = _safe_getattr(result, "gifts", [])
     catalog = []
@@ -259,7 +255,7 @@ async def get_gift_catalog(client: TelegramClient) -> list[CollectionInfo]:
             availability_remains=_safe_getattr(gift, "availability_remains", 0) or 0,
             star_count=_safe_getattr(gift, "stars", 0) or 0,
         ))
-    logger.info("Каталог: %d коллекций", len(catalog))
+    logger.info("Catalog: %d collections", len(catalog))
     return catalog
 
 
@@ -272,10 +268,10 @@ async def get_resale_listings(
             gift_id=gift_id, offset=offset, limit=limit, sort_by_price=sort_by_price,
         ))
     except AttributeError:
-        logger.error("Telethon не поддерживает GetResaleStarGiftsRequest (layer 210+)")
+        logger.error("Telethon does not support GetResaleStarGiftsRequest (need layer 210+)")
         return [], ""
     except Exception as e:
-        logger.error("Листинги gift_id=%d: %s", gift_id, e)
+        logger.error("Listings gift_id=%d: %s", gift_id, e)
         return [], ""
 
     users_map = {}
@@ -307,7 +303,7 @@ async def get_resale_listings(
 
 
 # ═══════════════════════════════════════════════════════
-#  SELLER CHECKER (with cache)
+#  SELLER CHECKER
 # ═══════════════════════════════════════════════════════
 
 _seller_cache: dict[int, SellerProfile] = {}
@@ -338,7 +334,7 @@ async def get_user_level(client: TelegramClient, user_id: int) -> int | None:
                 return int(level)
         return 0
     except Exception as e:
-        logger.warning("Уровень user_id=%d: %s", user_id, e)
+        logger.warning("Level user_id=%d: %s", user_id, e)
         return None
 
 
@@ -386,13 +382,13 @@ async def check_seller(client: TelegramClient, user_id: int) -> SellerProfile:
         username=username, first_name=first_name, checked_at=time.time(),
     )
     _seller_cache[user_id] = profile
-    logger.info("Продавец %s (id:%d): level=%s, nft=%s, pass=%s",
+    logger.info("Seller %s (id:%d): level=%s, nft=%s, pass=%s",
                 username or "?", user_id, level, nft_count, profile.passes_filter)
     return profile
 
 
 # ═══════════════════════════════════════════════════════
-#  DATABASE (SQLite)
+#  DATABASE
 # ═══════════════════════════════════════════════════════
 
 _db_lock = asyncio.Lock()
@@ -568,16 +564,16 @@ async def get_stats(db) -> dict:
 
 
 # ═══════════════════════════════════════════════════════
-#  DISPLAY (Rich console)
+#  DISPLAY
 # ═══════════════════════════════════════════════════════
 
 
 def format_stars(amount: int) -> str:
     if amount >= 1_000_000:
-        return f"{amount / 1_000_000:.1f}M ⭐"
+        return f"{amount / 1_000_000:.1f}M Stars"
     if amount >= 1_000:
-        return f"{amount / 1_000:.1f}K ⭐"
-    return f"{amount} ⭐"
+        return f"{amount / 1_000:.1f}K Stars"
+    return f"{amount} Stars"
 
 
 def print_new_listing(listing: ResaleListing, session_tag: str = ""):
@@ -586,47 +582,47 @@ def print_new_listing(listing: ResaleListing, session_tag: str = ""):
     t = Text()
     if session_tag:
         t.append(f"[{session_tag}] ", style="dim magenta")
-    t.append("Коллекция: ", style="dim")
+    t.append("Collection: ", style="dim")
     t.append(f"{listing.title}\n", style="bold")
-    t.append("Номер: ", style="dim")
-    t.append(f"#{listing.num}\n" if listing.num else "—\n")
-    t.append("Цена: ", style="dim")
+    t.append("Num: ", style="dim")
+    t.append(f"#{listing.num}\n" if listing.num else "--\n")
+    t.append("Price: ", style="dim")
     t.append(f"{format_stars(listing.price_stars)}\n", style="bold yellow")
-    t.append("Владелец: ", style="dim")
+    t.append("Owner: ", style="dim")
     t.append(f"{owner}\n", style="bold cyan" if listing.owner_username else "")
     if attrs:
-        t.append("Атрибуты: ", style="dim")
+        t.append("Attrs: ", style="dim")
         t.append(f"{attrs}\n")
     if listing.gift_link:
-        t.append("Ссылка: ", style="dim")
+        t.append("Link: ", style="dim")
         t.append(listing.gift_link, style="underline blue")
-    console.print(Panel(t, title="🆕 Новый листинг", border_style="green"))
+    console.print(Panel(t, title="NEW LISTING", border_style="green"))
 
 
 def print_delisted(info: dict):
     console.print(
-        f"  ❌ [dim]Снят:[/] {info.get('title', '?')} "
+        f"  [red]X[/] [dim]Delisted:[/] {info.get('title', '?')} "
         f"#{info.get('num', '?')} [dim]{format_stars(info.get('price_stars', 0))}[/]"
     )
 
 
 def print_stats(stats: dict):
     console.print(Panel(
-        f"[bold]Активных:[/] {stats['active_listings']}\n"
-        f"[bold]Всего:[/] {stats['total_seen']}\n"
-        f"[bold]Коллекций:[/] {stats['collections_tracked']}\n"
-        f"[bold]Занято:[/] {stats['total_claimed']}",
-        title="📊 Статистика", border_style="blue",
+        f"[bold]Active:[/] {stats['active_listings']}\n"
+        f"[bold]Total:[/] {stats['total_seen']}\n"
+        f"[bold]Collections:[/] {stats['collections_tracked']}\n"
+        f"[bold]Claimed:[/] {stats['total_claimed']}",
+        title="Stats", border_style="blue",
     ))
 
 
 # ═══════════════════════════════════════════════════════
-#  BOT (group messages + inline buttons)
+#  BOT
 # ═══════════════════════════════════════════════════════
 
 _db_ref = None
 _userbots: list[TelegramClient] = []
-_userbot_rr = 0  # round-robin index for DM
+_userbot_rr = 0
 
 FOOTER = "\n\n<i>Dev by fiesta</i>"
 
@@ -659,25 +655,25 @@ def create_bot() -> TelegramClient:
 def _build_listing_text(listing: ResaleListing, seller_level=None, seller_nft=None) -> str:
     owner = listing.owner_display
     attrs = "\n".join(
-        f"  • {a.type}: <b>{a.name}</b> ({a.rarity_percent:.1f}%)" for a in listing.attributes
+        f"  - {a.type}: <b>{a.name}</b> ({a.rarity_percent:.1f}%)" for a in listing.attributes
     )
     lines = [
-        "🆕 <b>Новый листинг на маркете</b>", "",
-        f"📦 <b>{listing.title}</b> #{listing.num or '?'}",
-        f"💰 Цена: <b>{format_stars(listing.price_stars)}</b>",
-        f"👤 Продавец: <code>{owner}</code>",
+        "<b>New listing</b>", "",
+        f"<b>{listing.title}</b> #{listing.num or '?'}",
+        f"Price: <b>{format_stars(listing.price_stars)}</b>",
+        f"Seller: <code>{owner}</code>",
     ]
     parts = []
     if seller_level is not None:
-        parts.append(f"Уровень: {seller_level}")
+        parts.append(f"Level: {seller_level}")
     if seller_nft is not None:
         parts.append(f"NFT: {seller_nft}")
     if parts:
-        lines.append(f"📊 {' | '.join(parts)}")
+        lines.append(f"{' | '.join(parts)}")
     if attrs:
-        lines.append(f"🎨 Атрибуты:\n{attrs}")
+        lines.append(f"Attributes:\n{attrs}")
     if listing.gift_link:
-        lines.append(f'🔗 <a href="{listing.gift_link}">Открыть подарок</a>')
+        lines.append(f'<a href="{listing.gift_link}">Open gift</a>')
     lines.append(FOOTER)
     return "\n".join(lines)
 
@@ -691,23 +687,22 @@ def _build_buttons(listing: ResaleListing) -> list[list[Button]]:
         profile_url = None
     row = []
     if profile_url:
-        row.append(Button.url("👤 Профиль продавца", profile_url))
-    row.append(Button.inline("🔒 Занять лот", data=f"claim:{listing.unique_gift_id}".encode()))
+        row.append(Button.url("Seller profile", profile_url))
+    row.append(Button.inline("Claim", data=f"claim:{listing.unique_gift_id}".encode()))
     return [row]
 
 
 def _build_claimed_text(title, num, price_stars, owner_display, claimer_name) -> str:
     return "\n".join([
-        f"📦 <b>{title}</b> #{num or '?'}",
-        f"💰 Цена: <b>{format_stars(price_stars)}</b>",
-        f"👤 Продавец: <code>{owner_display}</code>",
+        f"<b>{title}</b> #{num or '?'}",
+        f"Price: <b>{format_stars(price_stars)}</b>",
+        f"Seller: <code>{owner_display}</code>",
         "",
-        f"✅ <b>Лот был занят</b> — {claimer_name}",
+        f"<b>Claimed</b> by {claimer_name}",
         FOOTER,
     ])
 
 
-# Семафор для отправки в группу (Telegram rate limit ~30 msg/sec)
 _send_lock = asyncio.Lock()
 
 
@@ -721,10 +716,10 @@ async def send_listing_to_group(bot, listing, seller_level=None, seller_nft=None
             msg = await bot.send_message(
                 LOG_GROUP_ID, text, buttons=buttons, parse_mode="html", link_preview=False,
             )
-            await asyncio.sleep(0.1)  # ~10 msg/sec чтобы не словить flood wait
+            await asyncio.sleep(0.1)
             return msg.id
         except Exception as e:
-            logger.error("Отправка в группу: %s", e)
+            logger.error("Send to group: %s", e)
             return None
 
 
@@ -739,10 +734,10 @@ async def _handle_claim(bot, event):
 
     listing_data = await get_listing_by_unique_id(_db_ref, unique_gift_id)
     if not listing_data:
-        await event.answer("❌ Листинг не найден", alert=True)
+        await event.answer("Listing not found", alert=True)
         return
     if listing_data["claimed_by"]:
-        await event.answer("❌ Этот лот уже занят!", alert=True)
+        await event.answer("Already claimed", alert=True)
         return
 
     await set_claimed(_db_ref, unique_gift_id, claimer_id)
@@ -753,7 +748,7 @@ async def _handle_claim(bot, event):
     if userbot and owner_id:
         try:
             dm_text = CLAIM_DM_TEMPLATE.format(
-                title=listing_data["title"] or "подарок",
+                title=listing_data["title"] or "gift",
                 num=listing_data["num"] or "?",
                 price=listing_data["price_stars"],
                 link=f"https://t.me/nft/{listing_data['slug']}" if listing_data["slug"] else "",
@@ -761,12 +756,12 @@ async def _handle_claim(bot, event):
             await userbot.send_message(owner_id, dm_text)
             dm_sent = True
         except Exception as e:
-            logger.warning("DM продавцу %d: %s", owner_id, e)
+            logger.warning("DM to seller %d: %s", owner_id, e)
 
     owner_display = (
         f"@{listing_data['owner_username']}" if listing_data.get("owner_username")
         else listing_data.get("owner_name")
-        or (f"id:{owner_id}" if owner_id else "скрыт")
+        or (f"id:{owner_id}" if owner_id else "hidden")
     )
 
     claimed_text = _build_claimed_text(
@@ -778,14 +773,14 @@ async def _handle_claim(bot, event):
             LOG_GROUP_ID, event.message_id, claimed_text, buttons=None, parse_mode="html",
         )
     except Exception as e:
-        logger.error("Редактирование: %s", e)
+        logger.error("Edit message: %s", e)
 
-    status = "✅ Лот занят! DM отправлен." if dm_sent else "✅ Лот занят!"
+    status = "Claimed! DM sent." if dm_sent else "Claimed!"
     await event.answer(status, alert=True)
 
 
 # ═══════════════════════════════════════════════════════
-#  MAIN TRACKER LOOP (multi-session)
+#  MAIN LOOP
 # ═══════════════════════════════════════════════════════
 
 _running = True
@@ -794,7 +789,7 @@ _running = True
 def _handle_signal(signum, frame):
     global _running
     _running = False
-    console.print("\n[bold red]⏹ Останавливаю трекер...[/]")
+    console.print("\n[bold red]Stopping tracker...[/]")
 
 
 def _passes_price_filter(listing: ResaleListing) -> bool:
@@ -871,9 +866,7 @@ async def _poll_session_batch(
     userbot: TelegramClient, bot, db,
     collections: list[CollectionInfo], session_tag: str,
 ) -> tuple[int, int, int]:
-    """Опросить пачку коллекций одной сессией с ограничением параллельности."""
     sem = asyncio.Semaphore(MAX_CONCURRENT_PER_SESSION)
-    results = []
 
     async def _poll_one(col: CollectionInfo):
         async with sem:
@@ -887,7 +880,7 @@ async def _poll_session_batch(
     total_new = total_updated = total_delisted = 0
     for r in results:
         if isinstance(r, Exception):
-            logger.error("Ошибка опроса: %s", r)
+            logger.error("Poll error: %s", r)
             continue
         total_new += r[0]
         total_updated += r[1]
@@ -898,7 +891,6 @@ async def _poll_session_batch(
 def _distribute_collections(
     catalog: list[CollectionInfo], n_sessions: int,
 ) -> list[list[CollectionInfo]]:
-    """Распределить коллекции между сессиями round-robin."""
     buckets: list[list[CollectionInfo]] = [[] for _ in range(n_sessions)]
     for i, col in enumerate(catalog):
         buckets[i % n_sessions].append(col)
@@ -907,82 +899,76 @@ def _distribute_collections(
 
 async def run_tracker():
     if not API_ID or not API_HASH:
-        console.print("[bold red]Ошибка:[/] API_ID и API_HASH не заданы.")
+        console.print("[bold red]Error:[/] API_ID and API_HASH not set.")
         sys.exit(1)
     if not BOT_TOKEN:
-        console.print("[bold red]Ошибка:[/] BOT_TOKEN не задан.")
+        console.print("[bold red]Error:[/] BOT_TOKEN not set.")
         sys.exit(1)
     if not LOG_GROUP_ID:
-        console.print("[bold red]Ошибка:[/] LOG_GROUP_ID не задан.")
+        console.print("[bold red]Error:[/] LOG_GROUP_ID not set.")
         sys.exit(1)
 
     n = len(SESSION_NAMES)
     console.print(Panel(
-        f"[bold]🎁 Telegram Gift Market Tracker[/]\n\n"
-        f"Сессий: [bold cyan]{n}[/] ({', '.join(SESSION_NAMES)})\n"
-        f"Интервал: {POLL_INTERVAL_SECONDS}с\n"
-        f"Группа: {LOG_GROUP_ID}\n"
-        f"Фильтр продавца: уровень ≤ {MAX_SELLER_LEVEL or '∞'}, "
-        f"NFT ≤ {MAX_SELLER_NFT_COUNT or '∞'}\n"
-        f"Коллекции: {', '.join(TRACK_COLLECTIONS) or 'все'}\n"
-        f"Цена: {MIN_PRICE_STARS or '—'} – {MAX_PRICE_STARS or '∞'} ⭐",
+        f"[bold]Telegram Gift Market Tracker[/]\n\n"
+        f"Sessions: [bold cyan]{n}[/] ({', '.join(SESSION_NAMES)})\n"
+        f"Interval: {POLL_INTERVAL_SECONDS}s\n"
+        f"Group: {LOG_GROUP_ID}\n"
+        f"Seller filter: level <= {MAX_SELLER_LEVEL or 'inf'}, "
+        f"NFT <= {MAX_SELLER_NFT_COUNT or 'inf'}\n"
+        f"Collections: {', '.join(TRACK_COLLECTIONS) or 'all'}\n"
+        f"Price: {MIN_PRICE_STARS or '--'} - {MAX_PRICE_STARS or 'inf'} Stars",
         border_style="bright_magenta",
     ))
 
-    # ── Подключаем юзерботы ──
     userbots: list[TelegramClient] = []
     for i, name in enumerate(SESSION_NAMES, 1):
-        console.print(f"[dim]Подключаю сессию {i}/{n}: {name}...[/]")
+        console.print(f"[dim]Connecting session {i}/{n}: {name}...[/]")
         ub = TelegramClient(name, API_ID, API_HASH)
         await ub.start()
         me = await ub.get_me()
         tag = f"@{me.username}" if me.username else f"id:{me.id}"
-        console.print(f"  [green]✅ {name}[/] — {tag}")
+        console.print(f"  [green]{name}[/] -- {tag}")
         userbots.append(ub)
 
-    # ── Подключаем бота ──
     bot = create_bot()
     await bot.start(bot_token=BOT_TOKEN)
-    console.print("[green]✅ Бот подключен[/]")
+    console.print("[green]Bot connected[/]")
 
     db = await init_db()
     set_dependencies(db, userbots)
 
-    # ── Загружаем каталог (через первую сессию) ──
-    console.print("[dim]Загружаю каталог коллекций...[/]")
+    console.print("[dim]Loading gift catalog...[/]")
     catalog = await get_gift_catalog(userbots[0])
     if not catalog:
-        console.print("[yellow]⚠ Каталог пуст.[/]")
+        console.print("[yellow]Catalog empty.[/]")
         await _cleanup(userbots, bot, db)
         return
 
     if TRACK_COLLECTIONS:
         catalog = [c for c in catalog if c.title.lower() in [t.lower() for t in TRACK_COLLECTIONS]]
         if not catalog:
-            console.print(f"[yellow]⚠ Коллекции {TRACK_COLLECTIONS} не найдены.[/]")
+            console.print(f"[yellow]Collections {TRACK_COLLECTIONS} not found.[/]")
             await _cleanup(userbots, bot, db)
             return
 
     for c in catalog:
         await upsert_collection(db, c.gift_id, c.title, c.slug, c.total_issued)
 
-    # ── Распределяем коллекции ──
     buckets = _distribute_collections(catalog, len(userbots))
     for i, (ub_name, bucket) in enumerate(zip(SESSION_NAMES, buckets)):
         titles = [c.title for c in bucket]
-        console.print(f"  [dim]{ub_name}:[/] {len(bucket)} коллекций — {', '.join(titles[:5])}"
+        console.print(f"  [dim]{ub_name}:[/] {len(bucket)} collections -- {', '.join(titles[:5])}"
                        + ("..." if len(titles) > 5 else ""))
 
-    console.print(f"\n[green]📚 Отслеживаю {len(catalog)} коллекций через {len(userbots)} сессий[/]\n")
+    console.print(f"\n[green]Tracking {len(catalog)} collections via {len(userbots)} sessions[/]\n")
 
-    # ── Основной цикл ──
     cycle = 0
     while _running:
         cycle += 1
         now = datetime.now().strftime("%H:%M:%S")
-        console.rule(f"[dim]Цикл #{cycle} — {now}[/]")
+        console.rule(f"[dim]Cycle #{cycle} -- {now}[/]")
 
-        # Запускаем все сессии параллельно
         tasks = []
         for ub, bucket, name in zip(userbots, buckets, SESSION_NAMES):
             if bucket:
@@ -993,7 +979,7 @@ async def run_tracker():
         total_new = total_updated = total_delisted = 0
         for r in results:
             if isinstance(r, Exception):
-                logger.error("Ошибка сессии: %s", r)
+                logger.error("Session error: %s", r)
                 continue
             total_new += r[0]
             total_updated += r[1]
@@ -1001,12 +987,12 @@ async def run_tracker():
 
         if total_new or total_delisted:
             console.print(
-                f"\n  [green]+{total_new} новых[/]  "
-                f"[dim]{total_updated} обновлено[/]  "
-                f"[red]-{total_delisted} снято[/]"
+                f"\n  [green]+{total_new} new[/]  "
+                f"[dim]{total_updated} updated[/]  "
+                f"[red]-{total_delisted} delisted[/]"
             )
         else:
-            console.print(f"  [dim]Без изменений ({total_updated} проверено)[/]")
+            console.print(f"  [dim]No changes ({total_updated} checked)[/]")
 
         if cycle % 10 == 0:
             stats = await get_stats(db)
@@ -1022,12 +1008,12 @@ async def run_tracker():
 
 
 async def _cleanup(userbots: list[TelegramClient], bot, db):
-    console.print("\n[dim]Закрываю соединения...[/]")
+    console.print("\n[dim]Closing connections...[/]")
     await db.close()
     await bot.disconnect()
     for ub in userbots:
         await ub.disconnect()
-    console.print("[green]✅ Трекер остановлен.[/]")
+    console.print("[green]Tracker stopped.[/]")
 
 
 def main():
