@@ -2421,7 +2421,33 @@ async def _handle_claim(bot, event):
         except Exception as e:
             logger.debug("Claim edit %s/%s: %s", chat_id, mid, e)
 
-    status = "Занято! DM продавцу отправлен." if dm_sent else "Занято!"
+    try:
+        if owner_username:
+            seller_ref = f"@{owner_username}"
+            dm_buttons = [[Button.url("Seller profile", f"https://t.me/{owner_username}")]]
+        elif owner_id:
+            seller_ref = f'<a href="tg://user?id={owner_id}">продавец</a>'
+            dm_buttons = None
+        else:
+            seller_ref = "—"
+            dm_buttons = None
+        gift_link = f"https://t.me/nft/{listing_data['slug']}" if listing_data.get("slug") else ""
+        claimer_dm = (
+            f"Ты занял лот:\n"
+            f"<b>{listing_data['title'] or '?'}</b> #{listing_data['num'] or '?'}\n"
+            f"Цена: <b>{format_stars(listing_data['price_stars'])}</b>\n"
+            f"Продавец: {seller_ref}"
+        )
+        if gift_link:
+            claimer_dm += f'\n<a href="{gift_link}">Открыть подарок</a>'
+        await bot.send_message(
+            claimer_id, claimer_dm, parse_mode="html",
+            link_preview=False, buttons=dm_buttons,
+        )
+    except Exception as e:
+        logger.warning("Claim DM to claimer %s: %s", claimer_id, e)
+
+    status = "Занято! Лот отправлен тебе в личку." if dm_sent else "Занято! Лот в личке."
     await event.answer(status, alert=True)
 
 
