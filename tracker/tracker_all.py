@@ -111,6 +111,9 @@ CLAIM_DM_TEMPLATE = os.getenv(
     "Привет! Хочу приобрести ваш подарок \"{title}\" #{num} за {price} Stars\n"
     "Ссылка: {link}",
 )
+# Have the userbot DM the seller on Claim. OFF by default: messaging strangers
+# from a userbot gets the account spam-reported and limited.
+CLAIM_DM_SELLER = os.getenv("CLAIM_DM_SELLER", "0") not in ("0", "", "false", "False")
 
 SELLER_CACHE_TTL = int(os.getenv("SELLER_CACHE_TTL", "300"))
 
@@ -122,6 +125,9 @@ APP_VERSION = os.getenv("APP_VERSION", "4.16.8")
 LANG_CODE = os.getenv("LANG_CODE", "en")
 
 FLOOD_SLEEP_THRESHOLD = int(os.getenv("FLOOD_SLEEP_THRESHOLD", "120"))
+# Never sleep longer than this on a FloodWait; above it, skip instead of
+# freezing the whole session (a huge flood = the account is rate-limited/banned).
+FLOOD_MAX_SLEEP = int(os.getenv("FLOOD_MAX_SLEEP", "300"))
 CONNECTION_RETRIES = int(os.getenv("CONNECTION_RETRIES", "10"))
 RETRY_DELAY = int(os.getenv("RETRY_DELAY", "2"))
 AUTH_DELAY = int(os.getenv("AUTH_DELAY", "5"))
@@ -290,6 +296,11 @@ async def _api_call(client: TelegramClient, request, retries: int = 0, tag: str 
         try:
             return await client(request)
         except FloodWaitError as e:
+            if FLOOD_MAX_SLEEP and e.seconds > FLOOD_MAX_SLEEP:
+                logger.error("[%s] FloodWait %ds > cap %ds -- skipping (account "
+                             "likely rate-limited/spam-restricted)", tag,
+                             e.seconds, FLOOD_MAX_SLEEP)
+                raise
             logger.warning("[%s] FloodWait %ds, sleeping...", tag, e.seconds)
             await asyncio.sleep(e.seconds + 1)
         except _FATAL_ERRORS as e:
@@ -2378,7 +2389,7 @@ async def _handle_claim(bot, event):
     dm_target = owner_id or (f"@{owner_username}" if owner_username else None)
     dm_sent = False
     userbot = _next_userbot()
-    if userbot and dm_target:
+    if CLAIM_DM_SELLER and userbot and dm_target:
         try:
             dm_text = CLAIM_DM_TEMPLATE.format(
                 title=listing_data["title"] or "gift",
