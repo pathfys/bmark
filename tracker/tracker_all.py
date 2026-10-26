@@ -2306,6 +2306,8 @@ async def run_tracker():
     db = await init_db()
     set_dependencies(db, userbots)
 
+    await owner_resolver_selfcheck(userbots[0])
+
     console.print("[dim]Loading gift catalog...[/]")
     catalog = await get_gift_catalog(userbots[0], tag=SESSION_NAMES[0])
     if not catalog:
@@ -2451,6 +2453,71 @@ async def _cleanup(userbots: list[TelegramClient], bot, db):
         except Exception:
             pass
     console.print("[green]Tracker stopped.[/]")
+
+
+async def owner_resolver_selfcheck(userbot: TelegramClient):
+    """Run once at startup: say plainly whether the seller-resolution bypass can
+    work in THIS environment, and why not. The "Seller profile" button only
+    appears when a marketplace returns the seller, so if everything here is
+    FAIL, no buttons is expected -- fix what this prints."""
+    console.rule("[bold]Seller-resolution self-check[/]")
+
+    if not _HAS_CFFI:
+        console.print("[bold red]curl_cffi: NOT installed[/] -- Portals and "
+                      "Tonnel sit behind Cloudflare and will almost always be "
+                      "blocked (403) without it.")
+        console.print("  Fix: [bold]pip install curl_cffi[/] "
+                      "(or: pip install -r tracker/requirements.txt), then restart.")
+    else:
+        console.print("[green]curl_cffi: installed[/]")
+
+    # Tonnel -- no auth, best first test. Use a well-known collection.
+    tonnel_ok = False
+    try:
+        probe = await asyncio.to_thread(
+            _tonnel_http_post, f"{TONNEL_API.rstrip('/')}/pageGifts",
+            {"page": 1, "limit": 1, "sort": json.dumps({"gift_num": 1}),
+             "filter": json.dumps({"price": {"$exists": True},
+                                   "buyer": {"$exists": False},
+                                   "gift_name": "Plush Pepe", "asset": "TON"}),
+             "price_range": None, "ref": 0, "user_auth": ""},
+        )
+        rows = probe if isinstance(probe, list) else (probe or {}).get("gifts", [])
+        if rows:
+            keys = sorted(rows[0].keys()) if isinstance(rows[0], dict) else []
+            has_seller = any(k in keys for k in _TONNEL_OWNER_KEYS)
+            tonnel_ok = has_seller
+            console.print(f"[green]Tonnel: reachable[/], sample gift keys: {keys}")
+            console.print(f"  seller field present: "
+                          f"{'[green]yes[/]' if has_seller else '[red]NO[/]'}")
+        else:
+            console.print("[yellow]Tonnel: reachable but returned 0 gifts[/] "
+                          "(filter/collection name may differ).")
+    except Exception as e:
+        console.print(f"[red]Tonnel: FAILED[/] -- {e}")
+
+    # Portals -- needs a webview token from the userbot.
+    portals_ok = False
+    try:
+        auth = await get_portals_auth(userbot, force=True)
+        if auth:
+            console.print(f"[green]Portals auth: OK[/] (token len={len(auth)})")
+            portals_ok = True
+        else:
+            console.print("[red]Portals auth: FAILED[/] -- could not get a "
+                          "webview token from @portals via this session.")
+    except Exception as e:
+        console.print(f"[red]Portals auth: FAILED[/] -- {e}")
+
+    if tonnel_ok or portals_ok:
+        console.print("[bold green]Verdict: seller resolution CAN work.[/] "
+                      "Buttons appear for gifts listed on a reachable market.")
+    else:
+        console.print("[bold red]Verdict: seller resolution will NOT work yet.[/] "
+                      "No source returned a seller -> expect no 'Seller profile' "
+                      "button. Fix the FAIL line(s) above (usually: install "
+                      "curl_cffi).")
+    console.rule()
 
 
 async def diagnose(slug: str):
