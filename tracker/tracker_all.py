@@ -835,7 +835,7 @@ async def _refresh_giftstat() -> None:
             _giftstat_floors.clear()
             _giftstat_floors.update(floors)
     except Exception as e:
-        logger.debug("Giftstat collection floor refresh: %s", e)
+        logger.warning("Giftstat collection floor refresh failed: %s", e)
 
     try:
         mod = await _giftstat_get("/current/collections/models/floor", {"limit": 5000})
@@ -1055,19 +1055,22 @@ async def _portals_search(auth: str, collection_name: str) -> list:
         url = (
             f"{PORTALS_API.rstrip('/')}/nfts/search?"
             f"offset={offset}&limit={PORTALS_SEARCH_LIMIT}"
-            f"{_PORTALS_SORTS['latest']}"
+            f"{_PORTALS_SORTS['price_asc']}"
             f"&filter_by_collections={coll}&status=listed"
         )
         try:
             payload = await asyncio.to_thread(_portals_http_get, url, auth)
         except Exception as e:
-            logger.debug("Portals search '%s' p%d: %s", collection_name, page, e)
+            logger.warning("Portals search '%s' p%d HTTP error: %s",
+                           collection_name, page, e)
             break
         batch = []
         if isinstance(payload, dict):
             batch = payload.get("results") or payload.get("nfts") or []
         elif isinstance(payload, list):
             batch = payload
+        if page == 0:
+            logger.info("Portals search %r -> %d rows (page0)", coll, len(batch))
         if not batch:
             break
         rows.extend(batch)
@@ -2109,6 +2112,8 @@ async def poll_collection(
                     tag=session_tag, owner_name=listing.owner_name,
                     collection_name=listing.title, num=listing.num,
                 )
+                logger.info("OWNER %s #%s -> id=%s username=%s",
+                            listing.title, listing.num, oid, ouname)
                 if oid or ouname:
                     listing = ResaleListing(
                         unique_gift_id=listing.unique_gift_id,
@@ -2506,6 +2511,19 @@ async def owner_resolver_selfcheck(userbot: TelegramClient):
                 else:
                     console.print("[red]Portals search: 0 rows[/] "
                                   "(collection filter format, or Cloudflare).")
+                    # Dump the raw response so the real shape/error is visible.
+                    try:
+                        raw_url = (
+                            f"{PORTALS_API.rstrip('/')}/nfts/search?offset=0&limit=5"
+                            f"{_PORTALS_SORTS['price_asc']}"
+                            f"&filter_by_collections={urllib.parse.quote_plus('Plush Pepe')}"
+                            f"&status=listed"
+                        )
+                        raw = await asyncio.to_thread(_portals_http_get, raw_url, auth)
+                        console.print(f"  raw Portals response (truncated): "
+                                      f"{str(raw)[:700]}")
+                    except Exception as e:
+                        console.print(f"  raw probe error: {e}")
             except Exception as e:
                 console.print(f"[red]Portals search: FAILED[/] -- {e}")
         else:
