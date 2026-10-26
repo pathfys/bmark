@@ -1047,7 +1047,9 @@ def _portals_http_get(url: str, auth: str) -> dict | list | None:
 
 async def _portals_search(auth: str, collection_name: str) -> list:
     rows: list = []
-    coll = urllib.parse.quote(collection_name or "")
+    # Portals wants Title-cased names with spaces as '+' (quote_plus), e.g.
+    # "Plush Pepe" -> "Plush+Pepe". Using %20 returns 0 rows.
+    coll = urllib.parse.quote_plus((collection_name or "").strip())
     for page in range(max(1, PORTALS_SEARCH_PAGES)):
         offset = page * PORTALS_SEARCH_LIMIT
         url = (
@@ -1077,9 +1079,9 @@ async def _portals_search(auth: str, collection_name: str) -> list:
 def _portals_collection_candidates(
     collection_name: str | None, slug: str | None,
 ) -> list[str]:
-    """Candidate values for Portals' filter_by_collections. The exact format
-    (display name vs lowercase vs slug) isn't documented, so we try several and
-    stop at the first that returns the gift we want."""
+    """Candidate values for Portals' filter_by_collections. Portals expects the
+    Title-cased display name ("Plush Pepe"); we also try the raw title and the
+    slug stem as fallbacks."""
     out: list[str] = []
 
     def add(v: str | None) -> None:
@@ -1087,14 +1089,17 @@ def _portals_collection_candidates(
         if v and v not in out:
             out.append(v)
 
-    add(collection_name)
     if collection_name:
-        add(collection_name.lower())
+        add(collection_name.title())
+        add(collection_name)
     if slug:
         m = _SLUG_PARTS_RE.match(slug)
         if m:
             add(m.group(1))             # "PlushPepe" from "PlushPepe-3"
     return out
+
+
+_PORTALS_OWNER_KEYS = ("owner_id", "tg_id", "owner", "user_id", "seller_id", "seller")
 
 
 def _portals_find_owner(rows: list, num: int) -> int | None:
@@ -1105,12 +1110,25 @@ def _portals_find_owner(rows: list, num: int) -> int | None:
         if ext is None:
             continue
         try:
-            if int(ext) == int(num):
-                oid = g.get("owner_id") or g.get("tg_id")
-                if oid:
-                    return int(oid)
+            if int(ext) != int(num):
+                continue
         except (TypeError, ValueError):
             continue
+        for k in _PORTALS_OWNER_KEYS:
+            v = g.get(k)
+            if isinstance(v, bool):
+                continue
+            if isinstance(v, int) and v > 0:
+                return v
+            if isinstance(v, str) and v.isdigit():
+                return int(v)
+            if isinstance(v, dict):
+                for ik in ("id", "user_id", "tg_id"):
+                    iv = v.get(ik)
+                    if isinstance(iv, int) and iv > 0:
+                        return iv
+                    if isinstance(iv, str) and iv.isdigit():
+                        return int(iv)
     return None
 
 
@@ -1324,27 +1342,22 @@ async def resolve_owner_full(
     portals_task = asyncio.create_task(
         resolve_owner_via_portals(client, collection_name, num, slug=listing_slug)
     )
-    tonnel_task = asyncio.create_task(
-        resolve_owner_via_tonnel(collection_name, num)
-    )
 
     html_uname, html_name = await html_task
     frag_uname, frag_name = await fragment_task
     frag_json_uname, frag_json_name = await frag_json_task
     oid, oname, ouname, ton_addr = await slug_task
     portals_id, portals_name = await portals_task
-    tonnel_id, _tonnel_name = await tonnel_task
 
     best_name = oname or html_name or frag_name or frag_json_name or portals_name or owner_name
 
     # Priority = most authoritative first:
-    # 1. Marketplace seller record (owner_id / seller): the account that
-    #    actually listed the gift. Username derived from that id is guaranteed
-    #    to belong to it, so no cross-check needed. Portals first, then Tonnel.
-    market_id = portals_id or tonnel_id
-    if market_id:
-        uname = await _id_to_username(client, market_id, tag=tag)
-        return market_id, best_name, uname
+    # 1. Portals seller record (owner_id): the account that actually listed the
+    #    gift. Username derived from that id belongs to it, so no cross-check.
+    #    (Tonnel's public listing carries no seller field, so it is not used.)
+    if portals_id:
+        uname = await _id_to_username(client, portals_id, tag=tag)
+        return portals_id, best_name, uname
 
     # 2. Telegram's own getUniqueStarGift owner (explicit owner peer only).
     if oid:
@@ -2468,33 +2481,9 @@ async def owner_resolver_selfcheck(userbot: TelegramClient):
     else:
         console.print("[green]curl_cffi: installed[/]")
 
-    # Tonnel -- no auth, best first test. Use a well-known collection.
-    tonnel_ok = False
-    try:
-        probe = await asyncio.to_thread(
-            _tonnel_http_post, f"{TONNEL_API.rstrip('/')}/pageGifts",
-            {"page": 1, "limit": 1, "sort": json.dumps({"gift_num": 1}),
-             "filter": json.dumps({"price": {"$exists": True},
-                                   "buyer": {"$exists": False},
-                                   "gift_name": "Plush Pepe", "asset": "TON"}),
-             "price_range": None, "ref": 0, "user_auth": ""},
-        )
-        rows = probe if isinstance(probe, list) else (probe or {}).get("gifts", [])
-        if rows:
-            keys = sorted(rows[0].keys()) if isinstance(rows[0], dict) else []
-            has_seller = any(k in keys for k in _TONNEL_OWNER_KEYS)
-            tonnel_ok = has_seller
-            console.print(f"[green]Tonnel: reachable[/], sample gift keys: {keys}")
-            console.print(f"  seller field present: "
-                          f"{'[green]yes[/]' if has_seller else '[red]NO[/]'}")
-        else:
-            console.print("[yellow]Tonnel: reachable but returned 0 gifts[/] "
-                          "(filter/collection name may differ).")
-    except Exception as e:
-        console.print(f"[red]Tonnel: FAILED[/] -- {e}")
-
-    # Portals -- token comes via Telethon (no HTTP), but SEARCH is an HTTP call
-    # that Cloudflare blocks without curl_cffi, so test the actual search too.
+    # Portals is the one source that exposes a seller id. Token comes via
+    # Telethon (no HTTP); SEARCH is an HTTP call Cloudflare blocks without
+    # curl_cffi, so test the real search and confirm an owner key is present.
     portals_ok = False
     try:
         auth = await get_portals_auth(userbot, force=True)
@@ -2502,15 +2491,21 @@ async def owner_resolver_selfcheck(userbot: TelegramClient):
             console.print(f"[green]Portals auth: OK[/] (token len={len(auth)})")
             try:
                 probe = await _portals_search(auth, "Plush Pepe")
-                if probe:
+                if probe and isinstance(probe[0], dict):
+                    keys = sorted(probe[0].keys())
+                    owner_key = next((k for k in _PORTALS_OWNER_KEYS if k in keys), None)
                     console.print(f"[green]Portals search: OK[/] "
-                                  f"({len(probe)} rows, keys: "
-                                  f"{sorted(probe[0].keys()) if isinstance(probe[0], dict) else '?'})")
-                    portals_ok = True
+                                  f"({len(probe)} rows). gift keys: {keys}")
+                    if owner_key:
+                        console.print(f"  [green]owner field present: {owner_key}[/]")
+                        portals_ok = True
+                    else:
+                        console.print("  [bold red]NO owner field in Portals rows[/] "
+                                      "-- search works but the seller id isn't "
+                                      "exposed; send me these keys.")
                 else:
-                    console.print("[red]Portals search: returned 0 rows[/] "
-                                  "(blocked by Cloudflare without curl_cffi, or "
-                                  "filter name differs).")
+                    console.print("[red]Portals search: 0 rows[/] "
+                                  "(collection filter format, or Cloudflare).")
             except Exception as e:
                 console.print(f"[red]Portals search: FAILED[/] -- {e}")
         else:
@@ -2519,14 +2514,13 @@ async def owner_resolver_selfcheck(userbot: TelegramClient):
     except Exception as e:
         console.print(f"[red]Portals auth: FAILED[/] -- {e}")
 
-    if tonnel_ok or portals_ok:
+    if portals_ok:
         console.print("[bold green]Verdict: seller resolution CAN work.[/] "
-                      "Buttons appear for gifts listed on a reachable market.")
+                      "Buttons appear for gifts whose seller Portals exposes.")
     else:
         console.print("[bold red]Verdict: seller resolution will NOT work yet.[/] "
-                      "No source returned a seller -> expect no 'Seller profile' "
-                      "button. Fix the FAIL line(s) above (usually: install "
-                      "curl_cffi).")
+                      "No source returned a seller id -> expect no 'Seller "
+                      "profile' button. Fix the FAIL/NO line above.")
     console.rule()
 
 
