@@ -76,6 +76,19 @@ TRACK_COLLECTIONS = [
 MIN_PRICE_STARS = int(os.getenv("MIN_PRICE_STARS", "0"))
 MAX_PRICE_STARS = int(os.getenv("MAX_PRICE_STARS", "0"))
 
+OWNER_CACHE_TTL = int(os.getenv("OWNER_CACHE_TTL", "0"))
+OWNER_CACHE_NEG_TTL = int(os.getenv("OWNER_CACHE_NEG_TTL", "21600"))
+
+CHEAP_MAX_STARS = int(os.getenv("CHEAP_MAX_STARS", "500"))
+MID_MAX_STARS = int(os.getenv("MID_MAX_STARS", "2000"))
+BRANCH_CHEAP_CHAT = int(os.getenv("BRANCH_CHEAP_CHAT", "0")) or None
+BRANCH_MID_CHAT = int(os.getenv("BRANCH_MID_CHAT", "0")) or None
+BRANCH_EXPENSIVE_CHAT = int(os.getenv("BRANCH_EXPENSIVE_CHAT", "0")) or None
+BRANCH_GIRLS_CHAT = int(os.getenv("BRANCH_GIRLS_CHAT", "0")) or None
+GIRLS_COLLECTIONS = [
+    x.strip().lower() for x in os.getenv("GIRLS_COLLECTIONS", "").split(",") if x.strip()
+]
+
 CLAIM_DM_TEMPLATE = os.getenv(
     "CLAIM_DM_TEMPLATE",
     "Привет! Хочу приобрести ваш подарок \"{title}\" #{num} за {price} Stars\n"
@@ -1629,6 +1642,13 @@ async def init_db() -> aiosqlite.Connection:
             price_stars     INTEGER NOT NULL,
             recorded_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE TABLE IF NOT EXISTS owner_cache (
+            slug           TEXT PRIMARY KEY,
+            owner_id       INTEGER,
+            owner_username TEXT,
+            owner_name     TEXT,
+            resolved_at    REAL
+        );
         CREATE INDEX IF NOT EXISTS idx_listings_active ON listings(is_active, gift_id);
         CREATE INDEX IF NOT EXISTS idx_listings_unique_id ON listings(unique_gift_id);
         CREATE INDEX IF NOT EXISTS idx_price_history_gift ON price_history(unique_gift_id, recorded_at);
@@ -1687,6 +1707,44 @@ async def set_log_message_id(db, unique_gift_id: int, message_id: int):
         await db.execute(
             "UPDATE listings SET log_message_id=? WHERE unique_gift_id=?",
             (message_id, unique_gift_id),
+        )
+        await db.commit()
+
+
+async def get_cached_owner(db, slug: str | None) -> dict | None:
+    if not slug:
+        return None
+    cursor = await db.execute(
+        "SELECT owner_id, owner_username, owner_name, resolved_at "
+        "FROM owner_cache WHERE slug=?", (slug,),
+    )
+    row = await cursor.fetchone()
+    if not row:
+        return None
+    owner_id, owner_username, owner_name, resolved_at = row
+    age = time.time() - (resolved_at or 0)
+    positive = bool(owner_id or owner_username)
+    if positive:
+        if OWNER_CACHE_TTL > 0 and age > OWNER_CACHE_TTL:
+            return None
+    else:
+        if OWNER_CACHE_NEG_TTL > 0 and age > OWNER_CACHE_NEG_TTL:
+            return None
+    return {"owner_id": owner_id, "owner_username": owner_username,
+            "owner_name": owner_name}
+
+
+async def set_cached_owner(db, slug, owner_id, owner_username, owner_name):
+    if not slug:
+        return
+    async with _db_lock:
+        await db.execute(
+            "INSERT INTO owner_cache (slug, owner_id, owner_username, owner_name, resolved_at) "
+            "VALUES (?,?,?,?,?) "
+            "ON CONFLICT(slug) DO UPDATE SET owner_id=excluded.owner_id, "
+            "owner_username=excluded.owner_username, owner_name=excluded.owner_name, "
+            "resolved_at=excluded.resolved_at",
+            (slug, owner_id, owner_username, owner_name, time.time()),
         )
         await db.commit()
 
@@ -1934,10 +1992,33 @@ def _build_claimed_text(title, num, price_stars, owner_display, claimer_name) ->
 _send_lock = asyncio.Lock()
 
 
-async def send_listing_to_group(
-    bot, listing, seller_level=None, seller_nft=None, floor_note=None,
+def _branches_for(listing: ResaleListing) -> list[int]:
+    targets: list[int] = []
+    price = listing.price_stars or 0
+    if price <= CHEAP_MAX_STARS:
+        targets.append(BRANCH_CHEAP_CHAT)
+    elif price <= MID_MAX_STARS:
+        targets.append(BRANCH_MID_CHAT)
+    else:
+        targets.append(BRANCH_EXPENSIVE_CHAT)
+    if GIRLS_COLLECTIONS and (listing.title or "").strip().lower() in GIRLS_COLLECTIONS:
+        targets.append(BRANCH_GIRLS_CHAT)
+    targets = [t for t in targets if t]
+    if not targets and LOG_GROUP_ID:
+        targets.append(LOG_GROUP_ID)
+    seen: set[int] = set()
+    out: list[int] = []
+    for t in targets:
+        if t not in seen:
+            seen.add(t)
+            out.append(t)
+    return out
+
+
+async def send_listing_to_chat(
+    bot, chat_id, listing, seller_level=None, seller_nft=None, floor_note=None,
 ) -> int | None:
-    if not LOG_GROUP_ID:
+    if not chat_id:
         return None
     text = _build_listing_text(listing, seller_level, seller_nft, floor_note=floor_note)
     async with _send_lock:
@@ -1945,7 +2026,7 @@ async def send_listing_to_group(
             try:
                 msg = await _emit_with_buttons(
                     lambda b: bot.send_message(
-                        LOG_GROUP_ID, text, buttons=b,
+                        chat_id, text, buttons=b,
                         parse_mode="html", link_preview=False,
                     ),
                     listing,
@@ -1957,7 +2038,7 @@ async def send_listing_to_group(
                 await asyncio.sleep(e.seconds + 1)
             except (ConnectionError, TimeoutError, OSError) as e:
                 if attempt >= 2:
-                    logger.error("Send to group failed after retries: %s", e)
+                    logger.error("Send to %s failed after retries: %s", chat_id, e)
                     return None
                 await asyncio.sleep(2 ** (attempt + 1))
                 if not bot.is_connected():
@@ -1966,7 +2047,7 @@ async def send_listing_to_group(
                     except Exception:
                         pass
             except Exception as e:
-                logger.error("Send to group: %s", e)
+                logger.error("Send to %s: %s", chat_id, e)
                 return None
     return None
 
@@ -2028,7 +2109,7 @@ async def _handle_claim(bot, event):
     )
     try:
         await bot.edit_message(
-            LOG_GROUP_ID, event.message_id, claimed_text, buttons=None, parse_mode="html",
+            event.chat_id, event.message_id, claimed_text, buttons=None, parse_mode="html",
         )
     except Exception as e:
         logger.error("Edit message: %s", e)
@@ -2098,22 +2179,35 @@ async def poll_collection(
 
             floor_note, _underpriced = await floor_context_for(listing)
 
-            msg_id = None
-            if bot and LOG_GROUP_ID:
-                msg_id = await send_listing_to_group(
-                    bot, listing, None, None, floor_note=floor_note,
-                )
-                if msg_id:
-                    await set_log_message_id(db, listing.unique_gift_id, msg_id)
+            targets = _branches_for(listing)
+            posted: list[tuple[int, int]] = []
+            if bot and targets:
+                for chat_id in targets:
+                    mid = await send_listing_to_chat(
+                        bot, chat_id, listing, None, None, floor_note=floor_note,
+                    )
+                    if mid:
+                        posted.append((chat_id, mid))
+                if posted:
+                    await set_log_message_id(db, listing.unique_gift_id, posted[0][1])
 
             if listing.owner_id is None and listing.owner_username is None and listing.slug:
-                oid, oname, ouname = await resolve_owner_full(
-                    userbot, listing.slug, listing.owner_address,
-                    tag=session_tag, owner_name=listing.owner_name,
-                    collection_name=listing.title, num=listing.num,
-                )
-                logger.info("OWNER %s #%s -> id=%s username=%s",
-                            listing.title, listing.num, oid, ouname)
+                cached = await get_cached_owner(db, listing.slug)
+                if cached is not None:
+                    oid = cached["owner_id"]
+                    ouname = cached["owner_username"]
+                    oname = cached["owner_name"]
+                    src = "cache"
+                else:
+                    oid, oname, ouname = await resolve_owner_full(
+                        userbot, listing.slug, listing.owner_address,
+                        tag=session_tag, owner_name=listing.owner_name,
+                        collection_name=listing.title, num=listing.num,
+                    )
+                    await set_cached_owner(db, listing.slug, oid, ouname, oname)
+                    src = "resolve"
+                logger.info("OWNER %s #%s -> id=%s username=%s (%s)",
+                            listing.title, listing.num, oid, ouname, src)
                 if oid or ouname:
                     listing = ResaleListing(
                         unique_gift_id=listing.unique_gift_id,
@@ -2128,17 +2222,12 @@ async def poll_collection(
                     )
 
             seller_level = seller_nft = None
+            drop = False
             if listing.owner_id and (MAX_SELLER_LEVEL or MAX_SELLER_NFT_COUNT):
                 seller = await check_seller(userbot, listing.owner_id, tag=session_tag)
                 seller_level = seller.level
                 seller_nft = seller.nft_count
-                if not seller.passes_filter:
-                    if msg_id and bot:
-                        try:
-                            await bot.delete_messages(LOG_GROUP_ID, [msg_id])
-                        except Exception:
-                            pass
-                    continue
+                drop = not seller.passes_filter
             elif listing.owner_username and not listing.owner_id and (MAX_SELLER_LEVEL or MAX_SELLER_NFT_COUNT):
                 resolved_id = await resolve_username_to_id(
                     userbot, listing.owner_username, tag=session_tag,
@@ -2158,13 +2247,15 @@ async def poll_collection(
                     seller = await check_seller(userbot, resolved_id, tag=session_tag)
                     seller_level = seller.level
                     seller_nft = seller.nft_count
-                    if not seller.passes_filter:
-                        if msg_id and bot:
-                            try:
-                                await bot.delete_messages(LOG_GROUP_ID, [msg_id])
-                            except Exception:
-                                pass
-                        continue
+                    drop = not seller.passes_filter
+
+            if drop:
+                for chat_id, mid in posted:
+                    try:
+                        await bot.delete_messages(chat_id, [mid])
+                    except Exception:
+                        pass
+                continue
 
             await upsert_listing(
                 db,
@@ -2179,20 +2270,21 @@ async def poll_collection(
                 seller_level=seller_level, seller_nft_count=seller_nft,
             )
 
-            if msg_id and bot and (listing.owner_username or listing.owner_id):
-                try:
-                    updated_text = _build_listing_text(
-                        listing, seller_level, seller_nft, floor_note=floor_note,
-                    )
-                    await _emit_with_buttons(
-                        lambda b: bot.edit_message(
-                            LOG_GROUP_ID, msg_id, updated_text,
-                            buttons=b, parse_mode="html", link_preview=False,
-                        ),
-                        listing,
-                    )
-                except Exception as e:
-                    logger.debug("Edit listing msg: %s", e)
+            if posted and bot and (listing.owner_username or listing.owner_id):
+                updated_text = _build_listing_text(
+                    listing, seller_level, seller_nft, floor_note=floor_note,
+                )
+                for chat_id, mid in posted:
+                    try:
+                        await _emit_with_buttons(
+                            lambda b, _c=chat_id, _m=mid: bot.edit_message(
+                                _c, _m, updated_text,
+                                buttons=b, parse_mode="html", link_preview=False,
+                            ),
+                            listing,
+                        )
+                    except Exception as e:
+                        logger.debug("Edit listing msg in %s: %s", chat_id, e)
 
         page += 1
         if not next_offset or page >= 3:
@@ -2249,8 +2341,10 @@ async def run_tracker():
     if not BOT_TOKEN:
         console.print("[bold red]Error:[/] BOT_TOKEN not set.")
         sys.exit(1)
-    if not LOG_GROUP_ID:
-        console.print("[bold red]Error:[/] LOG_GROUP_ID not set.")
+    if not (LOG_GROUP_ID or BRANCH_CHEAP_CHAT or BRANCH_MID_CHAT
+            or BRANCH_EXPENSIVE_CHAT or BRANCH_GIRLS_CHAT):
+        console.print("[bold red]Error:[/] set LOG_GROUP_ID or at least one "
+                      "BRANCH_*_CHAT.")
         sys.exit(1)
 
     n = len(SESSION_NAMES)
