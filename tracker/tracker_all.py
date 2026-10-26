@@ -125,6 +125,11 @@ PORTALS_AUTH_TTL = int(os.getenv("PORTALS_AUTH_TTL", "1800"))
 PORTALS_SEARCH_LIMIT = int(os.getenv("PORTALS_SEARCH_LIMIT", "50"))
 PORTALS_SEARCH_PAGES = int(os.getenv("PORTALS_SEARCH_PAGES", "3"))
 
+# -- Tonnel Market (seller-resolution bypass, no auth needed for listings) --
+TONNEL_ENABLED = os.getenv("TONNEL_ENABLED", "1") not in ("0", "", "false", "False")
+TONNEL_API = os.getenv("TONNEL_API", "https://gifts2.tonnel.network/api")
+TONNEL_SEARCH_LIMIT = int(os.getenv("TONNEL_SEARCH_LIMIT", "30"))
+
 # ═══════════════════════════════════════════════════════
 #  LOGGING & CONSOLE
 # ═══════════════════════════════════════════════════════
@@ -1139,6 +1144,107 @@ async def resolve_owner_via_portals(
     return None, None
 
 
+# ───────────────────────── Tonnel ─────────────────────────
+# Tonnel's pageGifts listing is readable without auth and each gift carries a
+# `seller` field = the seller's Telegram user id. Good fallback when Portals'
+# webview token can't be obtained.
+
+_TONNEL_HEADERS = {
+    "Accept": "application/json, text/plain, */*",
+    "Content-Type": "application/json",
+    "Origin": "https://marketplace.tonnel.network",
+    "Referer": "https://marketplace.tonnel.network/",
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+    ),
+}
+
+_TONNEL_OWNER_KEYS = ("seller", "owner", "owner_id", "user_id", "buyer")
+
+
+def _tonnel_http_post(url: str, payload: dict) -> list | dict | None:
+    body = json.dumps(payload).encode("utf-8")
+    if _HAS_CFFI:
+        r = _cffi_requests.post(
+            url, data=body, headers=_TONNEL_HEADERS,
+            impersonate="chrome110", timeout=15,
+        )
+        if r.status_code != 200:
+            raise RuntimeError(f"tonnel http {r.status_code}")
+        return r.json()
+    req = urllib.request.Request(url, data=body, headers=_TONNEL_HEADERS, method="POST")
+    resp = urllib.request.urlopen(req, timeout=15, context=_ton_ctx)
+    return json.loads(resp.read())
+
+
+def _tonnel_owner_from(gift: dict) -> int | None:
+    for k in _TONNEL_OWNER_KEYS:
+        v = gift.get(k)
+        if isinstance(v, bool):
+            continue
+        if isinstance(v, int) and v > 0:
+            return v
+        if isinstance(v, str) and v.isdigit():
+            return int(v)
+        if isinstance(v, dict):
+            for ik in ("id", "user_id", "tg_id", "telegram_id"):
+                iv = v.get(ik)
+                if isinstance(iv, int) and iv > 0:
+                    return iv
+                if isinstance(iv, str) and iv.isdigit():
+                    return int(iv)
+    return None
+
+
+async def resolve_owner_via_tonnel(
+    collection_name: str | None, num: int | None,
+) -> tuple[int | None, str | None]:
+    """Return (seller_id, None) from Tonnel, matched by collection + gift_num."""
+    if not TONNEL_ENABLED or not collection_name or num is None:
+        return None, None
+    flt = {
+        "price": {"$exists": True},
+        "refunded": {"$ne": True},
+        "buyer": {"$exists": False},
+        "gift_name": collection_name,
+        "asset": "TON",
+    }
+    payload = {
+        "page": 1,
+        "limit": TONNEL_SEARCH_LIMIT,
+        "sort": json.dumps({"gift_num": 1}),
+        "filter": json.dumps(flt),
+        "price_range": None,
+        "ref": 0,
+        "user_auth": "",
+    }
+    try:
+        data = await asyncio.to_thread(
+            _tonnel_http_post, f"{TONNEL_API.rstrip('/')}/pageGifts", payload,
+        )
+    except Exception as e:
+        logger.debug("Tonnel search '%s': %s", collection_name, e)
+        return None, None
+    rows = data if isinstance(data, list) else (data.get("gifts") or data.get("data") or [])
+    for g in rows:
+        if not isinstance(g, dict):
+            continue
+        gn = g.get("gift_num")
+        try:
+            if gn is not None and int(gn) == int(num):
+                sid = _tonnel_owner_from(g)
+                if sid:
+                    logger.info(
+                        "Tonnel resolved %s #%s -> seller_id=%s",
+                        collection_name, num, sid,
+                    )
+                    return sid, None
+        except (TypeError, ValueError):
+            continue
+    return None, None
+
+
 async def resolve_username_to_id(
     client: TelegramClient, username: str, tag: str = "",
 ) -> int | None:
@@ -1221,22 +1327,27 @@ async def resolve_owner_full(
     portals_task = asyncio.create_task(
         resolve_owner_via_portals(client, collection_name, num, slug=listing_slug)
     )
+    tonnel_task = asyncio.create_task(
+        resolve_owner_via_tonnel(collection_name, num)
+    )
 
     html_uname, html_name = await html_task
     frag_uname, frag_name = await fragment_task
     frag_json_uname, frag_json_name = await frag_json_task
     oid, oname, ouname, ton_addr = await slug_task
     portals_id, portals_name = await portals_task
+    tonnel_id, _tonnel_name = await tonnel_task
 
     best_name = oname or html_name or frag_name or frag_json_name or portals_name or owner_name
 
     # Priority = most authoritative first:
-    # 1. Portals seller record (owner_id): the account that actually listed the
-    #    gift on the market. Username derived from that id is guaranteed to
-    #    belong to it, so no cross-check needed.
-    if portals_id:
-        uname = await _id_to_username(client, portals_id, tag=tag)
-        return portals_id, best_name, uname
+    # 1. Marketplace seller record (owner_id / seller): the account that
+    #    actually listed the gift. Username derived from that id is guaranteed
+    #    to belong to it, so no cross-check needed. Portals first, then Tonnel.
+    market_id = portals_id or tonnel_id
+    if market_id:
+        uname = await _id_to_username(client, market_id, tag=tag)
+        return market_id, best_name, uname
 
     # 2. Telegram's own getUniqueStarGift owner (explicit owner peer only).
     if oid:
@@ -2342,7 +2453,66 @@ async def _cleanup(userbots: list[TelegramClient], bot, db):
     console.print("[green]Tracker stopped.[/]")
 
 
+async def diagnose(slug: str):
+    """Probe every owner-resolution source for one gift and print what each
+    returns. Run: python tracker_all.py --diag <slug>   e.g. PlushPepe-3
+    Use it to see exactly where resolution breaks in your environment."""
+    console.rule(f"[bold]Resolver diagnostic for {slug}[/]")
+    m = _SLUG_PARTS_RE.match(slug)
+    collection = m.group(1) if m else slug
+    num = int(m.group(2)) if m else None
+    console.print(f"collection(from slug)={collection!r}  num={num}")
+    console.print(f"curl_cffi installed: {_HAS_CFFI}  "
+                  f"(Portals/Tonnel behind Cloudflare need it)")
+
+    console.print("\n[bold]t.me/nft page (Owner row):[/]")
+    try:
+        console.print(f"  -> {await resolve_owner_via_html(slug)}")
+    except Exception as e:
+        console.print(f"  [red]error: {e}[/]")
+
+    console.print("\n[bold]Fragment JSON:[/]")
+    try:
+        console.print(f"  -> {await resolve_owner_via_fragment_json(slug)}")
+    except Exception as e:
+        console.print(f"  [red]error: {e}[/]")
+
+    console.print("\n[bold]Tonnel pageGifts (no auth):[/]")
+    try:
+        console.print(f"  -> seller_id={await resolve_owner_via_tonnel(collection, num)}")
+    except Exception as e:
+        console.print(f"  [red]error: {e}[/]")
+
+    # Portals + slug API need a live userbot session.
+    ub = _create_client(SESSION_NAMES[0])
+    try:
+        await ub.start()
+        console.print("\n[bold]Portals auth (webview token):[/]")
+        auth = await get_portals_auth(ub, force=True)
+        console.print(f"  token: {'OK len=' + str(len(auth)) if auth else 'FAILED (no token)'}")
+        console.print("\n[bold]Portals search -> owner_id:[/]")
+        console.print(f"  -> {await resolve_owner_via_portals(ub, collection, num, slug=slug)}")
+        console.print("\n[bold]getUniqueStarGift (Telegram slug API):[/]")
+        console.print(f"  -> {await resolve_owner_by_slug(ub, slug)}")
+        console.print("\n[bold]Combined resolve_owner_full:[/]")
+        console.print(f"  -> (id, name, username) = "
+                      f"{await resolve_owner_full(ub, slug, None, collection_name=collection, num=num)}")
+    finally:
+        try:
+            await ub.disconnect()
+        except Exception:
+            pass
+    console.rule("[bold]done[/]")
+
+
 def main():
+    if len(sys.argv) >= 2 and sys.argv[1] in ("--diag", "diag"):
+        if len(sys.argv) < 3:
+            console.print("[red]usage: python tracker_all.py --diag <slug>  "
+                          "(e.g. PlushPepe-3)[/]")
+            return
+        asyncio.run(diagnose(sys.argv[2]))
+        return
     signal.signal(signal.SIGINT, _handle_signal)
     signal.signal(signal.SIGTERM, _handle_signal)
     try:
