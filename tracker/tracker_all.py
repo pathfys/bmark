@@ -94,6 +94,9 @@ BLACK_COLLECTIONS = [
 
 GIFT_PREVIEW = os.getenv("GIFT_PREVIEW", "1") not in ("0", "", "false", "False")
 POSTS_PER_MIN = int(os.getenv("POSTS_PER_MIN", "40"))
+# Only post listings whose seller has a public @username (so the Seller
+# profile button can open a chat). Set to 0 to post all.
+REQUIRE_USERNAME = os.getenv("REQUIRE_USERNAME", "1") not in ("0", "", "false", "False")
 
 CLAIM_MAX_PER_WINDOW = int(os.getenv("CLAIM_MAX_PER_WINDOW", "10"))
 CLAIM_WINDOW_SEC = int(os.getenv("CLAIM_WINDOW_SEC", "30"))
@@ -2460,24 +2463,8 @@ async def poll_collection(
             new_count += 1
             print_new_listing(listing, session_tag)
 
-            floor_note, _underpriced = await floor_context_for(listing)
-
-            targets = _branches_for(listing)
-            posted: list[tuple[int, int]] = []
-            if bot and targets:
-                for chat_id, topic_id in targets:
-                    mid = await send_listing_to_chat(
-                        bot, chat_id, listing, None, None,
-                        floor_note=floor_note, topic_id=topic_id,
-                    )
-                    if mid:
-                        posted.append((chat_id, mid))
-                        await add_listing_message(
-                            db, listing.unique_gift_id, chat_id, topic_id, mid,
-                        )
-                if posted:
-                    await set_log_message_id(db, listing.unique_gift_id, posted[0][1])
-
+            # Resolve the owner BEFORE posting so we can gate on username and
+            # post the final message once (no post-then-edit).
             if listing.owner_id is None and listing.owner_username is None and listing.slug:
                 cached = await get_cached_owner(db, listing.slug)
                 if cached is not None:
@@ -2508,41 +2495,17 @@ async def poll_collection(
                         attributes=listing.attributes,
                     )
 
+            # Only post lots we can open a chat with: require a @username.
+            if REQUIRE_USERNAME and not listing.owner_username:
+                continue
+
             seller_level = seller_nft = None
-            drop = False
             if listing.owner_id and (MAX_SELLER_LEVEL or MAX_SELLER_NFT_COUNT):
                 seller = await check_seller(userbot, listing.owner_id, tag=session_tag)
                 seller_level = seller.level
                 seller_nft = seller.nft_count
-                drop = not seller.passes_filter
-            elif listing.owner_username and not listing.owner_id and (MAX_SELLER_LEVEL or MAX_SELLER_NFT_COUNT):
-                resolved_id = await resolve_username_to_id(
-                    userbot, listing.owner_username, tag=session_tag,
-                )
-                if resolved_id:
-                    listing = ResaleListing(
-                        unique_gift_id=listing.unique_gift_id,
-                        gift_id=listing.gift_id,
-                        num=listing.num, slug=listing.slug, title=listing.title,
-                        owner_id=resolved_id,
-                        owner_name=listing.owner_name,
-                        owner_username=listing.owner_username,
-                        owner_address=listing.owner_address,
-                        price_stars=listing.price_stars,
-                        attributes=listing.attributes,
-                    )
-                    seller = await check_seller(userbot, resolved_id, tag=session_tag)
-                    seller_level = seller.level
-                    seller_nft = seller.nft_count
-                    drop = not seller.passes_filter
-
-            if drop:
-                for chat_id, mid in posted:
-                    try:
-                        await bot.delete_messages(chat_id, [mid])
-                    except Exception:
-                        pass
-                continue
+                if not seller.passes_filter:
+                    continue
 
             await upsert_listing(
                 db,
@@ -2557,21 +2520,23 @@ async def poll_collection(
                 seller_level=seller_level, seller_nft_count=seller_nft,
             )
 
-            if posted and bot and (listing.owner_username or listing.owner_id):
-                updated_text = _build_listing_text(
-                    listing, seller_level, seller_nft, floor_note=floor_note,
-                )
-                for chat_id, mid in posted:
-                    try:
-                        await _emit_with_buttons(
-                            lambda b, _c=chat_id, _m=mid: bot.edit_message(
-                                _c, _m, updated_text,
-                                buttons=b, parse_mode="html", link_preview=False,
-                            ),
-                            listing,
+            floor_note, _underpriced = await floor_context_for(listing)
+            targets = _branches_for(listing)
+            if bot and targets:
+                first_mid = None
+                for chat_id, topic_id in targets:
+                    mid = await send_listing_to_chat(
+                        bot, chat_id, listing, seller_level, seller_nft,
+                        floor_note=floor_note, topic_id=topic_id,
+                    )
+                    if mid:
+                        await add_listing_message(
+                            db, listing.unique_gift_id, chat_id, topic_id, mid,
                         )
-                    except Exception as e:
-                        logger.debug("Edit listing msg in %s: %s", chat_id, e)
+                        if first_mid is None:
+                            first_mid = mid
+                if first_mid:
+                    await set_log_message_id(db, listing.unique_gift_id, first_mid)
 
         page += 1
         if not next_offset or page >= 3:
