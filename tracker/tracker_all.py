@@ -1224,20 +1224,26 @@ async def resolve_owner_via_kartoshka(
     for rec in records:
         if not isinstance(rec, dict):
             continue
-        rec_num = rec.get("number") if rec.get("number") is not None else rec.get("num")
-        if rec_num is not None:
-            try:
-                if int(rec_num) != int(num):
-                    continue
-            except (TypeError, ValueError):
+        # Only filter by num when the record carries a scalar gift number. For
+        # /gift/{ref} the ref already identifies the gift (and result["number"]
+        # is a classification object, not the num), so don't filter there.
+        rec_num = rec.get("num")
+        if rec_num is None and isinstance(rec.get("number"), (int, str)):
+            rec_num = rec.get("number")
+        if rec_num is not None and str(rec_num).lstrip("-").isdigit() and num is not None:
+            if int(rec_num) != int(num):
                 continue
-        owners = rec.get("owner_info") or rec.get("owners")
         owner_obj = None
-        if isinstance(owners, list) and owners and isinstance(owners[0], dict):
-            owner_obj = owners[0]
-        elif isinstance(rec.get("owner"), dict):
-            owner_obj = rec["owner"]
-        else:
+        for key in ("owner", "owner_info", "owners", "holder", "current_owner",
+                    "currentOwner", "user", "seller", "ownerInfo"):
+            v = rec.get(key)
+            if isinstance(v, list) and v and isinstance(v[0], dict):
+                owner_obj = v[0]
+                break
+            if isinstance(v, dict):
+                owner_obj = v
+                break
+        if owner_obj is None:
             owner_obj = rec
         oid, uname, name = _kartoshka_owner_from(owner_obj)
         if oid or uname:
@@ -2683,13 +2689,20 @@ async def run_tracker():
     try:
         await bot.start(bot_token=BOT_TOKEN)
         console.print("[green]Bot connected[/]")
-        if not BOT_USERNAME:
-            try:
-                me_bot = await bot.get_me()
-                if me_bot and me_bot.username:
-                    globals()["BOT_USERNAME"] = me_bot.username
-            except Exception:
-                pass
+        try:
+            me_bot = await bot.get_me()
+            if me_bot and not getattr(me_bot, "bot", False):
+                console.print("[bold red]WARNING: 'gift_bot' session is logged in "
+                              "as a USER, not the bot[/] (id="
+                              f"{getattr(me_bot, 'id', '?')}). The bot_token was "
+                              "ignored because gift_bot.session already had a user.")
+                console.print("[yellow]Delete gift_bot.session (and "
+                              "gift_bot.session-journal) and restart so it logs "
+                              "in as the bot.[/]")
+            if me_bot and me_bot.username and not BOT_USERNAME:
+                globals()["BOT_USERNAME"] = me_bot.username
+        except Exception:
+            pass
         if BRANCH_CHAT_ID:
             await _prime_branch_chat(bot)
     except Exception as e:
@@ -2905,7 +2918,15 @@ async def owner_resolver_selfcheck(userbot: TelegramClient):
                         _kartoshka_http_get, KARTOSHKA_API
                         + KARTOSHKA_GIFT_PATH.format(collection="", num=1, slug=probe_slug),
                     )
-                    console.print(f"  raw /gift response (truncated): {str(raw)[:700]}")
+                    res = raw.get("result") if isinstance(raw, dict) else None
+                    if isinstance(res, dict):
+                        console.print(f"  result keys: {sorted(res.keys())}")
+                        for k in ("owner", "owner_info", "holder", "current_owner",
+                                  "user", "seller", "ownerInfo", "owners"):
+                            if k in res:
+                                console.print(f"  result[{k!r}] = {str(res[k])[:400]}")
+                    else:
+                        console.print(f"  raw /gift response (truncated): {str(raw)[:500]}")
                 except Exception as e:
                     console.print(f"  raw probe error: {e}")
         except Exception as e:
