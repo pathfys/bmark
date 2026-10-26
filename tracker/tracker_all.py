@@ -136,6 +136,13 @@ LOOKTG_AUTH = os.getenv("LOOKTG_AUTH", "")
 LOOKTG_API = os.getenv("LOOKTG_API", "https://look.tg").rstrip("/")
 LOOKTG_ENABLED = bool(LOOKTG_AUTH) and os.getenv("LOOKTG_ENABLED", "1") not in ("0", "", "false", "False")
 
+KARTOSHKA_TOKEN = os.getenv("KARTOSHKA_TOKEN", "")
+KARTOSHKA_API = os.getenv("KARTOSHKA_API", "https://kartoshka.free").rstrip("/")
+KARTOSHKA_GIFT_PATH = os.getenv(
+    "KARTOSHKA_GIFT_PATH", "/v1/gifts?name={collection}&number={num}"
+)
+KARTOSHKA_ENABLED = bool(KARTOSHKA_TOKEN) and os.getenv("KARTOSHKA_ENABLED", "1") not in ("0", "", "false", "False")
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -1124,6 +1131,103 @@ async def resolve_owner_via_portals(
     return None, None
 
 
+_KARTOSHKA_OWNER_KEYS = ("username", "owner_username", "telegram_username")
+_KARTOSHKA_ID_KEYS = ("id", "owner_id", "user_id", "tg_id", "telegram_id")
+
+
+def _kartoshka_http_get(url: str) -> dict | list | None:
+    headers = {
+        "Accept": "application/json",
+        "Authorization": f"Bearer {KARTOSHKA_TOKEN}",
+        "User-Agent": "gift-tracker/1.0 (+https://kartoshka.free)",
+    }
+    if _HAS_CFFI:
+        r = _cffi_requests.get(url, headers=headers, impersonate="chrome110", timeout=15)
+        if r.status_code != 200:
+            raise RuntimeError(f"kartoshka http {r.status_code}")
+        return r.json()
+    req = urllib.request.Request(url, headers=headers)
+    resp = urllib.request.urlopen(req, timeout=15, context=_ton_ctx)
+    return json.loads(resp.read())
+
+
+def _kartoshka_owner_from(obj: dict) -> tuple[int | None, str | None, str | None]:
+    if obj.get("hidden"):
+        return None, None, obj.get("full_name") or obj.get("name")
+    uname = None
+    for k in _KARTOSHKA_OWNER_KEYS:
+        v = obj.get(k)
+        if isinstance(v, str) and v.strip():
+            uname = v.strip().lstrip("@")
+            break
+    oid = None
+    for k in _KARTOSHKA_ID_KEYS:
+        v = obj.get(k)
+        if isinstance(v, int) and v > 0:
+            oid = v
+            break
+        if isinstance(v, str) and v.isdigit():
+            oid = int(v)
+            break
+    name = obj.get("full_name") or obj.get("name")
+    return oid, uname, name
+
+
+async def resolve_owner_via_kartoshka(
+    collection_name: str | None, num: int | None, slug: str | None = None,
+) -> tuple[int | None, str | None, str | None]:
+    """Owner via the official see.tg public API (kartoshka.free). Returns
+    (owner_id, owner_username, owner_name)."""
+    if not KARTOSHKA_ENABLED or num is None:
+        return None, None, None
+    path = KARTOSHKA_GIFT_PATH.format(
+        collection=urllib.parse.quote(collection_name or ""),
+        num=num,
+        slug=urllib.parse.quote(slug or ""),
+    )
+    url = KARTOSHKA_API + path
+    try:
+        data = await asyncio.to_thread(_kartoshka_http_get, url)
+    except Exception as e:
+        logger.warning("kartoshka '%s' #%s: %s", collection_name, num, e)
+        return None, None, None
+
+    records = []
+    if isinstance(data, list):
+        records = data
+    elif isinstance(data, dict):
+        for key in ("results", "gifts", "items", "data"):
+            if isinstance(data.get(key), list):
+                records = data[key]
+                break
+        else:
+            records = [data]
+
+    for rec in records:
+        if not isinstance(rec, dict):
+            continue
+        rec_num = rec.get("number") if rec.get("number") is not None else rec.get("num")
+        if rec_num is not None:
+            try:
+                if int(rec_num) != int(num):
+                    continue
+            except (TypeError, ValueError):
+                continue
+        owners = rec.get("owner_info") or rec.get("owners")
+        owner_obj = None
+        if isinstance(owners, list) and owners and isinstance(owners[0], dict):
+            owner_obj = owners[0]
+        elif isinstance(rec.get("owner"), dict):
+            owner_obj = rec["owner"]
+        else:
+            owner_obj = rec
+        oid, uname, name = _kartoshka_owner_from(owner_obj)
+        if oid or uname:
+            logger.info("kartoshka resolved %s #%s -> id=%s @%s",
+                        collection_name, num, oid, uname)
+            return oid, uname, name
+    return None, None, None
+
 
 _LOOKTG_HEADERS = {
     "Accept": "application/json, text/plain, */*",
@@ -1371,6 +1475,9 @@ async def resolve_owner_full(
     portals_task = asyncio.create_task(
         resolve_owner_via_portals(client, collection_name, num, slug=listing_slug)
     )
+    kartoshka_task = asyncio.create_task(
+        resolve_owner_via_kartoshka(collection_name, num, slug=listing_slug)
+    )
     looktg_task = asyncio.create_task(
         resolve_owner_via_looktg(collection_name, num)
     )
@@ -1380,19 +1487,22 @@ async def resolve_owner_full(
     frag_json_uname, frag_json_name = await frag_json_task
     oid, oname, ouname, ton_addr = await slug_task
     portals_id, portals_name = await portals_task
+    kartoshka_id, kartoshka_uname, kartoshka_name = await kartoshka_task
     looktg_id, looktg_uname, looktg_name = await looktg_task
 
     best_name = (oname or html_name or frag_name or frag_json_name
-                 or portals_name or looktg_name or owner_name)
+                 or portals_name or kartoshka_name or looktg_name or owner_name)
 
-    if looktg_uname or looktg_id:
-        if looktg_uname and looktg_id:
-            return looktg_id, best_name, looktg_uname
-        if looktg_uname:
-            rid = await resolve_username_to_id(client, looktg_uname, tag=tag)
-            return rid, best_name, looktg_uname
-        uname = await _id_to_username(client, looktg_id, tag=tag)
-        return looktg_id, best_name, uname
+    for db_id, db_uname in ((kartoshka_id, kartoshka_uname),
+                            (looktg_id, looktg_uname)):
+        if db_uname or db_id:
+            if db_uname and db_id:
+                return db_id, best_name, db_uname
+            if db_uname:
+                rid = await resolve_username_to_id(client, db_uname, tag=tag)
+                return rid, best_name, db_uname
+            uname = await _id_to_username(client, db_id, tag=tag)
+            return db_id, best_name, uname
 
     if portals_id:
         uname = await _id_to_username(client, portals_id, tag=tag)
@@ -2615,12 +2725,26 @@ async def owner_resolver_selfcheck(userbot: TelegramClient):
     except Exception as e:
         console.print(f"[red]Portals auth: FAILED[/] -- {e}")
 
-    looktg_ok = False
-    if not LOOKTG_AUTH:
-        console.print("[yellow]look.tg: disabled[/] (set LOOKTG_AUTH to the "
-                      "Authorization header copied from look.tg/see.tg DevTools "
-                      "-- this source returns the owner's @username directly).")
+    kartoshka_ok = False
+    if not KARTOSHKA_TOKEN:
+        console.print("[yellow]kartoshka.free (see.tg public API): disabled[/] "
+                      "(set KARTOSHKA_TOKEN -- token from see.tg mini app -> "
+                      "Useful/Polezno -> API. Official owner API, 100 req/day "
+                      "free then 0.00005 TON/req).")
     else:
+        try:
+            kid, kuname, kname = await resolve_owner_via_kartoshka("Plush Pepe", 1)
+            console.print(f"[green]kartoshka.free: reachable[/] -> "
+                          f"id={kid} username={kuname} name={kname}")
+            kartoshka_ok = bool(kid or kuname)
+            if not kartoshka_ok:
+                console.print("  [yellow]0 owner returned[/] -- check "
+                              "KARTOSHKA_GIFT_PATH matches the docs endpoint.")
+        except Exception as e:
+            console.print(f"[red]kartoshka.free: FAILED[/] -- {e}")
+
+    looktg_ok = False
+    if LOOKTG_AUTH:
         try:
             lid, luname, lname = await resolve_owner_via_looktg("Plush Pepe", 1)
             console.print(f"[green]look.tg: reachable[/] -> "
@@ -2629,14 +2753,14 @@ async def owner_resolver_selfcheck(userbot: TelegramClient):
         except Exception as e:
             console.print(f"[red]look.tg: FAILED[/] -- {e}")
 
-    if portals_ok or looktg_ok:
+    if portals_ok or kartoshka_ok or looktg_ok:
         console.print("[bold green]Verdict: seller resolution CAN work.[/] "
                       "Buttons appear for gifts whose owner a source exposes.")
     else:
         console.print("[bold red]Verdict: seller resolution will NOT work yet.[/] "
                       "No source returned an owner -> expect no 'Seller "
-                      "profile' button. Fix the FAIL/NO line above, or set "
-                      "LOOKTG_AUTH to use the look.tg/see.tg database.")
+                      "profile' button. Recommended: set KARTOSHKA_TOKEN "
+                      "(official see.tg public API).")
     console.rule()
 
 
