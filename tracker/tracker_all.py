@@ -75,6 +75,9 @@ TRACK_COLLECTIONS = [
 
 MIN_PRICE_STARS = int(os.getenv("MIN_PRICE_STARS", "0"))
 MAX_PRICE_STARS = int(os.getenv("MAX_PRICE_STARS", "0"))
+# Max NEW listings processed per collection per sweep (0 = unlimited). Keeps the
+# sweep moving across ALL collections instead of drowning in a few hot ones.
+MAX_NEW_PER_COLLECTION = int(os.getenv("MAX_NEW_PER_COLLECTION", "0"))
 
 OWNER_CACHE_TTL = int(os.getenv("OWNER_CACHE_TTL", "0"))
 OWNER_CACHE_NEG_TTL = int(os.getenv("OWNER_CACHE_NEG_TTL", "21600"))
@@ -2459,6 +2462,8 @@ async def poll_collection(
             break
         for listing in listings:
             all_active_ids.add(listing.unique_gift_id)
+            if MAX_NEW_PER_COLLECTION and new_count >= MAX_NEW_PER_COLLECTION:
+                continue
             if not _passes_price_filter(listing):
                 continue
 
@@ -2558,6 +2563,8 @@ async def poll_collection(
 
         page += 1
         if not next_offset or page >= 3:
+            break
+        if MAX_NEW_PER_COLLECTION and new_count >= MAX_NEW_PER_COLLECTION:
             break
         offset = next_offset
 
