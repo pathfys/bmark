@@ -157,6 +157,8 @@ LOOKTG_ENABLED = bool(LOOKTG_AUTH) and os.getenv("LOOKTG_ENABLED", "1") not in (
 KARTOSHKA_TOKEN = os.getenv("KARTOSHKA_TOKEN", "")
 KARTOSHKA_API = os.getenv("KARTOSHKA_API", "https://kartoshka.free").rstrip("/")
 KARTOSHKA_GIFT_PATH = os.getenv("KARTOSHKA_GIFT_PATH", "/v1/gift/{slug}/who")
+# Minimum seconds between see.tg API requests (global). 5 = 1 request / 5s.
+KARTOSHKA_MIN_INTERVAL = float(os.getenv("KARTOSHKA_MIN_INTERVAL", "1.0"))
 KARTOSHKA_ENABLED = bool(KARTOSHKA_TOKEN) and os.getenv("KARTOSHKA_ENABLED", "1") not in ("0", "", "false", "False")
 
 
@@ -1151,6 +1153,21 @@ _KARTOSHKA_OWNER_KEYS = ("username", "owner_username", "telegram_username")
 _KARTOSHKA_ID_KEYS = ("id", "owner_id", "user_id", "tg_id", "telegram_id")
 
 
+_kartoshka_rate_lock = asyncio.Lock()
+_kartoshka_last_ts = 0.0
+
+
+async def _kartoshka_rate_limit():
+    global _kartoshka_last_ts
+    if KARTOSHKA_MIN_INTERVAL <= 0:
+        return
+    async with _kartoshka_rate_lock:
+        wait = KARTOSHKA_MIN_INTERVAL - (time.time() - _kartoshka_last_ts)
+        if wait > 0:
+            await asyncio.sleep(wait)
+        _kartoshka_last_ts = time.time()
+
+
 def _kartoshka_http_get(url: str) -> dict | list | None:
     headers = {
         "Accept": "application/json",
@@ -1202,6 +1219,7 @@ async def resolve_owner_via_kartoshka(
         slug=urllib.parse.quote(slug or ""),
     )
     url = KARTOSHKA_API + path
+    await _kartoshka_rate_limit()
     try:
         data = await asyncio.to_thread(_kartoshka_http_get, url)
     except Exception as e:
