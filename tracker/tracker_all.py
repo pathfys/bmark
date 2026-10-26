@@ -34,7 +34,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 from telethon import TelegramClient, events, Button
-from telethon.tl import functions
+from telethon.tl import functions, types
 from telethon.tl.tlobject import TLObject
 from telethon.errors import (
     FloodWaitError,
@@ -125,14 +125,18 @@ HEALTH_CHECK_EVERY_N_CYCLES = int(os.getenv("HEALTH_CHECK_CYCLES", "10"))
 SESSION_BACKUP_EVERY_N_CYCLES = int(os.getenv("SESSION_BACKUP_CYCLES", "60"))
 SESSION_BACKUP_DIR = os.getenv("SESSION_BACKUP_DIR", "session_backups")
 
-GIFTSTAT_ENABLED = os.getenv("GIFTSTAT_ENABLED", "1") not in ("0", "", "false", "False")
+# Where owner data comes from: "kartoshka" = ONLY see.tg public API (default),
+# "all" = also try Portals / t.me page / Fragment / TON as fallbacks.
+OWNER_SOURCE = os.getenv("OWNER_SOURCE", "kartoshka").strip().lower()
+
+GIFTSTAT_ENABLED = os.getenv("GIFTSTAT_ENABLED", "0") not in ("0", "", "false", "False")
 GIFTSTAT_API = os.getenv("GIFTSTAT_API", "https://api.giftstat.app").rstrip("/")
 GIFTSTAT_MARKETPLACE = os.getenv("GIFTSTAT_MARKETPLACE", "portals")
 GIFTSTAT_REFRESH_SEC = int(os.getenv("GIFTSTAT_REFRESH", "600"))
 UNDERPRICED_PCT = float(os.getenv("UNDERPRICED_PCT", "0"))
 STARS_PER_TON = float(os.getenv("STARS_PER_TON", "0"))
 
-PORTALS_ENABLED = os.getenv("PORTALS_ENABLED", "1") not in ("0", "", "false", "False")
+PORTALS_ENABLED = os.getenv("PORTALS_ENABLED", "0") not in ("0", "", "false", "False")
 PORTALS_API = os.getenv("PORTALS_API", "https://portals-market.com/api/")
 PORTALS_BOT = os.getenv("PORTALS_BOT", "portals")
 PORTALS_AUTH_TTL = int(os.getenv("PORTALS_AUTH_TTL", "1800"))
@@ -1474,12 +1478,31 @@ async def _verify_id_username(
     return user_id, username
 
 
+async def _resolve_via_db(client, uname, uid, name, owner_name, tag):
+    best = name or owner_name
+    if uname and uid:
+        return uid, best, uname
+    if uname:
+        rid = await resolve_username_to_id(client, uname, tag=tag)
+        return rid, best, uname
+    if uid:
+        u = await _id_to_username(client, uid, tag=tag)
+        return uid, best, u
+    return None, best, None
+
+
 async def resolve_owner_full(
     client: TelegramClient, listing_slug: str,
     listing_owner_address: str | None, tag: str = "",
     owner_name: str | None = None,
     collection_name: str | None = None, num: int | None = None,
 ) -> tuple[int | None, str | None, str | None]:
+    if OWNER_SOURCE == "kartoshka":
+        kid, kuname, kname = await resolve_owner_via_kartoshka(
+            collection_name, num, slug=listing_slug,
+        )
+        return await _resolve_via_db(client, kuname, kid, kname, owner_name, tag)
+
     html_task = asyncio.create_task(resolve_owner_via_html(listing_slug))
     fragment_task = asyncio.create_task(resolve_owner_via_fragment(listing_slug))
     frag_json_task = asyncio.create_task(resolve_owner_via_fragment_json(listing_slug))
@@ -2058,6 +2081,30 @@ def set_dependencies(db, userbots: list[TelegramClient]):
     global _db_ref, _userbots
     _db_ref = db
     _userbots = userbots
+
+
+async def _prime_branch_chat(bot):
+    """Make the bot able to resolve the supergroup by id. A bot can only send
+    to a channel it is a member of; this caches its entity so send_message by
+    id works instead of failing with 'Could not find the input entity'."""
+    try:
+        await bot.get_entity(BRANCH_CHAT_ID)
+        console.print(f"[green]Branch chat resolved:[/] {BRANCH_CHAT_ID}")
+        return
+    except Exception:
+        pass
+    try:
+        raw = str(BRANCH_CHAT_ID)
+        raw_id = int(raw[4:]) if raw.startswith("-100") else int(raw)
+        await bot(functions.channels.GetChannelsRequest(
+            [types.InputChannel(channel_id=raw_id, access_hash=0)]
+        ))
+        await bot.get_entity(BRANCH_CHAT_ID)
+        console.print(f"[green]Branch chat resolved:[/] {BRANCH_CHAT_ID}")
+    except Exception as e:
+        console.print(f"[bold red]Cannot resolve branch chat {BRANCH_CHAT_ID}:[/] {e}")
+        console.print("[yellow]Add the bot to that supergroup as ADMIN (with "
+                      "post rights in topics), then restart.[/]")
 
 
 def create_bot() -> TelegramClient:
@@ -2643,6 +2690,8 @@ async def run_tracker():
                     globals()["BOT_USERNAME"] = me_bot.username
             except Exception:
                 pass
+        if BRANCH_CHAT_ID:
+            await _prime_branch_chat(bot)
     except Exception as e:
         console.print(f"[bold red]Bot failed: {e}[/]")
         for ub in userbots:
@@ -2813,46 +2862,27 @@ async def owner_resolver_selfcheck(userbot: TelegramClient):
         console.print("[green]curl_cffi: installed[/]")
 
     portals_ok = False
-    try:
-        auth = await get_portals_auth(userbot, force=True)
-        if auth:
-            console.print(f"[green]Portals auth: OK[/] (token len={len(auth)})")
-            try:
+    if OWNER_SOURCE == "all":
+        try:
+            auth = await get_portals_auth(userbot, force=True)
+            if auth:
+                console.print(f"[green]Portals auth: OK[/] (token len={len(auth)})")
                 probe = await _portals_search(auth, "Plush Pepe")
                 if probe and isinstance(probe[0], dict):
                     keys = sorted(probe[0].keys())
                     owner_key = next((k for k in _PORTALS_OWNER_KEYS if k in keys), None)
                     console.print(f"[green]Portals search: OK[/] "
                                   f"({len(probe)} rows). gift keys: {keys}")
-                    if owner_key:
-                        console.print(f"  [green]owner field present: {owner_key}[/]")
-                        portals_ok = True
-                    else:
-                        console.print("  [bold red]NO owner field in Portals rows[/] "
-                                      "-- search works but the seller id isn't "
-                                      "exposed; send me these keys.")
+                    portals_ok = bool(owner_key)
                 else:
-                    console.print("[red]Portals search: 0 rows[/] "
-                                  "(collection filter format, or Cloudflare).")
-                    try:
-                        raw_url = (
-                            f"{PORTALS_API.rstrip('/')}/nfts/search?offset=0&limit=5"
-                            f"{_PORTALS_SORTS['price_asc']}"
-                            f"&filter_by_collections={urllib.parse.quote_plus('Plush Pepe')}"
-                            f"&status=listed"
-                        )
-                        raw = await asyncio.to_thread(_portals_http_get, raw_url, auth)
-                        console.print(f"  raw Portals response (truncated): "
-                                      f"{str(raw)[:700]}")
-                    except Exception as e:
-                        console.print(f"  raw probe error: {e}")
-            except Exception as e:
-                console.print(f"[red]Portals search: FAILED[/] -- {e}")
-        else:
-            console.print("[red]Portals auth: FAILED[/] -- could not get a "
-                          "webview token from @portals via this session.")
-    except Exception as e:
-        console.print(f"[red]Portals auth: FAILED[/] -- {e}")
+                    console.print("[red]Portals search: 0 rows[/]")
+            else:
+                console.print("[red]Portals auth: FAILED[/]")
+        except Exception as e:
+            console.print(f"[red]Portals: FAILED[/] -- {e}")
+    else:
+        console.print(f"[dim]Owner source = {OWNER_SOURCE} (Portals/other markets "
+                      f"off; using kartoshka.free only).[/]")
 
     kartoshka_ok = False
     if not KARTOSHKA_TOKEN:
