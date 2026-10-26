@@ -138,9 +138,7 @@ LOOKTG_ENABLED = bool(LOOKTG_AUTH) and os.getenv("LOOKTG_ENABLED", "1") not in (
 
 KARTOSHKA_TOKEN = os.getenv("KARTOSHKA_TOKEN", "")
 KARTOSHKA_API = os.getenv("KARTOSHKA_API", "https://kartoshka.free").rstrip("/")
-KARTOSHKA_GIFT_PATH = os.getenv(
-    "KARTOSHKA_GIFT_PATH", "/v1/gifts?name={collection}&number={num}"
-)
+KARTOSHKA_GIFT_PATH = os.getenv("KARTOSHKA_GIFT_PATH", "/v1/gift/{slug}")
 KARTOSHKA_ENABLED = bool(KARTOSHKA_TOKEN) and os.getenv("KARTOSHKA_ENABLED", "1") not in ("0", "", "false", "False")
 
 
@@ -1191,6 +1189,11 @@ async def resolve_owner_via_kartoshka(
     except Exception as e:
         logger.warning("kartoshka '%s' #%s: %s", collection_name, num, e)
         return None, None, None
+
+    if isinstance(data, dict) and "ok" in data:
+        if not data.get("ok"):
+            return None, None, None
+        data = data.get("result")
 
     records = []
     if isinstance(data, list):
@@ -2732,14 +2735,23 @@ async def owner_resolver_selfcheck(userbot: TelegramClient):
                       "Useful/Polezno -> API. Official owner API, 100 req/day "
                       "free then 0.00005 TON/req).")
     else:
+        probe_slug = os.getenv("KARTOSHKA_PROBE_SLUG", "PlushPepe-1")
         try:
-            kid, kuname, kname = await resolve_owner_via_kartoshka("Plush Pepe", 1)
-            console.print(f"[green]kartoshka.free: reachable[/] -> "
+            kid, kuname, kname = await resolve_owner_via_kartoshka(
+                "Plush Pepe", 1, slug=probe_slug,
+            )
+            console.print(f"[green]kartoshka.free: reachable[/] ({probe_slug}) -> "
                           f"id={kid} username={kuname} name={kname}")
             kartoshka_ok = bool(kid or kuname)
             if not kartoshka_ok:
-                console.print("  [yellow]0 owner returned[/] -- check "
-                              "KARTOSHKA_GIFT_PATH matches the docs endpoint.")
+                try:
+                    raw = await asyncio.to_thread(
+                        _kartoshka_http_get, KARTOSHKA_API
+                        + KARTOSHKA_GIFT_PATH.format(collection="", num=1, slug=probe_slug),
+                    )
+                    console.print(f"  raw /gift response (truncated): {str(raw)[:700]}")
+                except Exception as e:
+                    console.print(f"  raw probe error: {e}")
         except Exception as e:
             console.print(f"[red]kartoshka.free: FAILED[/] -- {e}")
 
