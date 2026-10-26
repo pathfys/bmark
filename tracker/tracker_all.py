@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Telegram Gift Market Tracker (multi-session, hardened)
 
@@ -48,9 +47,6 @@ from telethon.errors import (
 
 load_dotenv()
 
-# ═══════════════════════════════════════════════════════
-#  CONFIG
-# ═══════════════════════════════════════════════════════
 
 API_ID = int(os.getenv("API_ID", "0"))
 API_HASH = os.getenv("API_HASH", "")
@@ -90,7 +86,6 @@ SELLER_CACHE_TTL = int(os.getenv("SELLER_CACHE_TTL", "300"))
 
 MAX_CONCURRENT_PER_SESSION = int(os.getenv("MAX_CONCURRENT_PER_SESSION", "3"))
 
-# -- Session protection --
 DEVICE_MODEL = os.getenv("DEVICE_MODEL", "Desktop")
 SYSTEM_VERSION = os.getenv("SYSTEM_VERSION", "Windows 10")
 APP_VERSION = os.getenv("APP_VERSION", "4.16.8")
@@ -106,18 +101,13 @@ HEALTH_CHECK_EVERY_N_CYCLES = int(os.getenv("HEALTH_CHECK_CYCLES", "10"))
 SESSION_BACKUP_EVERY_N_CYCLES = int(os.getenv("SESSION_BACKUP_CYCLES", "60"))
 SESSION_BACKUP_DIR = os.getenv("SESSION_BACKUP_DIR", "session_backups")
 
-# -- Giftstat (floor prices, no API key) --
 GIFTSTAT_ENABLED = os.getenv("GIFTSTAT_ENABLED", "1") not in ("0", "", "false", "False")
 GIFTSTAT_API = os.getenv("GIFTSTAT_API", "https://api.giftstat.app").rstrip("/")
 GIFTSTAT_MARKETPLACE = os.getenv("GIFTSTAT_MARKETPLACE", "portals")
 GIFTSTAT_REFRESH_SEC = int(os.getenv("GIFTSTAT_REFRESH", "600"))
-# Flag a listing as underpriced when its price is >= this % below floor. 0 = off.
 UNDERPRICED_PCT = float(os.getenv("UNDERPRICED_PCT", "0"))
-# Stars per 1 TON, used to compare a stars-priced listing against a TON floor.
-# 0 = skip the comparison (only show floor context, no underpriced math).
 STARS_PER_TON = float(os.getenv("STARS_PER_TON", "0"))
 
-# -- Portals Market (seller-resolution bypass) --
 PORTALS_ENABLED = os.getenv("PORTALS_ENABLED", "1") not in ("0", "", "false", "False")
 PORTALS_API = os.getenv("PORTALS_API", "https://portals-market.com/api/")
 PORTALS_BOT = os.getenv("PORTALS_BOT", "portals")
@@ -125,23 +115,14 @@ PORTALS_AUTH_TTL = int(os.getenv("PORTALS_AUTH_TTL", "1800"))
 PORTALS_SEARCH_LIMIT = int(os.getenv("PORTALS_SEARCH_LIMIT", "50"))
 PORTALS_SEARCH_PAGES = int(os.getenv("PORTALS_SEARCH_PAGES", "3"))
 
-# -- Tonnel Market (seller-resolution bypass, no auth needed for listings) --
 TONNEL_ENABLED = os.getenv("TONNEL_ENABLED", "1") not in ("0", "", "false", "False")
 TONNEL_API = os.getenv("TONNEL_API", "https://gifts2.tonnel.network/api")
 TONNEL_SEARCH_LIMIT = int(os.getenv("TONNEL_SEARCH_LIMIT", "30"))
 
-# -- look.tg / see.tg gift database (owner username + id per gift) --
-# Their backend returns gifts with owner_info[0] = {username, id, ...}. It needs
-# an Authorization header taken from the site: open look.tg (or see.tg) in a
-# browser, F12 -> Network -> any "getnftgifts" request -> copy the full
-# Authorization header value into LOOKTG_AUTH. Leave empty to disable.
 LOOKTG_AUTH = os.getenv("LOOKTG_AUTH", "")
 LOOKTG_API = os.getenv("LOOKTG_API", "https://look.tg").rstrip("/")
 LOOKTG_ENABLED = bool(LOOKTG_AUTH) and os.getenv("LOOKTG_ENABLED", "1") not in ("0", "", "false", "False")
 
-# ═══════════════════════════════════════════════════════
-#  LOGGING & CONSOLE
-# ═══════════════════════════════════════════════════════
 
 logging.basicConfig(
     level=logging.INFO,
@@ -151,9 +132,6 @@ logging.basicConfig(
 logger = logging.getLogger("tracker")
 console = Console()
 
-# ═══════════════════════════════════════════════════════
-#  DATA CLASSES
-# ═══════════════════════════════════════════════════════
 
 
 @dataclass
@@ -243,11 +221,7 @@ class SellerProfile:
         return ", ".join(reasons)
 
 
-# ═══════════════════════════════════════════════════════
-#  SESSION PROTECTION
-# ═══════════════════════════════════════════════════════
 
-# Fatal errors that mean the session is permanently dead
 _FATAL_ERRORS = (AuthKeyUnregisteredError, UserDeactivatedBanError, SessionRevokedError)
 
 
@@ -275,8 +249,6 @@ async def _api_call(client: TelegramClient, request, retries: int = 0, tag: str 
         try:
             return await client(request)
         except FloodWaitError as e:
-            # Telethon auto-sleeps up to flood_sleep_threshold;
-            # this catches waits ABOVE the threshold
             logger.warning("[%s] FloodWait %ds, sleeping...", tag, e.seconds)
             await asyncio.sleep(e.seconds + 1)
         except _FATAL_ERRORS as e:
@@ -362,7 +334,6 @@ def _backup_sessions():
             backed += 1
         except Exception:
             pass
-    # keep only last 10 backups per session
     _cleanup_old_backups()
     if backed:
         logger.info("Backed up %d session files to %s", backed, SESSION_BACKUP_DIR)
@@ -386,9 +357,6 @@ def _cleanup_old_backups():
         pass
 
 
-# ═══════════════════════════════════════════════════════
-#  API
-# ═══════════════════════════════════════════════════════
 
 
 def _safe_getattr(obj: TLObject, name: str, default=None):
@@ -451,10 +419,6 @@ def _resolve_owner(gift: TLObject, users_map: dict) -> tuple[int | None, str | N
     if owner_id is None:
         owner_id = _peer_to_id(_safe_getattr(gift, "host_id"))
 
-    # Only trust an explicit owner peer. The old "single user in map" and
-    # "match by display name" guesses picked whoever happened to be in the
-    # response (a relayer, a popular account) and produced wrong owners, so
-    # they are gone: an unknown owner stays unknown.
     if owner_id and owner_id in users_map:
         user = users_map[owner_id]
         owner_username = _safe_getattr(user, "username")
@@ -631,9 +595,6 @@ def _parse_owner_from_html(html: str) -> tuple[str | None, str | None]:
         if name:
             return None, name
 
-    # No explicit "Owner" row -> unknown. We do NOT scrape a random @mention
-    # from og:description or page links: that grabbed the collection author /
-    # a promoted channel (e.g. the same handle on every gift), not the owner.
     return None, None
 
 
@@ -679,8 +640,6 @@ async def resolve_owner_via_fragment(slug: str) -> tuple[str | None, str | None]
                 return uname, name
             if name:
                 return None, name
-            # No "first t.me link" fallback: it matched the collection/channel
-            # handle shared by every gift, not the owner.
         except Exception as e:
             logger.debug("Fragment resolve %s (%s): %s", slug, url, e)
     return None, None
@@ -779,12 +738,9 @@ async def resolve_owner_via_ton_account(wallet_address: str) -> tuple[str | None
     return None, None
 
 
-# ═══════════════════════════════════════════════════════
-#  GIFTSTAT (floor prices across marketplaces, no API key)
-# ═══════════════════════════════════════════════════════
 
-_giftstat_floors: dict[str, float] = {}        # collection name/slug (lower) -> floor TON
-_giftstat_model_floors: dict[str, float] = {}  # "collection_slug|model" (lower) -> floor TON
+_giftstat_floors: dict[str, float] = {}
+_giftstat_model_floors: dict[str, float] = {}
 _giftstat_ton_rate: float = 0.0
 _giftstat_last_refresh: float = 0.0
 _giftstat_lock = asyncio.Lock()
@@ -792,7 +748,7 @@ _giftstat_lock = asyncio.Lock()
 
 def _giftstat_get_sync(url: str):
     headers = {"Accept": "application/json", "User-Agent": "Mozilla/5.0"}
-    if _HAS_CFFI:  # Giftstat is Cloudflare-fronted; urllib gets 403 without this
+    if _HAS_CFFI:
         r = _cffi_requests.get(url, headers=headers, impersonate="chrome110", timeout=15)
         if r.status_code != 200:
             raise RuntimeError(f"giftstat http {r.status_code}")
@@ -943,19 +899,9 @@ async def floor_context_for(listing: "ResaleListing") -> tuple[str | None, bool]
     return note, underpriced
 
 
-# ═══════════════════════════════════════════════════════
-#  PORTALS MARKET (seller-resolution bypass)
-# ═══════════════════════════════════════════════════════
-#
-# Resale listings from the MTProto API hide owner_id because the gift sits in
-# the marketplace escrow during a sale. Portals is a Telegram mini-app: sellers
-# list through it with their own Telegram account, so its API exposes the real
-# owner_id (seller's Telegram user id) and external_collection_number (== num).
-# We match a hidden listing to its Portals twin by (collection, num) and recover
-# the seller's id, then resolve it to a @username via Telethon.
 
 try:
-    from curl_cffi import requests as _cffi_requests  # type: ignore
+    from curl_cffi import requests as _cffi_requests
     _HAS_CFFI = True
 except Exception:
     _HAS_CFFI = False
@@ -1008,10 +954,6 @@ async def _acquire_portals_auth(client: TelegramClient) -> str | None:
         return None
     try:
         frag = urllib.parse.urlparse(url).fragment
-        # initData is one value in the fragment; its own '&'/'=' are encoded, so
-        # splitting the fragment on '&' is safe. Unquote exactly once -- the
-        # Authorization header must carry initData in its native form (the
-        # user=... JSON stays percent-encoded, or Portals' hash check fails).
         init_data = None
         for part in frag.split("&"):
             if part.startswith("tgWebAppData="):
@@ -1056,8 +998,6 @@ def _portals_http_get(url: str, auth: str) -> dict | list | None:
 
 async def _portals_search(auth: str, collection_name: str) -> list:
     rows: list = []
-    # Portals wants Title-cased names with spaces as '+' (quote_plus), e.g.
-    # "Plush Pepe" -> "Plush+Pepe". Using %20 returns 0 rows.
     coll = urllib.parse.quote_plus((collection_name or "").strip())
     for page in range(max(1, PORTALS_SEARCH_PAGES)):
         offset = page * PORTALS_SEARCH_LIMIT
@@ -1107,7 +1047,7 @@ def _portals_collection_candidates(
     if slug:
         m = _SLUG_PARTS_RE.match(slug)
         if m:
-            add(m.group(1))             # "PlushPepe" from "PlushPepe-3"
+            add(m.group(1))
     return out
 
 
@@ -1155,7 +1095,7 @@ async def resolve_owner_via_portals(
     candidates = _portals_collection_candidates(collection_name, slug)
     if not candidates:
         return None, None
-    auth = await get_portals_auth(client)  # cached; refreshes on TTL only
+    auth = await get_portals_auth(client)
     if not auth:
         return None, None
 
@@ -1171,10 +1111,6 @@ async def resolve_owner_via_portals(
     return None, None
 
 
-# ──────────────────── look.tg / see.tg database ────────────────────
-# One GET returns the gift with its current owner (username + id), already
-# resolved in their crawler DB. Best source when configured, because it gives a
-# username directly (no stranger-id lookup needed).
 
 _LOOKTG_HEADERS = {
     "Accept": "application/json, text/plain, */*",
@@ -1243,10 +1179,6 @@ async def resolve_owner_via_looktg(
     return None, None, None
 
 
-# ───────────────────────── Tonnel ─────────────────────────
-# Tonnel's pageGifts listing is readable without auth and each gift carries a
-# `seller` field = the seller's Telegram user id. Good fallback when Portals'
-# webview token can't be obtained.
 
 _TONNEL_HEADERS = {
     "Accept": "application/json, text/plain, */*",
@@ -1440,8 +1372,6 @@ async def resolve_owner_full(
     best_name = (oname or html_name or frag_name or frag_json_name
                  or portals_name or looktg_name or owner_name)
 
-    # Priority = most authoritative first:
-    # 0. look.tg/see.tg DB: returns the resolved owner username+id directly.
     if looktg_uname or looktg_id:
         if looktg_uname and looktg_id:
             return looktg_id, best_name, looktg_uname
@@ -1451,14 +1381,10 @@ async def resolve_owner_full(
         uname = await _id_to_username(client, looktg_id, tag=tag)
         return looktg_id, best_name, uname
 
-    # 1. Portals seller record (owner_id): the account that actually listed the
-    #    gift. Username derived from that id belongs to it, so no cross-check.
-    #    (Tonnel's public listing carries no seller field, so it is not used.)
     if portals_id:
         uname = await _id_to_username(client, portals_id, tag=tag)
         return portals_id, best_name, uname
 
-    # 2. Telegram's own getUniqueStarGift owner (explicit owner peer only).
     if oid:
         if ouname:
             verified_id, verified_uname = await _verify_id_username(
@@ -1468,7 +1394,6 @@ async def resolve_owner_full(
         uname = await _id_to_username(client, oid, tag=tag)
         return oid, best_name, uname
 
-    # 3. Explicit "Owner" row scraped from the t.me / Fragment gift page.
     page_uname = html_uname or frag_uname or frag_json_uname or ouname
     if page_uname:
         verified_id, verified_uname = await _verify_id_username(
@@ -1476,7 +1401,6 @@ async def resolve_owner_full(
         )
         return verified_id, best_name, verified_uname
 
-    # 4. TON wallet holding the gift -> its linked Telegram social.
     addr = ton_addr or listing_owner_address
     if addr:
         ton_nft_task = asyncio.create_task(resolve_owner_via_ton(addr))
@@ -1498,9 +1422,6 @@ async def resolve_owner_full(
             if uname:
                 return ton_id, best_name, uname
 
-    # No contacts.Search-by-name guess: it returned whoever Telegram ranks
-    # highest for that display name (the same popular accounts over and over),
-    # not the actual owner. Unknown owner stays unknown -> no seller button.
     return None, best_name, None
 
 
@@ -1536,7 +1457,6 @@ async def get_resale_listings(
     next_offset = _safe_getattr(result, "next_offset", "") or ""
     listings = []
 
-    # Debug: dump first gift's TL structure once to find correct field names
     if gifts and logger.isEnabledFor(logging.DEBUG):
         g0 = gifts[0]
         logger.debug("TL class: %s", type(g0).__name__)
@@ -1570,9 +1490,6 @@ async def get_resale_listings(
     return listings, next_offset
 
 
-# ═══════════════════════════════════════════════════════
-#  SELLER CHECKER
-# ═══════════════════════════════════════════════════════
 
 _seller_cache: dict[int, SellerProfile] = {}
 
@@ -1668,9 +1585,6 @@ async def check_seller(client: TelegramClient, user_id: int, tag: str = "") -> S
     return profile
 
 
-# ═══════════════════════════════════════════════════════
-#  DATABASE
-# ═══════════════════════════════════════════════════════
 
 _db_lock = asyncio.Lock()
 
@@ -1846,9 +1760,6 @@ async def get_stats(db) -> dict:
             "collections_tracked": colls, "total_claimed": claimed}
 
 
-# ═══════════════════════════════════════════════════════
-#  DISPLAY
-# ═══════════════════════════════════════════════════════
 
 
 def format_stars(amount: int) -> str:
@@ -1899,9 +1810,6 @@ def print_stats(stats: dict):
     ))
 
 
-# ═══════════════════════════════════════════════════════
-#  BOT
-# ═══════════════════════════════════════════════════════
 
 _db_ref = None
 _userbots: list[TelegramClient] = []
@@ -1943,7 +1851,6 @@ def _build_listing_text(
     attrs = "\n".join(
         f"  - {a.type}: <b>{a.name}</b> ({a.rarity_percent:.1f}%)" for a in listing.attributes
     )
-    # Seller line links straight to the owner's profile when resolved.
     if listing.owner_username:
         seller_line = (
             f'Seller: <a href="https://t.me/{listing.owner_username}">'
@@ -2130,9 +2037,6 @@ async def _handle_claim(bot, event):
     await event.answer(status, alert=True)
 
 
-# ═══════════════════════════════════════════════════════
-#  MAIN LOOP
-# ═══════════════════════════════════════════════════════
 
 _running = True
 
@@ -2366,7 +2270,6 @@ async def run_tracker():
         border_style="bright_magenta",
     ))
 
-    # -- Sequential auth with delay to avoid security flags --
     userbots: list[TelegramClient] = []
     dead_sessions: set[str] = set()
 
@@ -2401,7 +2304,6 @@ async def run_tracker():
         console.print(f"[yellow]{len(dead_sessions)} sessions failed: {', '.join(dead_sessions)}[/]")
         console.print(f"[green]Continuing with {len(userbots)} active sessions[/]")
 
-    # -- Initial session backup --
     _backup_sessions()
 
     bot = create_bot()
@@ -2451,7 +2353,6 @@ async def run_tracker():
         now = datetime.now().strftime("%H:%M:%S")
         console.rule(f"[dim]Cycle #{cycle} -- {now}[/]")
 
-        # -- Health check --
         if cycle % HEALTH_CHECK_EVERY_N_CYCLES == 0:
             console.print("[dim]Running health check...[/]")
             healthy = []
@@ -2464,7 +2365,6 @@ async def run_tracker():
             if not healthy:
                 console.print("[bold red]All sessions dead! Waiting 60s before retry...[/]")
                 await asyncio.sleep(60)
-                # try reconnecting all
                 healthy = []
                 for ub, name in zip(userbots, active_names):
                     ok = await _ensure_connected(ub, name)
@@ -2487,11 +2387,9 @@ async def run_tracker():
             if cycle > 1:
                 buckets = _distribute_collections(catalog, len(userbots_active))
 
-        # -- Session backup --
         if cycle % SESSION_BACKUP_EVERY_N_CYCLES == 0:
             _backup_sessions()
 
-        # -- Poll --
         tasks = []
         for ub, bucket, name in zip(userbots_active, buckets, names_active):
             if bucket:
@@ -2529,7 +2427,6 @@ async def run_tracker():
             stats = await get_stats(db)
             print_stats(stats)
 
-        # -- Bot health --
         if cycle % HEALTH_CHECK_EVERY_N_CYCLES == 0:
             if not bot.is_connected():
                 logger.warning("Bot disconnected, reconnecting...")
@@ -2582,9 +2479,6 @@ async def owner_resolver_selfcheck(userbot: TelegramClient):
     else:
         console.print("[green]curl_cffi: installed[/]")
 
-    # Portals is the one source that exposes a seller id. Token comes via
-    # Telethon (no HTTP); SEARCH is an HTTP call Cloudflare blocks without
-    # curl_cffi, so test the real search and confirm an owner key is present.
     portals_ok = False
     try:
         auth = await get_portals_auth(userbot, force=True)
@@ -2607,7 +2501,6 @@ async def owner_resolver_selfcheck(userbot: TelegramClient):
                 else:
                     console.print("[red]Portals search: 0 rows[/] "
                                   "(collection filter format, or Cloudflare).")
-                    # Dump the raw response so the real shape/error is visible.
                     try:
                         raw_url = (
                             f"{PORTALS_API.rstrip('/')}/nfts/search?offset=0&limit=5"
@@ -2628,7 +2521,6 @@ async def owner_resolver_selfcheck(userbot: TelegramClient):
     except Exception as e:
         console.print(f"[red]Portals auth: FAILED[/] -- {e}")
 
-    # look.tg / see.tg DB -- the source that returns a username directly.
     looktg_ok = False
     if not LOOKTG_AUTH:
         console.print("[yellow]look.tg: disabled[/] (set LOOKTG_AUTH to the "
@@ -2684,7 +2576,6 @@ async def diagnose(slug: str):
     except Exception as e:
         console.print(f"  [red]error: {e}[/]")
 
-    # Portals + slug API need a live userbot session.
     ub = _create_client(SESSION_NAMES[0])
     try:
         await ub.start()
