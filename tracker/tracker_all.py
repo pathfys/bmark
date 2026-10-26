@@ -781,18 +781,23 @@ _giftstat_last_refresh: float = 0.0
 _giftstat_lock = asyncio.Lock()
 
 
+def _giftstat_get_sync(url: str):
+    headers = {"Accept": "application/json", "User-Agent": "Mozilla/5.0"}
+    if _HAS_CFFI:  # Giftstat is Cloudflare-fronted; urllib gets 403 without this
+        r = _cffi_requests.get(url, headers=headers, impersonate="chrome110", timeout=15)
+        if r.status_code != 200:
+            raise RuntimeError(f"giftstat http {r.status_code}")
+        return r.json()
+    req = urllib.request.Request(url, headers=headers)
+    resp = urllib.request.urlopen(req, timeout=15, context=_ton_ctx)
+    return json.loads(resp.read())
+
+
 async def _giftstat_get(path: str, params: dict | None = None):
     url = GIFTSTAT_API + path
     if params:
         url += "?" + urllib.parse.urlencode({k: v for k, v in params.items() if v not in (None, "")})
-    req = urllib.request.Request(url, headers={
-        "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0",
-    })
-    resp = await asyncio.to_thread(
-        urllib.request.urlopen, req, timeout=15, context=_ton_ctx,
-    )
-    return json.loads(resp.read())
+    return await asyncio.to_thread(_giftstat_get_sync, url)
 
 
 def _giftstat_rows(payload) -> list:
@@ -1120,20 +1125,12 @@ async def resolve_owner_via_portals(
     candidates = _portals_collection_candidates(collection_name, slug)
     if not candidates:
         return None, None
-    auth = await get_portals_auth(client)
+    auth = await get_portals_auth(client)  # cached; refreshes on TTL only
     if not auth:
         return None, None
 
-    auth_retried = False
     for cand in candidates:
         rows = await _portals_search(auth, cand)
-        if not rows and not auth_retried:
-            # token may have expired mid-poll; refresh once and retry this cand
-            auth_retried = True
-            refreshed = await get_portals_auth(client, force=True)
-            if refreshed:
-                auth = refreshed
-                rows = await _portals_search(auth, cand)
         oid = _portals_find_owner(rows, num)
         if oid:
             logger.info(
@@ -2496,13 +2493,26 @@ async def owner_resolver_selfcheck(userbot: TelegramClient):
     except Exception as e:
         console.print(f"[red]Tonnel: FAILED[/] -- {e}")
 
-    # Portals -- needs a webview token from the userbot.
+    # Portals -- token comes via Telethon (no HTTP), but SEARCH is an HTTP call
+    # that Cloudflare blocks without curl_cffi, so test the actual search too.
     portals_ok = False
     try:
         auth = await get_portals_auth(userbot, force=True)
         if auth:
             console.print(f"[green]Portals auth: OK[/] (token len={len(auth)})")
-            portals_ok = True
+            try:
+                probe = await _portals_search(auth, "Plush Pepe")
+                if probe:
+                    console.print(f"[green]Portals search: OK[/] "
+                                  f"({len(probe)} rows, keys: "
+                                  f"{sorted(probe[0].keys()) if isinstance(probe[0], dict) else '?'})")
+                    portals_ok = True
+                else:
+                    console.print("[red]Portals search: returned 0 rows[/] "
+                                  "(blocked by Cloudflare without curl_cffi, or "
+                                  "filter name differs).")
+            except Exception as e:
+                console.print(f"[red]Portals search: FAILED[/] -- {e}")
         else:
             console.print("[red]Portals auth: FAILED[/] -- could not get a "
                           "webview token from @portals via this session.")
