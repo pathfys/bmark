@@ -79,15 +79,26 @@ MAX_PRICE_STARS = int(os.getenv("MAX_PRICE_STARS", "0"))
 OWNER_CACHE_TTL = int(os.getenv("OWNER_CACHE_TTL", "0"))
 OWNER_CACHE_NEG_TTL = int(os.getenv("OWNER_CACHE_NEG_TTL", "21600"))
 
-CHEAP_MAX_STARS = int(os.getenv("CHEAP_MAX_STARS", "500"))
-MID_MAX_STARS = int(os.getenv("MID_MAX_STARS", "2000"))
-BRANCH_CHEAP_CHAT = int(os.getenv("BRANCH_CHEAP_CHAT", "0")) or None
-BRANCH_MID_CHAT = int(os.getenv("BRANCH_MID_CHAT", "0")) or None
-BRANCH_EXPENSIVE_CHAT = int(os.getenv("BRANCH_EXPENSIVE_CHAT", "0")) or None
-BRANCH_GIRLS_CHAT = int(os.getenv("BRANCH_GIRLS_CHAT", "0")) or None
-GIRLS_COLLECTIONS = [
-    x.strip().lower() for x in os.getenv("GIRLS_COLLECTIONS", "").split(",") if x.strip()
+# Branches = forum topics inside one supergroup.
+# t.me/c/3940557866/<topic> -> chat id is -100 prefixed.
+BRANCH_CHAT_ID = int(os.getenv("BRANCH_CHAT_ID", "-1003940557866"))
+TOPIC_ALL = int(os.getenv("TOPIC_ALL", "5"))
+TOPIC_RICH = int(os.getenv("TOPIC_RICH", "3"))
+TOPIC_POOR = int(os.getenv("TOPIC_POOR", "4"))
+TOPIC_BLACK = int(os.getenv("TOPIC_BLACK", "6"))
+RICH_MIN_STARS = int(os.getenv("RICH_MIN_STARS", "2000"))
+POOR_MAX_STARS = int(os.getenv("POOR_MAX_STARS", "500"))
+BLACK_COLLECTIONS = [
+    x.strip().lower() for x in os.getenv("BLACK_COLLECTIONS", "").split(",") if x.strip()
 ]
+
+GIFT_PREVIEW = os.getenv("GIFT_PREVIEW", "1") not in ("0", "", "false", "False")
+POSTS_PER_MIN = int(os.getenv("POSTS_PER_MIN", "40"))
+
+CLAIM_MAX_PER_WINDOW = int(os.getenv("CLAIM_MAX_PER_WINDOW", "10"))
+CLAIM_WINDOW_SEC = int(os.getenv("CLAIM_WINDOW_SEC", "30"))
+REQUIRE_START = os.getenv("REQUIRE_START", "1") not in ("0", "", "false", "False")
+BOT_USERNAME = os.getenv("BOT_USERNAME", "").lstrip("@")
 
 CLAIM_DM_TEMPLATE = os.getenv(
     "CLAIM_DM_TEMPLATE",
@@ -1762,6 +1773,18 @@ async def init_db() -> aiosqlite.Connection:
             owner_name     TEXT,
             resolved_at    REAL
         );
+        CREATE TABLE IF NOT EXISTS listing_messages (
+            unique_gift_id INTEGER NOT NULL,
+            chat_id        INTEGER NOT NULL,
+            topic_id       INTEGER,
+            message_id     INTEGER NOT NULL,
+            PRIMARY KEY (unique_gift_id, chat_id, message_id)
+        );
+        CREATE TABLE IF NOT EXISTS bot_started (
+            user_id    INTEGER PRIMARY KEY,
+            started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_listing_messages ON listing_messages(unique_gift_id);
         CREATE INDEX IF NOT EXISTS idx_listings_active ON listings(is_active, gift_id);
         CREATE INDEX IF NOT EXISTS idx_listings_unique_id ON listings(unique_gift_id);
         CREATE INDEX IF NOT EXISTS idx_price_history_gift ON price_history(unique_gift_id, recorded_at);
@@ -1822,6 +1845,39 @@ async def set_log_message_id(db, unique_gift_id: int, message_id: int):
             (message_id, unique_gift_id),
         )
         await db.commit()
+
+
+async def add_listing_message(db, unique_gift_id, chat_id, topic_id, message_id):
+    async with _db_lock:
+        await db.execute(
+            "INSERT OR REPLACE INTO listing_messages "
+            "(unique_gift_id, chat_id, topic_id, message_id) VALUES (?,?,?,?)",
+            (unique_gift_id, chat_id, topic_id, message_id),
+        )
+        await db.commit()
+
+
+async def get_listing_messages(db, unique_gift_id) -> list[tuple[int, int]]:
+    cursor = await db.execute(
+        "SELECT chat_id, message_id FROM listing_messages WHERE unique_gift_id=?",
+        (unique_gift_id,),
+    )
+    return [(r[0], r[1]) for r in await cursor.fetchall()]
+
+
+async def mark_bot_started(db, user_id: int):
+    async with _db_lock:
+        await db.execute(
+            "INSERT OR IGNORE INTO bot_started (user_id) VALUES (?)", (user_id,),
+        )
+        await db.commit()
+
+
+async def has_started_bot(db, user_id: int) -> bool:
+    cursor = await db.execute(
+        "SELECT 1 FROM bot_started WHERE user_id=?", (user_id,),
+    )
+    return await cursor.fetchone() is not None
 
 
 async def get_cached_owner(db, slug: str | None) -> dict | None:
@@ -2007,6 +2063,17 @@ def set_dependencies(db, userbots: list[TelegramClient]):
 def create_bot() -> TelegramClient:
     bot = _create_client("gift_bot")
 
+    @bot.on(events.NewMessage(pattern=r"^/start"))
+    async def on_start(event):
+        if event.is_private:
+            await mark_bot_started(_db_ref, event.sender_id)
+            try:
+                await event.respond(
+                    "Готово. Теперь можешь занимать лоты (Claim) в каналах.",
+                )
+            except Exception:
+                pass
+
     @bot.on(events.CallbackQuery(pattern=rb"^claim:(\d+)$"))
     async def on_claim(event):
         await _handle_claim(bot, event)
@@ -2034,9 +2101,14 @@ def _build_listing_text(
         )
     else:
         seller_line = f"Seller: <code>{listing.owner_display}</code>"
+    if listing.gift_link:
+        title_line = (f'<a href="{listing.gift_link}"><b>{listing.title}</b> '
+                      f'#{listing.num or "?"}</a>')
+    else:
+        title_line = f"<b>{listing.title}</b> #{listing.num or '?'}"
     lines = [
         "<b>New listing</b>", "",
-        f"<b>{listing.title}</b> #{listing.num or '?'}",
+        title_line,
         f"Price: <b>{format_stars(listing.price_stars)}</b>",
         seller_line,
     ]
@@ -2051,8 +2123,6 @@ def _build_listing_text(
         lines.append(f"{' | '.join(parts)}")
     if attrs:
         lines.append(f"Attributes:\n{attrs}")
-    if listing.gift_link:
-        lines.append(f'<a href="{listing.gift_link}">Open gift</a>')
     lines.append(FOOTER)
     return "\n".join(lines)
 
@@ -2103,48 +2173,62 @@ def _build_claimed_text(title, num, price_stars, owner_display, claimer_name) ->
 
 
 _send_lock = asyncio.Lock()
+_last_post_ts = 0.0
 
 
-def _branches_for(listing: ResaleListing) -> list[int]:
-    targets: list[int] = []
+def _branches_for(listing: ResaleListing) -> list[tuple[int, int | None]]:
+    """Return (chat_id, topic_id) targets for a listing.
+    all -> every listing; rich -> price>=RICH_MIN; poor -> price<=POOR_MAX;
+    black -> collection in BLACK_COLLECTIONS."""
     price = listing.price_stars or 0
-    if price <= CHEAP_MAX_STARS:
-        targets.append(BRANCH_CHEAP_CHAT)
-    elif price <= MID_MAX_STARS:
-        targets.append(BRANCH_MID_CHAT)
-    else:
-        targets.append(BRANCH_EXPENSIVE_CHAT)
-    if GIRLS_COLLECTIONS and (listing.title or "").strip().lower() in GIRLS_COLLECTIONS:
-        targets.append(BRANCH_GIRLS_CHAT)
-    targets = [t for t in targets if t]
-    if not targets and LOG_GROUP_ID:
-        targets.append(LOG_GROUP_ID)
+    topics: list[int] = [TOPIC_ALL]
+    if RICH_MIN_STARS and price >= RICH_MIN_STARS:
+        topics.append(TOPIC_RICH)
+    if POOR_MAX_STARS and price <= POOR_MAX_STARS:
+        topics.append(TOPIC_POOR)
+    if BLACK_COLLECTIONS and (listing.title or "").strip().lower() in BLACK_COLLECTIONS:
+        topics.append(TOPIC_BLACK)
+    out: list[tuple[int, int | None]] = []
     seen: set[int] = set()
-    out: list[int] = []
-    for t in targets:
-        if t not in seen:
+    for t in topics:
+        if t and t not in seen:
             seen.add(t)
-            out.append(t)
+            out.append((BRANCH_CHAT_ID, t))
+    if not out and LOG_GROUP_ID:
+        out.append((LOG_GROUP_ID, None))
     return out
+
+
+async def _post_throttle():
+    """Pace posts to roughly POSTS_PER_MIN. Called while holding _send_lock."""
+    global _last_post_ts
+    if POSTS_PER_MIN <= 0:
+        return
+    min_gap = 60.0 / POSTS_PER_MIN
+    wait = min_gap - (time.time() - _last_post_ts)
+    if wait > 0:
+        await asyncio.sleep(wait)
+    _last_post_ts = time.time()
 
 
 async def send_listing_to_chat(
     bot, chat_id, listing, seller_level=None, seller_nft=None, floor_note=None,
+    topic_id: int | None = None,
 ) -> int | None:
     if not chat_id:
         return None
     text = _build_listing_text(listing, seller_level, seller_nft, floor_note=floor_note)
     async with _send_lock:
+        await _post_throttle()
         for attempt in range(3):
             try:
                 msg = await _emit_with_buttons(
                     lambda b: bot.send_message(
-                        chat_id, text, buttons=b,
-                        parse_mode="html", link_preview=False,
+                        chat_id, text, buttons=b, reply_to=topic_id,
+                        parse_mode="html", link_preview=GIFT_PREVIEW,
                     ),
                     listing,
                 )
-                await asyncio.sleep(0.1)
                 return msg.id
             except FloodWaitError as e:
                 logger.warning("Send FloodWait %ds, sleeping...", e.seconds)
@@ -2165,6 +2249,20 @@ async def send_listing_to_chat(
     return None
 
 
+_claim_times: dict[int, list[float]] = {}
+
+
+def _claim_cooldown_ok(user_id: int) -> bool:
+    now = time.time()
+    times = [t for t in _claim_times.get(user_id, []) if now - t < CLAIM_WINDOW_SEC]
+    if len(times) >= CLAIM_MAX_PER_WINDOW:
+        _claim_times[user_id] = times
+        return False
+    times.append(now)
+    _claim_times[user_id] = times
+    return True
+
+
 async def _handle_claim(bot, event):
     unique_gift_id = int(event.pattern_match.group(1))
     claimer = await event.get_sender()
@@ -2174,12 +2272,26 @@ async def _handle_claim(bot, event):
         else (claimer.first_name or f"id:{claimer_id}")
     )
 
+    if REQUIRE_START and not await has_started_bot(_db_ref, claimer_id):
+        start_link = f"https://t.me/{BOT_USERNAME}?start=1" if BOT_USERNAME else "the bot"
+        await event.answer(
+            f"Сначала нажмите /start у бота: {start_link}", alert=True,
+        )
+        return
+
+    if not _claim_cooldown_ok(claimer_id):
+        await event.answer(
+            f"Слишком быстро. Лимит {CLAIM_MAX_PER_WINDOW} лотов "
+            f"за {CLAIM_WINDOW_SEC}с.", alert=True,
+        )
+        return
+
     listing_data = await get_listing_by_unique_id(_db_ref, unique_gift_id)
     if not listing_data:
         await event.answer("Listing not found", alert=True)
         return
     if listing_data["claimed_by"]:
-        await event.answer("Already claimed", alert=True)
+        await event.answer("Уже занято", alert=True)
         return
 
     await set_claimed(_db_ref, unique_gift_id, claimer_id)
@@ -2220,14 +2332,19 @@ async def _handle_claim(bot, event):
         listing_data["title"] or "?", listing_data["num"],
         listing_data["price_stars"], owner_display, claimer_name,
     )
-    try:
-        await bot.edit_message(
-            event.chat_id, event.message_id, claimed_text, buttons=None, parse_mode="html",
-        )
-    except Exception as e:
-        logger.error("Edit message: %s", e)
+    msgs = await get_listing_messages(_db_ref, unique_gift_id)
+    if (event.chat_id, event.message_id) not in msgs:
+        msgs.append((event.chat_id, event.message_id))
+    for chat_id, mid in msgs:
+        try:
+            await bot.edit_message(
+                chat_id, mid, claimed_text, buttons=None, parse_mode="html",
+                link_preview=False,
+            )
+        except Exception as e:
+            logger.debug("Claim edit %s/%s: %s", chat_id, mid, e)
 
-    status = "Claimed! DM sent." if dm_sent else "Claimed!"
+    status = "Занято! DM продавцу отправлен." if dm_sent else "Занято!"
     await event.answer(status, alert=True)
 
 
@@ -2295,12 +2412,16 @@ async def poll_collection(
             targets = _branches_for(listing)
             posted: list[tuple[int, int]] = []
             if bot and targets:
-                for chat_id in targets:
+                for chat_id, topic_id in targets:
                     mid = await send_listing_to_chat(
-                        bot, chat_id, listing, None, None, floor_note=floor_note,
+                        bot, chat_id, listing, None, None,
+                        floor_note=floor_note, topic_id=topic_id,
                     )
                     if mid:
                         posted.append((chat_id, mid))
+                        await add_listing_message(
+                            db, listing.unique_gift_id, chat_id, topic_id, mid,
+                        )
                 if posted:
                     await set_log_message_id(db, listing.unique_gift_id, posted[0][1])
 
@@ -2454,10 +2575,8 @@ async def run_tracker():
     if not BOT_TOKEN:
         console.print("[bold red]Error:[/] BOT_TOKEN not set.")
         sys.exit(1)
-    if not (LOG_GROUP_ID or BRANCH_CHEAP_CHAT or BRANCH_MID_CHAT
-            or BRANCH_EXPENSIVE_CHAT or BRANCH_GIRLS_CHAT):
-        console.print("[bold red]Error:[/] set LOG_GROUP_ID or at least one "
-                      "BRANCH_*_CHAT.")
+    if not (BRANCH_CHAT_ID or LOG_GROUP_ID):
+        console.print("[bold red]Error:[/] set BRANCH_CHAT_ID or LOG_GROUP_ID.")
         sys.exit(1)
 
     n = len(SESSION_NAMES)
@@ -2517,6 +2636,13 @@ async def run_tracker():
     try:
         await bot.start(bot_token=BOT_TOKEN)
         console.print("[green]Bot connected[/]")
+        if not BOT_USERNAME:
+            try:
+                me_bot = await bot.get_me()
+                if me_bot and me_bot.username:
+                    globals()["BOT_USERNAME"] = me_bot.username
+            except Exception:
+                pass
     except Exception as e:
         console.print(f"[bold red]Bot failed: {e}[/]")
         for ub in userbots:
