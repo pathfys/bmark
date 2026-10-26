@@ -130,6 +130,15 @@ TONNEL_ENABLED = os.getenv("TONNEL_ENABLED", "1") not in ("0", "", "false", "Fal
 TONNEL_API = os.getenv("TONNEL_API", "https://gifts2.tonnel.network/api")
 TONNEL_SEARCH_LIMIT = int(os.getenv("TONNEL_SEARCH_LIMIT", "30"))
 
+# -- look.tg / see.tg gift database (owner username + id per gift) --
+# Their backend returns gifts with owner_info[0] = {username, id, ...}. It needs
+# an Authorization header taken from the site: open look.tg (or see.tg) in a
+# browser, F12 -> Network -> any "getnftgifts" request -> copy the full
+# Authorization header value into LOOKTG_AUTH. Leave empty to disable.
+LOOKTG_AUTH = os.getenv("LOOKTG_AUTH", "")
+LOOKTG_API = os.getenv("LOOKTG_API", "https://look.tg").rstrip("/")
+LOOKTG_ENABLED = bool(LOOKTG_AUTH) and os.getenv("LOOKTG_ENABLED", "1") not in ("0", "", "false", "False")
+
 # ═══════════════════════════════════════════════════════
 #  LOGGING & CONSOLE
 # ═══════════════════════════════════════════════════════
@@ -1162,6 +1171,78 @@ async def resolve_owner_via_portals(
     return None, None
 
 
+# ──────────────────── look.tg / see.tg database ────────────────────
+# One GET returns the gift with its current owner (username + id), already
+# resolved in their crawler DB. Best source when configured, because it gives a
+# username directly (no stranger-id lookup needed).
+
+_LOOKTG_HEADERS = {
+    "Accept": "application/json, text/plain, */*",
+    "Origin": "https://look.tg",
+    "Referer": "https://look.tg/",
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+    ),
+}
+
+
+def _looktg_http_get(url: str) -> dict | list | None:
+    headers = dict(_LOOKTG_HEADERS)
+    headers["Authorization"] = LOOKTG_AUTH
+    if _HAS_CFFI:
+        r = _cffi_requests.get(url, headers=headers, impersonate="chrome110", timeout=15)
+        if r.status_code != 200:
+            raise RuntimeError(f"looktg http {r.status_code}")
+        return r.json()
+    req = urllib.request.Request(url, headers=headers)
+    resp = urllib.request.urlopen(req, timeout=15, context=_ton_ctx)
+    return json.loads(resp.read())
+
+
+async def resolve_owner_via_looktg(
+    collection_name: str | None, num: int | None,
+) -> tuple[int | None, str | None, str | None]:
+    """Return (owner_id, owner_username, owner_name) from the look.tg/see.tg DB."""
+    if not LOOKTG_ENABLED or not collection_name or num is None:
+        return None, None, None
+    url = (
+        f"{LOOKTG_API}/api/getnftgifts?page=1&limit=20"
+        f"&name={urllib.parse.quote(collection_name)}&number={num}"
+    )
+    try:
+        data = await asyncio.to_thread(_looktg_http_get, url)
+    except Exception as e:
+        logger.warning("look.tg '%s' #%s: %s", collection_name, num, e)
+        return None, None, None
+    results = data.get("results") if isinstance(data, dict) else (data if isinstance(data, list) else [])
+    for r in results or []:
+        if not isinstance(r, dict):
+            continue
+        try:
+            if int(r.get("number")) != int(num):
+                continue
+        except (TypeError, ValueError):
+            continue
+        owners = r.get("owner_info") or []
+        if owners and isinstance(owners[0], dict):
+            o = owners[0]
+            if o.get("hidden"):
+                return None, None, o.get("full_name")
+            oid = o.get("id")
+            uname = o.get("username")
+            name = o.get("full_name")
+            try:
+                oid = int(oid) if oid else None
+            except (TypeError, ValueError):
+                oid = None
+            if oid or uname:
+                logger.info("look.tg resolved %s #%s -> id=%s @%s",
+                            collection_name, num, oid, uname)
+                return oid, uname, name
+    return None, None, None
+
+
 # ───────────────────────── Tonnel ─────────────────────────
 # Tonnel's pageGifts listing is readable without auth and each gift carries a
 # `seller` field = the seller's Telegram user id. Good fallback when Portals'
@@ -1345,16 +1426,31 @@ async def resolve_owner_full(
     portals_task = asyncio.create_task(
         resolve_owner_via_portals(client, collection_name, num, slug=listing_slug)
     )
+    looktg_task = asyncio.create_task(
+        resolve_owner_via_looktg(collection_name, num)
+    )
 
     html_uname, html_name = await html_task
     frag_uname, frag_name = await fragment_task
     frag_json_uname, frag_json_name = await frag_json_task
     oid, oname, ouname, ton_addr = await slug_task
     portals_id, portals_name = await portals_task
+    looktg_id, looktg_uname, looktg_name = await looktg_task
 
-    best_name = oname or html_name or frag_name or frag_json_name or portals_name or owner_name
+    best_name = (oname or html_name or frag_name or frag_json_name
+                 or portals_name or looktg_name or owner_name)
 
     # Priority = most authoritative first:
+    # 0. look.tg/see.tg DB: returns the resolved owner username+id directly.
+    if looktg_uname or looktg_id:
+        if looktg_uname and looktg_id:
+            return looktg_id, best_name, looktg_uname
+        if looktg_uname:
+            rid = await resolve_username_to_id(client, looktg_uname, tag=tag)
+            return rid, best_name, looktg_uname
+        uname = await _id_to_username(client, looktg_id, tag=tag)
+        return looktg_id, best_name, uname
+
     # 1. Portals seller record (owner_id): the account that actually listed the
     #    gift. Username derived from that id belongs to it, so no cross-check.
     #    (Tonnel's public listing carries no seller field, so it is not used.)
@@ -2532,13 +2628,29 @@ async def owner_resolver_selfcheck(userbot: TelegramClient):
     except Exception as e:
         console.print(f"[red]Portals auth: FAILED[/] -- {e}")
 
-    if portals_ok:
+    # look.tg / see.tg DB -- the source that returns a username directly.
+    looktg_ok = False
+    if not LOOKTG_AUTH:
+        console.print("[yellow]look.tg: disabled[/] (set LOOKTG_AUTH to the "
+                      "Authorization header copied from look.tg/see.tg DevTools "
+                      "-- this source returns the owner's @username directly).")
+    else:
+        try:
+            lid, luname, lname = await resolve_owner_via_looktg("Plush Pepe", 1)
+            console.print(f"[green]look.tg: reachable[/] -> "
+                          f"id={lid} username={luname} name={lname}")
+            looktg_ok = bool(lid or luname)
+        except Exception as e:
+            console.print(f"[red]look.tg: FAILED[/] -- {e}")
+
+    if portals_ok or looktg_ok:
         console.print("[bold green]Verdict: seller resolution CAN work.[/] "
-                      "Buttons appear for gifts whose seller Portals exposes.")
+                      "Buttons appear for gifts whose owner a source exposes.")
     else:
         console.print("[bold red]Verdict: seller resolution will NOT work yet.[/] "
-                      "No source returned a seller id -> expect no 'Seller "
-                      "profile' button. Fix the FAIL/NO line above.")
+                      "No source returned an owner -> expect no 'Seller "
+                      "profile' button. Fix the FAIL/NO line above, or set "
+                      "LOOKTG_AUTH to use the look.tg/see.tg database.")
     console.rule()
 
 
