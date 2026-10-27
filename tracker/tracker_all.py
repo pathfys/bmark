@@ -2287,15 +2287,22 @@ _last_post_ts = 0.0
 
 def _branches_for(listing: ResaleListing) -> list[tuple[int, int | None]]:
     """Return (chat_id, topic_id) targets for a listing.
-    all -> every listing; rich -> price>=RICH_MIN; poor -> price<=POOR_MAX;
-    black -> collection in BLACK_COLLECTIONS."""
-    price = listing.price_stars or 0
-    topics: list[int] = [TOPIC_ALL]
-    if RICH_MIN_STARS and price >= RICH_MIN_STARS:
-        topics.append(TOPIC_RICH)
-    if POOR_MAX_STARS and price <= POOR_MAX_STARS:
-        topics.append(TOPIC_POOR)
-    if BLACK_COLLECTIONS and (listing.title or "").strip().lower() in BLACK_COLLECTIONS:
+    When TRACK_COLLECTIONS is set, every listed collection is treated as
+    premium -> goes to all + rich (and nothing else, except black). When it is
+    empty, falls back to the by-price rules: rich -> price>=RICH_MIN,
+    poor -> price<=POOR_MAX, black -> collection in BLACK_COLLECTIONS."""
+    title_norm = (listing.title or "").strip().lower()
+    tracked = {t.strip().lower() for t in TRACK_COLLECTIONS} if TRACK_COLLECTIONS else None
+    if tracked and title_norm in tracked:
+        topics: list[int] = [TOPIC_ALL, TOPIC_RICH]
+    else:
+        price = listing.price_stars or 0
+        topics = [TOPIC_ALL]
+        if RICH_MIN_STARS and price >= RICH_MIN_STARS:
+            topics.append(TOPIC_RICH)
+        if POOR_MAX_STARS and price <= POOR_MAX_STARS:
+            topics.append(TOPIC_POOR)
+    if BLACK_COLLECTIONS and title_norm in BLACK_COLLECTIONS:
         topics.append(TOPIC_BLACK)
     out: list[tuple[int, int | None]] = []
     seen: set[int] = set()
@@ -2769,14 +2776,19 @@ async def _giftdb_feeder_loop(db):
     order = "ASC" if GIFTDB_ORDER == "asc" else "DESC"
     # Troll-listing cutoffs: price_ton >= 100000 ("un-buyable" sentinel) and
     # price_stars absurdly high. Also apply the user's own MIN/MAX stars floor
-    # here so trolls don't even leave the DB.
+    # and TRACK_COLLECTIONS whitelist here so filtered rows don't even leave DB.
     conds = ["p.instance_id IS NULL",
              "COALESCE(r.price_ton,0) < 100000",
              "COALESCE(r.price_stars,0) <= 100000"]
+    sql_params: list = []
     if MIN_PRICE_STARS:
         conds.append(f"COALESCE(r.price_stars,0) >= {int(MIN_PRICE_STARS)}")
     if MAX_PRICE_STARS:
         conds.append(f"COALESCE(r.price_stars,0) <= {int(MAX_PRICE_STARS)}")
+    if TRACK_COLLECTIONS:
+        placeholders = ",".join("?" * len(TRACK_COLLECTIONS))
+        conds.append(f"LOWER(TRIM(r.title)) IN ({placeholders})")
+        sql_params.extend([t.strip().lower() for t in TRACK_COLLECTIONS])
     query = (
         "SELECT r.instance_id, r.gift_id, r.title, r.slug, r.num, r.price_stars, "
         "       r.seller_id, r.seller_name, o.username, o.first_name "
@@ -2787,12 +2799,13 @@ async def _giftdb_feeder_loop(db):
         f"ORDER BY r.posted_at {order} "
         "LIMIT ?"
     )
-    logger.info("GIFTDB: feeding from %s (%d DB : %d market, %s)",
-                GIFTDB_PATH, GIFTDB_RATIO_DB, GIFTDB_RATIO_MARKET, order)
+    logger.info("GIFTDB: feeding from %s (%d DB : %d market, %s, whitelist=%d)",
+                GIFTDB_PATH, GIFTDB_RATIO_DB, GIFTDB_RATIO_MARKET, order,
+                len(TRACK_COLLECTIONS) if TRACK_COLLECTIONS else 0)
     fed_total = 0
     while _running:
         try:
-            cur = await conn.execute(query, (GIFTDB_BATCH,))
+            cur = await conn.execute(query, (*sql_params, GIFTDB_BATCH))
             rows = await cur.fetchall()
         except Exception as e:
             logger.error("GIFTDB: query failed: %s", e)
