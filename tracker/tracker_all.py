@@ -94,6 +94,11 @@ POOR_MAX_STARS = int(os.getenv("POOR_MAX_STARS", "500"))
 BLACK_COLLECTIONS = [
     x.strip().lower() for x in os.getenv("BLACK_COLLECTIONS", "").split(",") if x.strip()
 ]
+# Whitelist for the rich branch: lots from these collections ALWAYS go to rich
+# (regardless of price). Collections outside it never reach rich.
+RICH_COLLECTIONS = [
+    x.strip() for x in os.getenv("RICH_COLLECTIONS", "").split(",") if x.strip()
+]
 
 GIFT_PREVIEW = os.getenv("GIFT_PREVIEW", "1") not in ("0", "", "false", "False")
 POSTS_PER_MIN = int(os.getenv("POSTS_PER_MIN", "40"))
@@ -2289,22 +2294,23 @@ _last_post_ts = 0.0
 
 
 def _branches_for(listing: ResaleListing) -> list[tuple[int, int | None]]:
-    """Return (chat_id, topic_id) targets for a listing.
-    When TRACK_COLLECTIONS is set, every listed collection is treated as
-    premium -> goes to all + rich (and nothing else, except black). When it is
-    empty, falls back to the by-price rules: rich -> price>=RICH_MIN,
-    poor -> price<=POOR_MAX, black -> collection in BLACK_COLLECTIONS."""
+    """Per-branch routing (independent filters):
+      all  -> every listing
+      rich -> only RICH_COLLECTIONS whitelist (price-independent). If the
+              whitelist is empty, falls back to RICH_MIN_STARS by price.
+      poor -> only lots with price <= POOR_MAX_STARS (price-only, any collection)
+      black -> only BLACK_COLLECTIONS."""
     title_norm = (listing.title or "").strip().lower()
-    tracked = {t.strip().lower() for t in TRACK_COLLECTIONS} if TRACK_COLLECTIONS else None
-    if tracked and title_norm in tracked:
-        topics: list[int] = [TOPIC_ALL, TOPIC_RICH]
-    else:
-        price = listing.price_stars or 0
-        topics = [TOPIC_ALL]
-        if RICH_MIN_STARS and price >= RICH_MIN_STARS:
+    price = listing.price_stars or 0
+    topics: list[int] = [TOPIC_ALL]
+    rich_wl = {t.strip().lower() for t in RICH_COLLECTIONS} if RICH_COLLECTIONS else set()
+    if rich_wl:
+        if title_norm in rich_wl:
             topics.append(TOPIC_RICH)
-        if POOR_MAX_STARS and price <= POOR_MAX_STARS:
-            topics.append(TOPIC_POOR)
+    elif RICH_MIN_STARS and price >= RICH_MIN_STARS:
+        topics.append(TOPIC_RICH)
+    if POOR_MAX_STARS and price <= POOR_MAX_STARS:
+        topics.append(TOPIC_POOR)
     if BLACK_COLLECTIONS and title_norm in BLACK_COLLECTIONS:
         topics.append(TOPIC_BLACK)
     out: list[tuple[int, int | None]] = []
