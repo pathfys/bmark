@@ -100,6 +100,23 @@ RICH_COLLECTIONS = [
     x.strip() for x in os.getenv("RICH_COLLECTIONS", "").split(",") if x.strip()
 ]
 
+# ── Seller verification (resolve-check + entity-type + NFT presence) ──
+# All three run before posting. Each is cheap-ish per unique seller because we
+# cache both success and failure.
+#   VERIFY_SELLER=1       -> master switch. Off = no checks.
+#   REQUIRE_USER_ENTITY=1 -> drop channels / bots / deleted accounts.
+#   REQUIRE_HAS_NFTS=1    -> drop sellers whose star-gift inventory is empty.
+#   MIN_NFT_COUNT=0       -> optional floor on how many gifts they must own.
+#   VERIFY_CACHE_TTL      -> seconds a positive verify is reused.
+#   VERIFY_NEG_CACHE_TTL  -> seconds a negative verify is reused (longer, so
+#                            dead handles don't get retried every post).
+VERIFY_SELLER = os.getenv("VERIFY_SELLER", "1") not in ("0", "", "false", "False")
+REQUIRE_USER_ENTITY = os.getenv("REQUIRE_USER_ENTITY", "1") not in ("0", "", "false", "False")
+REQUIRE_HAS_NFTS = os.getenv("REQUIRE_HAS_NFTS", "0") not in ("0", "", "false", "False")
+MIN_NFT_COUNT = int(os.getenv("MIN_NFT_COUNT", "0"))
+VERIFY_CACHE_TTL = int(os.getenv("VERIFY_CACHE_TTL", "86400"))
+VERIFY_NEG_CACHE_TTL = int(os.getenv("VERIFY_NEG_CACHE_TTL", "3600"))
+
 GIFT_PREVIEW = os.getenv("GIFT_PREVIEW", "1") not in ("0", "", "false", "False")
 POSTS_PER_MIN = int(os.getenv("POSTS_PER_MIN", "40"))
 # Only post listings whose seller has a public @username (so the Seller
@@ -1815,6 +1832,122 @@ async def check_seller(client: TelegramClient, user_id: int, tag: str = "") -> S
     return profile
 
 
+# Verify cache keyed by "@username" or "id:12345". Value:
+#   {"valid": bool, "user_id": int|None, "username": str|None,
+#    "nft_count": int|None, "entity_type": str, "checked_at": float}
+_verify_cache: dict[str, dict] = {}
+_verify_lock = asyncio.Lock()
+
+
+async def _verify_seller(
+    uname: str | None, uid: int | None, tag: str = "",
+) -> tuple[bool, int | None, str | None, int | None, str]:
+    """Three checks before posting a lot:
+      1) The @username / user_id actually resolves on Telegram (not a dead
+         handle that opens "Данного пользователя не существует").
+      2) The resolved entity is a real User, not a Channel/Chat/bot.
+      3) The user owns at least MIN_NFT_COUNT star-gifts (optional).
+    Returns (valid, resolved_user_id, resolved_username, nft_count, reason).
+    Both positive and negative results are cached so dead handles never cost
+    more than one lookup per TTL."""
+    if not VERIFY_SELLER:
+        return (True, uid, uname, None, "disabled")
+    key_uname = f"@{uname.lstrip('@').lower()}" if uname else None
+    key_uid = f"id:{uid}" if uid else None
+    key = key_uname or key_uid
+    if key is None:
+        return (False, None, None, None, "no_handle")
+
+    now = time.time()
+    for k in (key_uname, key_uid):
+        if not k:
+            continue
+        cached = _verify_cache.get(k)
+        if not cached:
+            continue
+        ttl = VERIFY_CACHE_TTL if cached["valid"] else VERIFY_NEG_CACHE_TTL
+        if now - cached["checked_at"] < ttl:
+            return (cached["valid"], cached["user_id"], cached["username"],
+                    cached["nft_count"], cached.get("reason", "cache"))
+
+    client = _next_userbot()
+    if client is None:
+        return (True, uid, uname, None, "no_userbot")
+
+    async with _verify_lock:
+        # re-check cache after taking the lock (another coro may have filled it)
+        for k in (key_uname, key_uid):
+            if not k:
+                continue
+            cached = _verify_cache.get(k)
+            if cached and now - cached["checked_at"] < VERIFY_NEG_CACHE_TTL:
+                return (cached["valid"], cached["user_id"], cached["username"],
+                        cached["nft_count"], cached.get("reason", "cache"))
+
+        entity_type = "none"
+        resolved_uid = uid
+        resolved_uname = uname.lstrip("@") if uname else None
+        try:
+            target = f"@{resolved_uname}" if resolved_uname else uid
+            entity = await asyncio.wait_for(client.get_entity(target), timeout=15)
+            etype = type(entity).__name__
+            if etype == "User":
+                if getattr(entity, "deleted", False):
+                    entity_type = "deleted"
+                elif getattr(entity, "bot", False):
+                    entity_type = "bot"
+                else:
+                    entity_type = "user"
+                    resolved_uid = entity.id
+                    resolved_uname = getattr(entity, "username", None) or resolved_uname
+            elif etype in ("Channel", "Chat", "ChannelForbidden", "ChatForbidden"):
+                entity_type = "channel"
+            else:
+                entity_type = "other"
+        except (ValueError, TypeError):
+            entity_type = "none"
+        except FloodWaitError as e:
+            logger.warning("verify %s FloodWait %ds", key, e.seconds)
+            return (True, uid, uname, None, "flood")
+        except Exception as e:
+            logger.debug("verify %s: %s", key, e)
+            entity_type = "none"
+
+        if REQUIRE_USER_ENTITY:
+            valid_entity = (entity_type == "user")
+        else:
+            valid_entity = (entity_type != "none")
+
+        nft_count: int | None = None
+        if valid_entity and REQUIRE_HAS_NFTS and resolved_uid:
+            try:
+                nft_count = await asyncio.wait_for(
+                    get_user_nft_count(client, resolved_uid, tag=tag), timeout=20,
+                )
+            except Exception as e:
+                logger.debug("verify nft %s: %s", key, e)
+                nft_count = None
+
+        nft_pass = True
+        if REQUIRE_HAS_NFTS:
+            if nft_count is None or nft_count < max(1, MIN_NFT_COUNT):
+                nft_pass = False
+        elif MIN_NFT_COUNT and nft_count is not None and nft_count < MIN_NFT_COUNT:
+            nft_pass = False
+
+        valid = valid_entity and nft_pass
+        reason = (f"entity={entity_type}"
+                  + (f",nft={nft_count}" if REQUIRE_HAS_NFTS or MIN_NFT_COUNT else ""))
+
+        rec = {"valid": valid, "user_id": resolved_uid, "username": resolved_uname,
+               "nft_count": nft_count, "entity_type": entity_type,
+               "reason": reason, "checked_at": now}
+        if key_uname:
+            _verify_cache[key_uname] = rec
+        if key_uid and key_uid != key_uname:
+            _verify_cache[key_uid] = rec
+        return (valid, resolved_uid, resolved_uname, nft_count, reason)
+
 
 _db_lock = asyncio.Lock()
 
@@ -2646,6 +2779,30 @@ async def poll_collection(
             if REQUIRE_USERNAME and not listing.owner_username:
                 continue
 
+            # Verify seller: @username/user_id resolves, entity is a real User
+            # (not Channel/bot), and (optional) they own at least one NFT.
+            if VERIFY_SELLER and (listing.owner_username or listing.owner_id):
+                v_ok, v_uid, v_uname, v_nft, v_reason = await _verify_seller(
+                    listing.owner_username, listing.owner_id, tag=session_tag,
+                )
+                if not v_ok:
+                    logger.info("VERIFY SKIP %s #%s: @%s id=%s (%s)",
+                                listing.title, listing.num,
+                                listing.owner_username, listing.owner_id, v_reason)
+                    continue
+                if v_uname and v_uname != listing.owner_username:
+                    listing = ResaleListing(
+                        unique_gift_id=listing.unique_gift_id,
+                        gift_id=listing.gift_id,
+                        num=listing.num, slug=listing.slug, title=listing.title,
+                        owner_id=v_uid or listing.owner_id,
+                        owner_name=listing.owner_name,
+                        owner_username=v_uname,
+                        owner_address=listing.owner_address,
+                        price_stars=listing.price_stars,
+                        attributes=listing.attributes,
+                    )
+
             seller_level = seller_nft = None
             if listing.owner_id and (MAX_SELLER_LEVEL or MAX_SELLER_NFT_COUNT):
                 seller = await check_seller(userbot, listing.owner_id, tag=session_tag)
@@ -2872,6 +3029,29 @@ async def _giftdb_feeder_loop(db):
                 continue
             if not _passes_price_filter(listing):
                 continue
+
+            # Same three-check verify as the market path: handle resolves,
+            # entity is a real User, (optional) owns NFTs. Skips dead handles,
+            # @channel sellers, and empty collectors.
+            if VERIFY_SELLER and (listing.owner_username or listing.owner_id):
+                v_ok, v_uid, v_uname, v_nft, v_reason = await _verify_seller(
+                    listing.owner_username, listing.owner_id, tag="giftdb",
+                )
+                if not v_ok:
+                    logger.debug("GIFTDB verify skip %s #%s: @%s id=%s (%s)",
+                                 listing.title, listing.num,
+                                 listing.owner_username, listing.owner_id, v_reason)
+                    continue
+                if v_uname and v_uname != listing.owner_username:
+                    listing = ResaleListing(
+                        unique_gift_id=listing.unique_gift_id,
+                        gift_id=listing.gift_id,
+                        num=listing.num, slug=listing.slug, title=listing.title,
+                        owner_id=v_uid or listing.owner_id,
+                        owner_name=listing.owner_name,
+                        owner_username=v_uname,
+                        price_stars=listing.price_stars,
+                    )
 
             # Store in listings so Claim (cross-branch lock + claimer DM) works.
             await upsert_listing(
