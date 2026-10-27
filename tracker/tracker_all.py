@@ -116,6 +116,11 @@ REQUIRE_HAS_NFTS = os.getenv("REQUIRE_HAS_NFTS", "0") not in ("0", "", "false", 
 MIN_NFT_COUNT = int(os.getenv("MIN_NFT_COUNT", "0"))
 VERIFY_CACHE_TTL = int(os.getenv("VERIFY_CACHE_TTL", "86400"))
 VERIFY_NEG_CACHE_TTL = int(os.getenv("VERIFY_NEG_CACHE_TTL", "3600"))
+# Verify that the SPECIFIC gift (by slug or num) is currently in the seller's
+# profile. Guards against stale rows in owners.db (the seller already sold /
+# transferred the gift) and against bogus listings.
+VERIFY_GIFT_OWNERSHIP = os.getenv("VERIFY_GIFT_OWNERSHIP", "0") not in ("0", "", "false", "False")
+GIFT_SEARCH_MAX_PAGES = int(os.getenv("GIFT_SEARCH_MAX_PAGES", "5"))
 
 GIFT_PREVIEW = os.getenv("GIFT_PREVIEW", "1") not in ("0", "", "false", "False")
 POSTS_PER_MIN = int(os.getenv("POSTS_PER_MIN", "40"))
@@ -1775,6 +1780,55 @@ async def get_user_level(client: TelegramClient, user_id: int, tag: str = "") ->
         return None
 
 
+async def _gift_in_profile(
+    client: TelegramClient, user_id: int, slug: str | None, num: int | None,
+    tag: str = "",
+) -> bool | None:
+    """Scan the seller's saved star-gifts and look for a matching slug/num.
+    Returns True (found), False (not found after scanning all pages up to
+    GIFT_SEARCH_MAX_PAGES), or None if the lookup failed (don't block the lot
+    on an API error). Match is slug-first; falls back to num when the gift
+    carries no slug yet."""
+    want_slug = (slug or "").strip().lower() or None
+    want_num = int(num) if num is not None else None
+    offset = ""
+    pages = 0
+    try:
+        while pages < GIFT_SEARCH_MAX_PAGES:
+            try:
+                result = await _api_call(
+                    client, functions.payments.GetSavedStarGiftsRequest(
+                        peer=user_id, offset=offset, limit=100,
+                    ),
+                    tag=tag or f"ownsearch:{user_id}",
+                )
+            except (AttributeError, TypeError):
+                return None
+            gifts = getattr(result, "gifts", []) or []
+            for gw in gifts:
+                inner = getattr(gw, "gift", None) or gw
+                g_slug = (getattr(inner, "slug", None) or "").strip().lower() or None
+                g_num = getattr(inner, "num", None)
+                if want_slug and g_slug and g_slug == want_slug:
+                    return True
+                if want_num is not None and g_num is not None:
+                    try:
+                        if int(g_num) == want_num and want_slug and g_slug and want_slug.split("-")[0] == g_slug.split("-")[0]:
+                            return True
+                    except (TypeError, ValueError):
+                        pass
+            offset = getattr(result, "next_offset", "") or ""
+            pages += 1
+            if not offset:
+                break
+        return False
+    except _FATAL_ERRORS:
+        raise
+    except Exception as e:
+        logger.debug("gift_in_profile user=%d slug=%s: %s", user_id, slug, e)
+        return None
+
+
 async def get_user_nft_count(client: TelegramClient, user_id: int, tag: str = "") -> int | None:
     try:
         try:
@@ -1907,8 +1961,9 @@ async def _verify_seller(
         except (ValueError, TypeError):
             entity_type = "none"
         except FloodWaitError as e:
-            logger.warning("verify %s FloodWait %ds", key, e.seconds)
-            return (True, uid, uname, None, "flood")
+            # Don't post the lot and don't cache; next pass retries.
+            logger.warning("verify %s FloodWait %ds, SKIP lot", key, e.seconds)
+            return (False, uid, uname, None, "flood")
         except Exception as e:
             logger.debug("verify %s: %s", key, e)
             entity_type = "none"
