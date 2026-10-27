@@ -170,6 +170,27 @@ KARTOSHKA_GIFT_PATH = os.getenv("KARTOSHKA_GIFT_PATH", "/v1/gift/{slug}/who")
 KARTOSHKA_MIN_INTERVAL = float(os.getenv("KARTOSHKA_MIN_INTERVAL", "1.0"))
 KARTOSHKA_ENABLED = bool(KARTOSHKA_TOKEN) and os.getenv("KARTOSHKA_ENABLED", "1") not in ("0", "", "false", "False")
 
+# ── Local gift DB feed (owners.db from gift_parser_bot) ──
+# Mixes lots read from a local SQLite DB (resale_listings + owners) with live
+# market lots at a fixed COUNT ratio, alternating. Default: 8 DB : 2 market,
+# i.e. post 8 DB lots, then 2 market lots, repeating (Variant B).
+GIFTDB_ENABLED = os.getenv("GIFTDB_ENABLED", "1") not in ("0", "", "false", "False")
+GIFTDB_PATH = os.getenv("GIFTDB_PATH", "owners.db")
+GIFTDB_RATIO_DB = int(os.getenv("GIFTDB_RATIO_DB", "8"))
+GIFTDB_RATIO_MARKET = int(os.getenv("GIFTDB_RATIO_MARKET", "2"))
+GIFTDB_BATCH = int(os.getenv("GIFTDB_BATCH", "200"))
+GIFTDB_IDLE_SLEEP = float(os.getenv("GIFTDB_IDLE_SLEEP", "10"))
+# "desc" = newest listings first (by posted_at); "asc" = oldest first.
+GIFTDB_ORDER = os.getenv("GIFTDB_ORDER", "desc").strip().lower()
+# Only feed DB lots whose seller has a public @username (same gate as market).
+GIFTDB_REQUIRE_USERNAME = os.getenv("GIFTDB_REQUIRE_USERNAME", "1") not in ("0", "", "false", "False")
+# unique_gift_id namespace offset so DB lots never collide with market ids.
+# MUST stay positive -- the Claim callback matches ^claim:(\d+)$.
+GIFTDB_ID_OFFSET = int(os.getenv("GIFTDB_ID_OFFSET", "9000000000000000"))
+# Sentinel gift_id for DB lots so market delisting (keyed on gift_id) never
+# touches them.
+GIFTDB_GIFT_ID = -1
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -2299,6 +2320,53 @@ async def _post_throttle():
     _last_post_ts = time.time()
 
 
+@dataclass
+class _PostItem:
+    listing: "ResaleListing"
+    seller_level: int | None = None
+    seller_nft: int | None = None
+    floor_note: str | None = None
+    source: str = "market"
+
+
+class _PostMixer:
+    """Interleaves DB-sourced and market-sourced listings at a fixed COUNT
+    ratio (default 8 DB : 2 market), alternating. A single consumer drains it,
+    so all posting stays serialized and paced by POSTS_PER_MIN. If the slot's
+    queue is empty, it borrows from the other side instead of stalling (the DB
+    is effectively infinite, so in practice the market just fills its 2 slots
+    whenever it has fresh lots, and DB fills the rest)."""
+
+    def __init__(self, db_n: int, market_n: int, maxsize: int = 5000):
+        self._q = {
+            "db": asyncio.Queue(maxsize),
+            "market": asyncio.Queue(maxsize),
+        }
+        self._pattern = ["db"] * max(0, db_n) + ["market"] * max(0, market_n)
+        if not self._pattern:
+            self._pattern = ["market"]
+        self._pos = 0
+
+    async def put(self, source: str, item: "_PostItem"):
+        await self._q[source].put(item)
+
+    async def get(self) -> "_PostItem | None":
+        while True:
+            primary = self._pattern[self._pos % len(self._pattern)]
+            other = "market" if primary == "db" else "db"
+            for src in (primary, other):
+                try:
+                    item = self._q[src].get_nowait()
+                    self._pos += 1
+                    return item
+                except asyncio.QueueEmpty:
+                    continue
+            await asyncio.sleep(0.4)
+
+
+_post_mixer = _PostMixer(GIFTDB_RATIO_DB, GIFTDB_RATIO_MARKET)
+
+
 async def send_listing_to_chat(
     bot, chat_id, listing, seller_level=None, seller_nft=None, floor_note=None,
     topic_id: int | None = None,
@@ -2581,22 +2649,13 @@ async def poll_collection(
             )
 
             floor_note, _underpriced = await floor_context_for(listing)
-            targets = _branches_for(listing)
-            if bot and targets:
-                first_mid = None
-                for chat_id, topic_id in targets:
-                    mid = await send_listing_to_chat(
-                        bot, chat_id, listing, seller_level, seller_nft,
-                        floor_note=floor_note, topic_id=topic_id,
-                    )
-                    if mid:
-                        await add_listing_message(
-                            db, listing.unique_gift_id, chat_id, topic_id, mid,
-                        )
-                        if first_mid is None:
-                            first_mid = mid
-                if first_mid:
-                    await set_log_message_id(db, listing.unique_gift_id, first_mid)
+            # Hand the lot to the 8:2 mixer; the single consumer does the
+            # branch fan-out + message recording (so counts stay honest and
+            # posting stays paced by POSTS_PER_MIN).
+            await _post_mixer.put(
+                "market",
+                _PostItem(listing, seller_level, seller_nft, floor_note, "market"),
+            )
 
         page += 1
         if not next_offset or page >= 3:
@@ -2646,6 +2705,158 @@ def _distribute_collections(
     for i, col in enumerate(catalog):
         buckets[i % n_sessions].append(col)
     return buckets
+
+
+async def _post_consumer_loop(bot, db):
+    """Single drain of the 8:2 mixer: fan a listing out to its branches and
+    record every posted message. All posts (DB + market) go through here."""
+    while _running:
+        try:
+            item = await asyncio.wait_for(_post_mixer.get(), timeout=2.0)
+        except asyncio.TimeoutError:
+            continue
+        except asyncio.CancelledError:
+            break
+        if item is None:
+            continue
+        listing = item.listing
+        targets = _branches_for(listing)
+        if not (bot and targets):
+            continue
+        try:
+            first_mid = None
+            for chat_id, topic_id in targets:
+                mid = await send_listing_to_chat(
+                    bot, chat_id, listing, item.seller_level, item.seller_nft,
+                    floor_note=item.floor_note, topic_id=topic_id,
+                )
+                if mid:
+                    await add_listing_message(
+                        db, listing.unique_gift_id, chat_id, topic_id, mid,
+                    )
+                    if first_mid is None:
+                        first_mid = mid
+            if first_mid:
+                await set_log_message_id(db, listing.unique_gift_id, first_mid)
+        except Exception as e:
+            logger.error("Post consumer error: %s", e)
+
+
+async def _giftdb_feeder_loop(db):
+    """Feed lots from the local owners.db (resale_listings joined with owners)
+    into the mixer's DB queue. Dedupes via a giftdb_posted table kept inside
+    owners.db itself, so each row is posted once per dump."""
+    if not GIFTDB_ENABLED:
+        return
+    if not os.path.exists(GIFTDB_PATH):
+        logger.warning("GIFTDB: %s not found -- DB feed disabled", GIFTDB_PATH)
+        return
+    try:
+        conn = await aiosqlite.connect(GIFTDB_PATH)
+        await conn.execute("PRAGMA busy_timeout=5000")
+        await conn.execute(
+            "CREATE TABLE IF NOT EXISTS giftdb_posted ("
+            "instance_id INTEGER PRIMARY KEY, posted_at REAL)"
+        )
+        await conn.commit()
+    except Exception as e:
+        logger.error("GIFTDB: open %s failed: %s", GIFTDB_PATH, e)
+        return
+
+    order = "ASC" if GIFTDB_ORDER == "asc" else "DESC"
+    query = (
+        "SELECT r.instance_id, r.gift_id, r.title, r.slug, r.num, r.price_stars, "
+        "       r.seller_id, r.seller_name, o.username, o.first_name "
+        "FROM resale_listings r "
+        "LEFT JOIN owners o ON o.user_id = r.seller_id "
+        "LEFT JOIN giftdb_posted p ON p.instance_id = r.instance_id "
+        "WHERE p.instance_id IS NULL "
+        f"ORDER BY r.posted_at {order} "
+        "LIMIT ?"
+    )
+    logger.info("GIFTDB: feeding from %s (%d DB : %d market, %s)",
+                GIFTDB_PATH, GIFTDB_RATIO_DB, GIFTDB_RATIO_MARKET, order)
+    fed_total = 0
+    while _running:
+        try:
+            cur = await conn.execute(query, (GIFTDB_BATCH,))
+            rows = await cur.fetchall()
+        except Exception as e:
+            logger.error("GIFTDB: query failed: %s", e)
+            await asyncio.sleep(GIFTDB_IDLE_SLEEP)
+            continue
+        if not rows:
+            await asyncio.sleep(GIFTDB_IDLE_SLEEP)
+            continue
+        for row in rows:
+            if not _running:
+                break
+            (instance_id, gift_id, title, slug, num, price_stars,
+             seller_id, seller_name, username, first_name) = row
+            try:
+                num_i = int(num) if num is not None else None
+            except (TypeError, ValueError):
+                num_i = None
+            try:
+                price_i = int(price_stars or 0)
+            except (TypeError, ValueError):
+                price_i = 0
+            uname = (username or "").lstrip("@").strip() or None
+            if not uname and seller_name and str(seller_name).startswith("@"):
+                uname = str(seller_name).lstrip("@").strip() or None
+            oname = first_name or (
+                None if (seller_name or "").startswith("@") else seller_name
+            )
+            try:
+                oid = int(seller_id) if seller_id else None
+            except (TypeError, ValueError):
+                oid = None
+
+            listing = ResaleListing(
+                unique_gift_id=GIFTDB_ID_OFFSET + int(instance_id),
+                gift_id=GIFTDB_GIFT_ID,
+                num=num_i, slug=slug, title=title,
+                owner_id=oid, owner_name=oname, owner_username=uname,
+                price_stars=price_i,
+            )
+
+            # Mark posted first so a crash/restart never refeeds this row.
+            try:
+                await conn.execute(
+                    "INSERT OR IGNORE INTO giftdb_posted(instance_id, posted_at) "
+                    "VALUES (?, ?)", (int(instance_id), time.time()),
+                )
+                await conn.commit()
+            except Exception as e:
+                logger.debug("GIFTDB: mark posted %s: %s", instance_id, e)
+
+            if GIFTDB_REQUIRE_USERNAME and not listing.owner_username:
+                continue
+            if not _passes_price_filter(listing):
+                continue
+
+            # Store in listings so Claim (cross-branch lock + claimer DM) works.
+            await upsert_listing(
+                db,
+                unique_gift_id=listing.unique_gift_id,
+                gift_id=listing.gift_id,
+                num=listing.num, slug=listing.slug, title=listing.title,
+                owner_id=listing.owner_id, owner_name=listing.owner_name,
+                owner_username=listing.owner_username, owner_address=None,
+                price_stars=listing.price_stars,
+                attributes_json=listing.attributes_json,
+                seller_level=None, seller_nft_count=None,
+            )
+            await _post_mixer.put(
+                "db", _PostItem(listing, None, None, None, "db"),
+            )
+            fed_total += 1
+        logger.info("GIFTDB: fed %d lots total", fed_total)
+
+    try:
+        await conn.close()
+    except Exception:
+        pass
 
 
 async def run_tracker():
@@ -2740,6 +2951,17 @@ async def run_tracker():
 
     db = await init_db()
     set_dependencies(db, userbots)
+
+    # Single post consumer (drains the 8:2 mixer) + optional local DB feeder.
+    bg_tasks: list[asyncio.Task] = [
+        asyncio.create_task(_post_consumer_loop(bot, db)),
+    ]
+    if GIFTDB_ENABLED:
+        bg_tasks.append(asyncio.create_task(_giftdb_feeder_loop(db)))
+        console.print(
+            f"[green]DB feed ON[/] -- {GIFTDB_PATH} "
+            f"({GIFTDB_RATIO_DB} DB : {GIFTDB_RATIO_MARKET} market, alternating)"
+        )
 
     await owner_resolver_selfcheck(userbots[0])
 
@@ -2863,6 +3085,8 @@ async def run_tracker():
             except asyncio.CancelledError:
                 break
 
+    for t in bg_tasks:
+        t.cancel()
     await _cleanup(userbots, bot, db)
 
 
