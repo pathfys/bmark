@@ -190,6 +190,9 @@ GIFTDB_ID_OFFSET = int(os.getenv("GIFTDB_ID_OFFSET", "9000000000000000"))
 # Sentinel gift_id for DB lots so market delisting (keyed on gift_id) never
 # touches them.
 GIFTDB_GIFT_ID = -1
+# Extra delay (seconds) after each DB-sourced post. Lets DB lots trickle out
+# slower without slowing market posts. 0 = disabled.
+GIFTDB_EXTRA_DELAY = float(os.getenv("GIFTDB_EXTRA_DELAY", "0"))
 
 
 logging.basicConfig(
@@ -2750,6 +2753,9 @@ async def _post_consumer_loop(bot, db):
                 await set_log_message_id(db, listing.unique_gift_id, first_mid)
         except Exception as e:
             logger.error("Post consumer error: %s", e)
+        # Extra pause for DB-sourced posts only (market posts aren't slowed).
+        if item.source == "db" and GIFTDB_EXTRA_DELAY > 0:
+            await asyncio.sleep(GIFTDB_EXTRA_DELAY)
 
 
 async def _giftdb_feeder_loop(db):
