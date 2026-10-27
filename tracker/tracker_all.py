@@ -2545,6 +2545,9 @@ def _passes_price_filter(listing: ResaleListing) -> bool:
         return False
     if MAX_PRICE_STARS and listing.price_stars > MAX_PRICE_STARS:
         return False
+    # Troll listings: >100000 Stars is basically "do-not-buy" sentinel pricing.
+    if listing.price_stars and listing.price_stars > 100000:
+        return False
     return True
 
 
@@ -2764,13 +2767,23 @@ async def _giftdb_feeder_loop(db):
         return
 
     order = "ASC" if GIFTDB_ORDER == "asc" else "DESC"
+    # Troll-listing cutoffs: price_ton >= 100000 ("un-buyable" sentinel) and
+    # price_stars absurdly high. Also apply the user's own MIN/MAX stars floor
+    # here so trolls don't even leave the DB.
+    conds = ["p.instance_id IS NULL",
+             "COALESCE(r.price_ton,0) < 100000",
+             "COALESCE(r.price_stars,0) <= 100000"]
+    if MIN_PRICE_STARS:
+        conds.append(f"COALESCE(r.price_stars,0) >= {int(MIN_PRICE_STARS)}")
+    if MAX_PRICE_STARS:
+        conds.append(f"COALESCE(r.price_stars,0) <= {int(MAX_PRICE_STARS)}")
     query = (
         "SELECT r.instance_id, r.gift_id, r.title, r.slug, r.num, r.price_stars, "
         "       r.seller_id, r.seller_name, o.username, o.first_name "
         "FROM resale_listings r "
         "LEFT JOIN owners o ON o.user_id = r.seller_id "
         "LEFT JOIN giftdb_posted p ON p.instance_id = r.instance_id "
-        "WHERE p.instance_id IS NULL "
+        f"WHERE {' AND '.join(conds)} "
         f"ORDER BY r.posted_at {order} "
         "LIMIT ?"
     )
